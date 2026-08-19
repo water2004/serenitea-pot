@@ -1,9 +1,12 @@
 package org.edtp.universe.player;
 
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundSetExperiencePacket;
 import net.minecraft.network.protocol.game.ClientboundSetHealthPacket;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -13,6 +16,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.food.FoodData;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -25,7 +29,7 @@ import org.edtp.universe.model.UniverseRecord;
 import java.util.UUID;
 
 public final class PlayerStateManager {
-    private static final int SNAPSHOT_VERSION = 1;
+    private static final int SNAPSHOT_VERSION = 2;
 
     private static MinecraftServer server;
     private static PlayerStateStore store;
@@ -107,9 +111,37 @@ public final class PlayerStateManager {
         }
     }
 
+    public static SavedLocation savedLocation(ServerPlayer player, UUID realmOwner) {
+        requireServerThread(player.level().getServer());
+        CompoundTag snapshot = store == null ? null : store.get(player.getUUID(), stateKey(realmOwner));
+        if (snapshot == null) return null;
+        var input = TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), snapshot);
+        if (input.getIntOr("snapshotVersion", 0) != SNAPSHOT_VERSION) return null;
+        Identifier dimensionId = Identifier.tryParse(input.getStringOr("LocationDimension", ""));
+        if (dimensionId == null) return null;
+        double x = input.getDoubleOr("LocationX", Double.NaN);
+        double y = input.getDoubleOr("LocationY", Double.NaN);
+        double z = input.getDoubleOr("LocationZ", Double.NaN);
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) return null;
+        return new SavedLocation(
+            ResourceKey.create(Registries.DIMENSION, dimensionId),
+            x,
+            y,
+            z,
+            input.getFloatOr("LocationYaw", 0.0F),
+            input.getFloatOr("LocationPitch", 0.0F)
+        );
+    }
+
     private static void capture(ServerPlayer player, UUID realmOwner) {
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, player.registryAccess());
         output.putInt("snapshotVersion", SNAPSHOT_VERSION);
+        output.putString("LocationDimension", player.level().dimension().identifier().toString());
+        output.putDouble("LocationX", player.getX());
+        output.putDouble("LocationY", player.getY());
+        output.putDouble("LocationZ", player.getZ());
+        output.putFloat("LocationYaw", player.getYRot());
+        output.putFloat("LocationPitch", player.getXRot());
         player.getInventory().save(output.list("Inventory", ItemStackWithSlot.CODEC));
         output.putInt("SelectedItemSlot", player.getInventory().getSelectedSlot());
         player.getEnderChestInventory().storeAsSlots(output.list("EnderItems", ItemStackWithSlot.CODEC));
@@ -234,5 +266,15 @@ public final class PlayerStateManager {
     }
 
     public record StateSwitchPlan(UUID sourceOwner, UUID targetOwner) {
+    }
+
+    public record SavedLocation(
+        ResourceKey<Level> dimension,
+        double x,
+        double y,
+        double z,
+        float yaw,
+        float pitch
+    ) {
     }
 }

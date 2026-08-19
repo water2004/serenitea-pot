@@ -11,6 +11,7 @@ import org.edtp.universe.model.UniverseDimension;
 import org.edtp.universe.model.UniverseRecord;
 import org.edtp.universe.model.UniverseSlotRecord;
 import org.edtp.universe.player.HumanPlayerDetector;
+import org.edtp.universe.player.PlayerStateManager;
 import org.edtp.universe.region.UniverseCreationService;
 
 import java.util.Set;
@@ -69,15 +70,24 @@ public final class UniverseTravelService {
         if (destinationDimension == null) {
             return new Rejected("目标小宇宙还没有可进入的维度");
         }
-        UniverseSlotRecord slot = record.getSlots().get(destinationDimension);
+        Destination destination = savedUniverseDestination(player, owner, record, bundle);
+        if (destination == null) {
+            UniverseSlotRecord slot = record.getSlots().get(destinationDimension);
+            destination = new Destination(
+                bundle.get(destinationDimension),
+                new Vec3(slot.entryX() + 0.5, slot.entryY(), slot.entryZ() + 0.5),
+                player.getYRot(),
+                player.getXRot()
+            );
+        }
         boolean success = player.teleportTo(
-            bundle.get(destinationDimension),
-            slot.entryX() + 0.5,
-            slot.entryY(),
-            slot.entryZ() + 0.5,
+            destination.level(),
+            destination.position().x,
+            destination.position().y,
+            destination.position().z,
             Set.of(),
-            player.getYRot(),
-            player.getXRot(),
+            destination.yaw(),
+            destination.pitch(),
             true
         );
         return success ? Success.INSTANCE : new Rejected("传送被访问策略拒绝");
@@ -99,6 +109,21 @@ public final class UniverseTravelService {
         }
 
         var server = player.level().getServer();
+        Destination savedPublic = savedPublicDestination(player);
+        if (savedPublic != null) {
+            boolean success = player.teleportTo(
+                savedPublic.level(),
+                savedPublic.position().x,
+                savedPublic.position().y,
+                savedPublic.position().z,
+                Set.of(),
+                savedPublic.yaw(),
+                savedPublic.pitch(),
+                true
+            );
+            return success ? Success.INSTANCE : new Rejected("无法离开小宇宙");
+        }
+
         UniverseRecord record = UniverseManager.record(owner);
         UniverseSlotRecord slot = record == null ? null : record.getSlots().get(identity.dimension());
         ServerLevel candidate = null;
@@ -125,8 +150,50 @@ public final class UniverseTravelService {
         return success ? Success.INSTANCE : new Rejected("无法离开小宇宙");
     }
 
+    private static Destination savedUniverseDestination(
+        ServerPlayer player,
+        UUID owner,
+        UniverseRecord record,
+        UniverseBundle bundle
+    ) {
+        PlayerStateManager.SavedLocation saved = PlayerStateManager.savedLocation(player, owner);
+        if (saved == null) return null;
+        UniverseLevelKeys.Identity identity = UniverseLevelKeys.identify(saved.dimension());
+        if (identity == null || !identity.owner().equals(owner)
+            || !record.getSlots().containsKey(identity.dimension())) {
+            return null;
+        }
+        // A saved position belongs to the logical owner/dimension, not to its physical
+        // generation. Unchanged dimensions are copied forward; the active border rejects
+        // positions removed by a trim or a non-overlapping replacement.
+        ServerLevel level = bundle.get(identity.dimension());
+        return usable(level, saved)
+            ? new Destination(level, new Vec3(saved.x(), saved.y(), saved.z()), saved.yaw(), saved.pitch())
+            : null;
+    }
+
+    private static Destination savedPublicDestination(ServerPlayer player) {
+        PlayerStateManager.SavedLocation saved = PlayerStateManager.savedLocation(player, null);
+        if (saved == null || UniverseLevelKeys.identify(saved.dimension()) != null) return null;
+        ServerLevel level = player.level().getServer().getLevel(saved.dimension());
+        return level != null && usable(level, saved)
+            ? new Destination(level, new Vec3(saved.x(), saved.y(), saved.z()), saved.yaw(), saved.pitch())
+            : null;
+    }
+
+    private static boolean usable(ServerLevel level, PlayerStateManager.SavedLocation saved) {
+        return saved.y() >= level.getMinY()
+            && saved.y() < level.getMaxY()
+            && Float.isFinite(saved.yaw())
+            && Float.isFinite(saved.pitch())
+            && level.getWorldBorder().isWithinBounds(saved.x(), saved.z());
+    }
+
     private static ServerLevel publicTarget(ServerLevel fallback, ServerLevel candidate) {
         return candidate != null && UniverseLevelKeys.identify(candidate.dimension()) == null ? candidate : fallback;
+    }
+
+    private record Destination(ServerLevel level, Vec3 position, float yaw, float pitch) {
     }
 
     public sealed interface Result permits Success, Rejected {
