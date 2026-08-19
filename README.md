@@ -62,13 +62,15 @@ OP4 也可用 `/universe enter <owner>` 进入主人当前已加载的小宇宙�
 
 产物内嵌并强依赖 Arcade Dimensions 0.13.0-beta.6。小宇宙三维度由 `VanillaLikeLevelsBuilder` 组成；Arcade 的 Nether/End portal mixin 和 `VanillaDimensionMapper` 负责让玩家及实体只在同一名主人的主世界、下界、末地之间传送。不要从 jar 中移除或替换这组 Arcade 依赖。
 
+Universe 647 的实现源码全部使用 Java 25。Arcade Dimensions 自身使用 Kotlin 编写，因此最终服务端产物仍声明 `fabric-language-kotlin` 运行时依赖；这不代表本项目还混有 Kotlin 业务源码，也不要求玩家客户端安装任何模组。
+
 区域提取会复制方块状态、方块实体完整 NBT/Data Components、生物群系、方块/流体计划刻以及非玩家实体（含乘客树）。因此把机器状态保存在方块实体中的常规模组通常可以直接工作；小宇宙仍使用服务端相同的模组、注册表和游戏逻辑。
 
 区域提取不是任意模组数据的字节级裁剪器。POI、结构引用、维度级 SavedData、跨区块网络，以及 Fabric/第三方自定义 chunk、level 或 player attachments 没有通用且安全的区域语义，当前不会承诺复制或隔离。玩家隔离覆盖上文列出的原版状态；额外模组若把关键玩家数据放在自定义 attachment 中，需要该模组提供专用适配。
 
 ## 构建与验证
 
-需要 Java 25：
+使用 IntelliJ IDEA 直接打开仓库根目录即可导入 Gradle 工程。源码位于 `src/main/java`，需要 Java 25：
 
 ```powershell
 .\gradlew.bat build
