@@ -5,7 +5,7 @@
   "name": "Universe 647",
   "description": "Server-side personal three-dimensional pocket universes with isolation and performance budgets.",
   "authors": ["EDTP"],
-  "environment": "server",
+  "environment": "*",
   "entrypoints": {
     "main": [
       {
