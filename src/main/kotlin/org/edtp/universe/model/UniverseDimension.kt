@@ -6,11 +6,12 @@ import net.minecraft.world.level.Level
 
 enum class UniverseDimension(
     val id: String,
+    val vanillaId: String,
     val vanilla: VanillaDimension,
 ) {
-    OVERWORLD("overworld", VanillaDimension.Overworld),
-    NETHER("nether", VanillaDimension.Nether),
-    END("end", VanillaDimension.End),
+    OVERWORLD("overworld", "minecraft:overworld", VanillaDimension.Overworld),
+    NETHER("nether", "minecraft:the_nether", VanillaDimension.Nether),
+    END("end", "minecraft:the_end", VanillaDimension.End),
     ;
 
     val vanillaLevelKey: ResourceKey<Level>

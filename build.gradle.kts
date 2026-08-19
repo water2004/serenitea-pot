@@ -29,6 +29,9 @@ dependencies {
 
     implementation(libs.bundles.arcade)
     include(libs.bundles.arcade)
+
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 loom {
@@ -62,6 +65,10 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions.freeCompilerArgs.add("-Xjvm-default=all")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 publishing {

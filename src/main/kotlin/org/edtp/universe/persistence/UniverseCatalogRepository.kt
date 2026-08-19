@@ -123,7 +123,7 @@ class UniverseCatalogRepository(private val root: Path) {
                 val dimension = UniverseDimension.fromId(slotId) ?: continue
                 val slot = slotElement.asJsonObject
                 record.slots[dimension] = UniverseSlotRecord(
-                    sourceDimension = slot.string("sourceDimension", dimension.vanillaLevelKey.identifier().toString()),
+                    sourceDimension = slot.string("sourceDimension", dimension.vanillaId),
                     centerX = slot.int("centerX", 0),
                     centerY = slot.int("centerY", 0),
                     centerZ = slot.int("centerZ", 0),
