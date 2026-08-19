@@ -34,7 +34,7 @@ import java.util.UUID;
  * synchronous chunk loads in the same server tick.
  */
 public final class RegionCopyTask {
-    private static final int MAX_ENTITY_ROOTS_PER_CHUNK = 256;
+    private static final int ENTITY_ROOTS_PER_SLICE = 256;
 
     private final ServerLevel source;
     private final ServerLevel target;
@@ -255,17 +255,20 @@ public final class RegionCopyTask {
             phase = Phase.ENTITIES;
             return;
         }
-        var area = AABB.of(chunkBox(entityScanChunkCursor++));
-        var found = new ArrayList<Entity>(MAX_ENTITY_ROOTS_PER_CHUNK + 1);
+        var area = AABB.of(chunkBox(entityScanChunkCursor));
+        var found = new ArrayList<Entity>(ENTITY_ROOTS_PER_SLICE);
         source.getEntities(EntityTypeTest.forClass(Entity.class), area,
-                entity -> !(entity instanceof ServerPlayer) && !entity.isPassenger(),
-                found, MAX_ENTITY_ROOTS_PER_CHUNK + 1);
-        if (found.size() > MAX_ENTITY_ROOTS_PER_CHUNK) {
-            throw new IllegalStateException("区域内单区块实体根节点超过安全上限 " + MAX_ENTITY_ROOTS_PER_CHUNK);
-        }
+                entity -> !(entity instanceof ServerPlayer)
+                        && !entity.isPassenger()
+                        && !collectedEntityIds.contains(entity.getUUID()),
+                found, ENTITY_ROOTS_PER_SLICE);
         for (var entity : found) {
             if (collectedEntityIds.add(entity.getUUID())) entities.addLast(entity);
         }
+        if (found.size() >= ENTITY_ROOTS_PER_SLICE) {
+            return;
+        }
+        entityScanChunkCursor++;
         if (entityScanChunkCursor >= chunkCount) {
             totalEntities = entities.size();
             phase = Phase.ENTITIES;

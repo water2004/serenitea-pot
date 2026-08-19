@@ -32,16 +32,6 @@ public final class UniverseAccessPolicy {
         if (!record.isEnabled()) {
             return Component.literal("目标小宇宙已被管理员禁用");
         }
-        if (record.isStopped()) {
-            return Component.literal("目标小宇宙已被管理员停止");
-        }
-        if (record.isFrozen()) {
-            return Component.literal("目标小宇宙已被管理员冻结");
-        }
-        if (record.isQuarantined()) {
-            return Component.literal("目标小宇宙因性能异常被隔离");
-        }
-
         UniverseLevelKeys.Identity current = UniverseLevelKeys.identify(player.level().dimension());
         if (current != null && current.owner().equals(identity.owner())) {
             return null;

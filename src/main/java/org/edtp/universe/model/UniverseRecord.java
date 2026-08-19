@@ -18,25 +18,21 @@ public class UniverseRecord {
     private double budgetMillisPerSecond;
     private boolean enabled;
     private boolean frozen;
-    private boolean stopped;
-    private boolean quarantined;
     private final Map<UniverseDimension, UniverseSlotRecord> slots;
 
     public UniverseRecord(UUID owner) {
         this(owner, UUID.randomUUID(), 0, DEFAULT_MAX_RADIUS_CHUNKS, DEFAULT_BUDGET_MILLIS_PER_SECOND,
-                true, false, false, false, new EnumMap<>(UniverseDimension.class));
+                true, false, new EnumMap<>(UniverseDimension.class));
     }
 
     public UniverseRecord(UUID owner, UUID stateId, long activeGeneration, int maxRadiusChunks,
-                          double budgetMillisPerSecond, boolean enabled, boolean frozen,
-                          boolean stopped, boolean quarantined) {
+                          double budgetMillisPerSecond, boolean enabled, boolean frozen) {
         this(owner, stateId, activeGeneration, maxRadiusChunks, budgetMillisPerSecond, enabled, frozen,
-                stopped, quarantined, new EnumMap<>(UniverseDimension.class));
+                new EnumMap<>(UniverseDimension.class));
     }
 
     public UniverseRecord(UUID owner, UUID stateId, long activeGeneration, int maxRadiusChunks,
                           double budgetMillisPerSecond, boolean enabled, boolean frozen,
-                          boolean stopped, boolean quarantined,
                           Map<UniverseDimension, UniverseSlotRecord> slots) {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.stateId = Objects.requireNonNull(stateId, "stateId");
@@ -45,8 +41,6 @@ public class UniverseRecord {
         this.budgetMillisPerSecond = budgetMillisPerSecond;
         this.enabled = enabled;
         this.frozen = frozen;
-        this.stopped = stopped;
-        this.quarantined = quarantined;
         this.slots = Objects.requireNonNull(slots, "slots");
     }
 
@@ -100,22 +94,6 @@ public class UniverseRecord {
 
     public void setFrozen(boolean frozen) {
         this.frozen = frozen;
-    }
-
-    public boolean isStopped() {
-        return stopped;
-    }
-
-    public void setStopped(boolean stopped) {
-        this.stopped = stopped;
-    }
-
-    public boolean isQuarantined() {
-        return quarantined;
-    }
-
-    public void setQuarantined(boolean quarantined) {
-        this.quarantined = quarantined;
     }
 
     public boolean exists() {

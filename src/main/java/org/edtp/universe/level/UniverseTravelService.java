@@ -25,9 +25,6 @@ public final class UniverseTravelService {
             return new Rejected("目标玩家还没有创建小宇宙");
         }
         if (!record.isEnabled()) return new Rejected("目标小宇宙已被禁用");
-        if (record.isStopped()) return new Rejected("目标小宇宙已被管理员停止");
-        if (record.isFrozen()) return new Rejected("目标小宇宙已被管理员冻结");
-        if (record.isQuarantined()) return new Rejected("目标小宇宙因性能异常被隔离");
         if (UniverseLifecycleService.isUnavailable(owner)) return new Rejected("目标小宇宙正在关闭或维护");
 
         UniverseBundle bundle;

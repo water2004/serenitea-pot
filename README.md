@@ -23,6 +23,7 @@ Minecraft 26.2 的 Fabric 服务端逻辑小宇宙模组，支持独立服务器
 /universe create <radius>         按区块半径提取当前维度完整高度，覆盖对应小宇宙维度
 /universe enter                   进入自己的小宇宙
 /universe leave                   离开当前小宇宙
+/universe unfreeze                维修完成后恢复自己的小宇宙 tick
 /universe request <owner>         申请进入，60 秒过期
 /universe requests                查看收到的待处理申请
 /universe approve <player>        批准并立即送入申请者
@@ -36,30 +37,25 @@ OP4 也可用 `/universe enter <owner>` 进入主人当前已加载的小宇宙�
 
 ```text
 /universe admin enable|disable <player>
-/universe admin freeze|unfreeze <player>
-/universe admin stop|start <player>
 /universe admin max-radius <player> <chunk-radius>
 /universe admin budget <player> <ms-per-second>
 /universe admin global-budget <ms-per-second>
 /universe admin status <player>
 /universe admin perf [player]
-/universe admin clear-quarantine <player>
 /universe admin delete <player> confirm
 ```
 
-`start` 只解除管理员停止状态，不会常驻加载；仍需真实主人进入才会加载。
-
 新玩家默认最大区块半径为 `4`；OP4 可用 `max-radius` 为每名玩家独立调整。这里的半径始终以区块为单位，绝对上限为 `256`。提高上限只更新配置；降低上限且现有维度更大时，会通过同一暂存代际事务裁掉所有已创建维度超出新半径的边缘，成功切换后删除原代际，而不是只缩世界边界。
 
-`disable`、`freeze`、`stop` 和自动性能隔离都会先禁止新进入，然后在 tick 末尾通过同一个关闭事务送出所有成员、确认维度无人占用，最后保存并卸载。这里的 `freeze` 是“冻结存档并卸载”，不是让玩家停留在一个不 tick 的维度中。
+`disable` 会禁止新进入，并在 tick 末尾通过关闭事务送出所有成员、确认维度无人占用，最后保存并卸载。`freeze` 是维修模式：仍允许主人、获批访客和管理员进入，但整组三维度的 `ServerLevel.tick` 都暂停，机器、实体、计划刻和随机刻不会推进；主人离开后仍照常卸载。运行中的小宇宙异常卡顿时会自动进入 `frozen`，主人可以直接维修并自行 `unfreeze`；反复制造问题时 OP4 仍可 `disable`。
 
 ## 性能模型
 
-每名玩家的三个维度和全高度区域复制任务共享一个毫秒/秒 token bucket，全部小宇宙还共享一个全局池。预算不足、冻结、创建中或被隔离时会跳过整个 `ServerLevel.tick`。区域复制按玩家轮转，方块、生物群系、计划刻和实体扫描都按区块推进，每次最多准备一个新区块，并受每 tick 4 ms 的额外总上限约束。`perf` 显示 `RUNNING`、`COPYING`、`THROTTLED`、`QUARANTINED` 等运行状态，并记录最近完整一秒的总耗时、其中复制耗时、平均/最大维度 tick、执行/跳过次数和有效 TPS。
+每名玩家的三个维度和全高度区域复制任务共享一个毫秒/秒 token bucket，全部小宇宙还共享一个全局池。预算不足、禁用、冻结或创建中时会跳过整个 `ServerLevel.tick`。区域复制按玩家轮转，方块、生物群系、计划刻和实体扫描都按区块推进，每次最多准备一个新区块，并受每 tick 4 ms 的额外总上限约束。`perf` 显示 `RUNNING`、`COPYING`、`THROTTLED`、`FROZEN`、`DISABLED` 等运行状态，并记录最近完整一秒的总耗时、其中复制耗时、平均/最大维度 tick、执行/跳过次数和有效 TPS。
 
-单次维度 tick、同步区块加载或模组回调无法从中途安全终止；如果一次调用超过预算，实际耗时会形成 token 债务，后续 tick 被节流。单片达到 200 ms 会自动隔离并关闭该小宇宙。这能限制长期占用和连续卡顿，但不能保证任意第三方模组的一次失控调用绝不造成瞬时卡顿。
+单次维度 tick、同步区块加载或模组回调无法从中途安全终止；如果一次调用超过预算，实际耗时会形成 token 债务，后续工作被节流。只有已经运行的小宇宙单次 `ServerLevel.tick` 达到 200 ms 才会自动冻结；玩家留在原地，从下一 tick 起进入维修模式。创建复制不会因慢区块而冻结或失败：超出的耗时记为预算债务，之后降低推进频率继续执行。因此复杂区域只会需要更长时间，但仍不能保证第三方模组的一次失控回调绝不造成瞬时卡顿。
 
-为避免病态实体堆积绕过复制预算，提取区域中任一区块若超过 256 个非玩家根实体，创建会安全失败并清理暂存代际；乘客树随根实体整体复制。
+实体复制同样属于计划的一部分：每片最多收集 256 个非玩家根实体，单区块超过该数量时会留在当前区块继续分片收集，不会直接判定创建失败；乘客树随根实体整体复制。
 
 ## 模组兼容边界
 

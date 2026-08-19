@@ -53,6 +53,11 @@ public final class UniverseLifecycleService {
         pendingCloses.add(owner);
     }
 
+    /** Cancels a close that has only been queued and has not started yet. */
+    public static void cancelPendingClose(UUID owner) {
+        pendingCloses.remove(owner);
+    }
+
     public static boolean isUnavailable(UUID owner) {
         return pendingCloses.contains(owner) || maintenance.contains(owner) || closing.contains(owner);
     }

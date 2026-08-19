@@ -38,11 +38,11 @@ public final class UniverseInvitationService {
         }
         UniverseRecord record = UniverseManager.record(owner);
         if (record == null) return new Rejected("该玩家还没有小宇宙");
-        if (!record.exists() || !record.isEnabled() || record.isStopped() || record.isQuarantined()) {
+        if (!record.exists() || !record.isEnabled()) {
             return new Rejected("该小宇宙当前不可申请");
         }
-        if (record.isFrozen() || UniverseLifecycleService.isUnavailable(owner)) {
-            return new Rejected("该小宇宙当前正在冻结、关闭或维护");
+        if (UniverseLifecycleService.isUnavailable(owner)) {
+            return new Rejected("该小宇宙当前正在关闭或维护");
         }
         if (!UniverseAccessPolicy.isRealOwnerInside(requester.level().getServer(), owner)) {
             return new Rejected("只有主人本人正在小宇宙内时才能提交申请");

@@ -82,8 +82,6 @@ public class UniverseCatalogRepository {
         result.addProperty("budgetMillisPerSecond", record.getBudgetMillisPerSecond());
         result.addProperty("enabled", record.isEnabled());
         result.addProperty("frozen", record.isFrozen());
-        result.addProperty("stopped", record.isStopped());
-        result.addProperty("quarantined", record.isQuarantined());
 
         JsonObject slots = new JsonObject();
         for (Map.Entry<UniverseDimension, UniverseSlotRecord> entry : record.getSlots().entrySet()) {
@@ -123,9 +121,7 @@ public class UniverseCatalogRepository {
                     intValue(recordObject, "maxRadiusChunks", catalog.getDefaultMaxRadiusChunks()),
                     doubleValue(recordObject, "budgetMillisPerSecond", catalog.getDefaultBudgetMillisPerSecond()),
                     booleanValue(recordObject, "enabled", true),
-                    booleanValue(recordObject, "frozen", false),
-                    booleanValue(recordObject, "stopped", false),
-                    booleanValue(recordObject, "quarantined", false));
+                    booleanValue(recordObject, "frozen", false));
 
             JsonObject slots = objectValue(recordObject, "slots");
             for (Map.Entry<String, JsonElement> slotEntry : slots.entrySet()) {

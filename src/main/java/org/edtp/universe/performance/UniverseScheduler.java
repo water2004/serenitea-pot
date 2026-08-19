@@ -8,7 +8,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.permissions.Permissions;
 import org.edtp.universe.UniverseMod;
 import org.edtp.universe.level.UniverseLevelKeys;
-import org.edtp.universe.level.UniverseLifecycleService;
 import org.edtp.universe.level.UniverseManager;
 import org.edtp.universe.model.UniverseDimension;
 import org.edtp.universe.region.UniverseCreationService;
@@ -23,7 +22,7 @@ import java.util.UUID;
 public final class UniverseScheduler {
     private static final double TICKS_PER_SECOND = 20.0;
     private static final long MINIMUM_RESERVATION_NANOS = 50_000L;
-    private static final long QUARANTINE_SINGLE_TICK_NANOS = 200_000_000L;
+    private static final long AUTO_FREEZE_LEVEL_TICK_NANOS = 200_000_000L;
 
     private static final LinkedHashMap<UUID, OwnerBudget> owners = new LinkedHashMap<>();
     private static double globalTokensNanos;
@@ -56,7 +55,7 @@ public final class UniverseScheduler {
         budget.calls++;
         UniverseDimension dimension = identity.dimension();
         budget.dimension(dimension).calls++;
-        if (!record.isEnabled() || record.isFrozen() || record.isStopped() || record.isQuarantined()
+        if (!record.isEnabled() || record.isFrozen()
             || UniverseCreationService.isBusy(owner)) {
             budget.recordSkip(dimension);
             return false;
@@ -92,16 +91,15 @@ public final class UniverseScheduler {
         globalTokensNanos -= correction;
         budget.recordRun(dimension, elapsedNanos);
 
-        if (elapsedNanos >= QUARANTINE_SINGLE_TICK_NANOS) {
+        if (elapsedNanos >= AUTO_FREEZE_LEVEL_TICK_NANOS) {
             var record = UniverseManager.record(owner);
             if (record == null) {
                 return;
             }
-            if (!record.isQuarantined()) {
-                record.setQuarantined(true);
+            if (!record.isFrozen()) {
+                record.setFrozen(true);
                 UniverseManager.saveCatalog();
-                UniverseLifecycleService.forceUnload(owner);
-                notifyQuarantine(level.getServer(), owner, elapsedNanos);
+                notifyAutomaticFreeze(level.getServer(), owner, elapsedNanos);
             }
         }
     }
@@ -155,7 +153,7 @@ public final class UniverseScheduler {
     /**
      * Reserves time for a region-copy slice from the same owner/global token
      * buckets used by custom level ticks. The actual elapsed time is corrected
-     * by {@link #completeCreationSlice(MinecraftServer, CreationReservation, long)},
+     * by {@link #completeCreationSlice(CreationReservation, long)},
      * so a slow chunk load creates budget debt.
      */
     public static CreationReservation reserveCreationSlice(UUID owner, long maximumNanos) {
@@ -175,11 +173,7 @@ public final class UniverseScheduler {
         return new CreationReservation(owner, reserved);
     }
 
-    public static void completeCreationSlice(
-        MinecraftServer server,
-        CreationReservation reservation,
-        long elapsedNanos
-    ) {
+    public static void completeCreationSlice(CreationReservation reservation, long elapsedNanos) {
         if (reservation.completed) {
             UniverseMod.LOGGER.warn(
                 "Ignored duplicate completion for universe {} creation reservation", reservation.owner);
@@ -194,18 +188,6 @@ public final class UniverseScheduler {
         budget.tokensNanos -= correction;
         globalTokensNanos -= correction;
         budget.recordCreation(elapsedNanos);
-        if (elapsedNanos >= QUARANTINE_SINGLE_TICK_NANOS) {
-            var record = UniverseManager.record(reservation.owner);
-            if (record == null) {
-                return;
-            }
-            if (!record.isQuarantined()) {
-                record.setQuarantined(true);
-                UniverseManager.saveCatalog();
-                UniverseLifecycleService.forceUnload(reservation.owner);
-                notifyQuarantine(server, reservation.owner, elapsedNanos);
-            }
-        }
     }
 
     private static void startServerTick(MinecraftServer server) {
@@ -225,19 +207,21 @@ public final class UniverseScheduler {
         }
     }
 
-    private static void notifyQuarantine(MinecraftServer server, UUID owner, long elapsedNanos) {
+    private static void notifyAutomaticFreeze(MinecraftServer server, UUID owner, long elapsedNanos) {
         double millis = elapsedNanos / 1_000_000.0;
         String formattedMillis = "%.2f".formatted(millis);
         UniverseMod.LOGGER.error(
-            "Universe {} produced a single {} ms level/copy slice and was quarantined",
+            "Universe {} produced a single {} ms level tick and was automatically frozen",
             owner,
             formattedMillis
         );
         Component message = Component.literal(
-            "[Universe 647] " + owner + " 单次维度 tick/复制片段耗时 " + formattedMillis + " ms，已自动隔离"
+            "[Universe 647] " + owner + " 单次维度 tick 耗时 " + formattedMillis
+                + " ms，已自动冻结；修复后执行 /universe unfreeze"
         );
         for (var player : server.getPlayerList().getPlayers()) {
-            if (player.permissions().hasPermission(Permissions.COMMANDS_OWNER)) {
+            if (player.getUUID().equals(owner)
+                || player.permissions().hasPermission(Permissions.COMMANDS_OWNER)) {
                 player.sendSystemMessage(message);
             }
         }

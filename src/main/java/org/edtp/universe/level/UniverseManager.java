@@ -48,15 +48,18 @@ public final class UniverseManager {
         if (UniverseManager.server != null) {
             throw new IllegalStateException("UniverseManager is already attached");
         }
-        UniverseManager.server = server;
-        repository = new UniverseCatalogRepository(
+        UniverseCatalogRepository candidateRepository = new UniverseCatalogRepository(
             server.getWorldPath(LevelResource.ROOT).resolve(UniverseMod.MOD_ID)
         );
+        UniverseCatalog loadedCatalog;
         try {
-            catalog = repository.load();
+            loadedCatalog = candidateRepository.load();
         } catch (IOException error) {
             throw new IllegalStateException("Failed to load universe catalog", error);
         }
+        repository = candidateRepository;
+        catalog = loadedCatalog;
+        UniverseManager.server = server;
         UniverseMod.LOGGER.info(
             "Loaded metadata for {} personal universes; dimensions remain unloaded",
             catalog.getPlayers().size()

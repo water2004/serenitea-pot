@@ -47,6 +47,7 @@ public final class UniverseCommands {
                 .then(Commands.argument("owner", GameProfileArgument.gameProfile())
                     .executes(UniverseCommands::enterTarget)))
             .then(Commands.literal("leave").executes(UniverseCommands::leave))
+            .then(Commands.literal("unfreeze").executes(UniverseCommands::unfreezeSelf))
             .then(Commands.literal("request")
                 .then(Commands.argument("owner", GameProfileArgument.gameProfile()).executes(UniverseCommands::request)))
             .then(Commands.literal("requests").executes(UniverseCommands::requests))
@@ -71,10 +72,6 @@ public final class UniverseCommands {
             .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_OWNER))
             .then(adminToggle("enable", true))
             .then(adminToggle("disable", false))
-            .then(adminFreeze("freeze", true))
-            .then(adminFreeze("unfreeze", false))
-            .then(adminStop("stop", true))
-            .then(adminStop("start", false))
             .then(Commands.literal("max-radius")
                 .then(Commands.argument("player", GameProfileArgument.gameProfile())
                     .then(Commands.argument("radius", IntegerArgumentType.integer(
@@ -94,9 +91,6 @@ public final class UniverseCommands {
                 .executes(UniverseCommands::adminPerfList)
                 .then(Commands.argument("player", GameProfileArgument.gameProfile())
                     .executes(UniverseCommands::adminPerf)))
-            .then(Commands.literal("clear-quarantine")
-                .then(Commands.argument("player", GameProfileArgument.gameProfile())
-                    .executes(UniverseCommands::adminClearQuarantine)))
             .then(Commands.literal("delete")
                 .then(Commands.argument("player", GameProfileArgument.gameProfile())
                     .then(Commands.literal("confirm").executes(UniverseCommands::adminDelete))));
@@ -106,37 +100,39 @@ public final class UniverseCommands {
         return Commands.literal(name).then(
             Commands.argument("player", GameProfileArgument.gameProfile()).executes(context -> {
                 UUID owner = profile(context, "player");
-                UniverseManager.getOrCreateRecord(owner).setEnabled(enabled);
-                if (!enabled) UniverseLifecycleService.requestClose(owner);
+                UniverseRecord record = UniverseManager.getOrCreateRecord(owner);
+                boolean wasEnabled = record.isEnabled();
+                record.setEnabled(enabled);
+                if (enabled) {
+                    if (!wasEnabled) {
+                        UniverseLifecycleService.cancelPendingClose(owner);
+                        UniverseScheduler.reset(owner);
+                    }
+                } else {
+                    UniverseLifecycleService.requestClose(owner);
+                }
                 UniverseManager.saveCatalog();
-                return success(context, "已" + (enabled ? "启用" : "禁用") + " " + owner + " 的小宇宙功能");
+                String suffix = enabled && record.isFrozen()
+                    ? "；tick 仍处于自动冻结，主人可执行 /universe unfreeze"
+                    : "";
+                return success(context,
+                    "已" + (enabled ? "启用" : "禁用") + " " + owner + " 的小宇宙功能" + suffix
+                );
             })
         );
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> adminFreeze(String name, boolean frozen) {
-        return Commands.literal(name).then(
-            Commands.argument("player", GameProfileArgument.gameProfile()).executes(context -> {
-                UUID owner = profile(context, "player");
-                UniverseManager.getOrCreateRecord(owner).setFrozen(frozen);
-                if (frozen) UniverseLifecycleService.requestClose(owner);
-                UniverseManager.saveCatalog();
-                return success(context, "已" + (frozen ? "冻结" : "解冻") + " " + owner + " 的小宇宙");
-            })
-        );
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> adminStop(String name, boolean stopped) {
-        return Commands.literal(name).then(
-            Commands.argument("player", GameProfileArgument.gameProfile()).executes(context -> {
-                UUID owner = profile(context, "player");
-                UniverseManager.getOrCreateRecord(owner).setStopped(stopped);
-                if (stopped) UniverseLifecycleService.requestClose(owner);
-                UniverseManager.saveCatalog();
-                String wording = stopped ? "停止并卸载" : "解除停止（等待主人进入时加载）";
-                return success(context, "已" + wording + " " + owner + " 的小宇宙");
-            })
-        );
+    private static int unfreezeSelf(CommandContext<CommandSourceStack> context)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        UUID owner = context.getSource().getPlayerOrException().getUUID();
+        UniverseRecord record = UniverseManager.record(owner);
+        if (record == null || !record.exists()) return failure(context, "你还没有小宇宙");
+        if (!record.isFrozen()) {
+            return success(context, "你的小宇宙 tick 当前没有冻结");
+        }
+        record.setFrozen(false);
+        UniverseManager.saveCatalog();
+        return success(context, "已解除小宇宙的自动冻结；预算债务仍会继续限制 tick 频率");
     }
 
     private static int create(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
@@ -299,7 +295,6 @@ public final class UniverseCommands {
         return success(context,
             "owner=" + owner + ", 存在=" + record.exists() + ", 已加载=" + (UniverseManager.loaded(owner) != null)
                 + ", enabled=" + record.isEnabled() + ", frozen=" + record.isFrozen()
-                + ", stopped=" + record.isStopped() + ", quarantined=" + record.isQuarantined()
                 + ", maxRadiusChunks=" + record.getMaxRadiusChunks() + ", budget=" + record.getBudgetMillisPerSecond()
                 + "ms/s" + creation
         );
@@ -324,20 +319,11 @@ public final class UniverseCommands {
         return snapshots.size();
     }
 
-    private static int adminClearQuarantine(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        UUID owner = profile(context, "player");
-        UniverseManager.getOrCreateRecord(owner).setQuarantined(false);
-        UniverseScheduler.reset(owner);
-        UniverseManager.saveCatalog();
-        return success(context, "已解除 " + owner + " 的性能隔离；主人下次进入时加载");
-    }
-
     private static String formatPerformance(UniversePerformanceSnapshot snapshot) {
         UniverseRecord record = UniverseManager.record(snapshot.owner());
         String state;
-        if (record != null && record.isQuarantined()) state = "QUARANTINED";
+        if (record != null && !record.isEnabled()) state = "DISABLED";
         else if (record != null && record.isFrozen()) state = "FROZEN";
-        else if (record != null && record.isStopped()) state = "STOPPED";
         else if (UniverseCreationService.isBusy(snapshot.owner())) state = "COPYING";
         else if (snapshot.skippedTicks() > 0) state = "THROTTLED";
         else if (UniverseManager.loaded(snapshot.owner()) != null) state = "RUNNING";

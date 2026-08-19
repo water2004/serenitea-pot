@@ -38,15 +38,11 @@ public final class UniverseDeletionService {
             oldSlots.put(entry.getKey(), entry.getValue());
         }
         boolean oldFrozen = record.isFrozen();
-        boolean oldStopped = record.isStopped();
-        boolean oldQuarantined = record.isQuarantined();
 
         record.setActiveGeneration(0);
         record.setStateId(UUID.randomUUID());
         record.getSlots().clear();
         record.setFrozen(false);
-        record.setStopped(false);
-        record.setQuarantined(false);
         try {
             UniverseManager.saveCatalog();
         } catch (Throwable error) {
@@ -54,8 +50,6 @@ public final class UniverseDeletionService {
             record.setActiveGeneration(oldGeneration);
             record.getSlots().putAll(oldSlots);
             record.setFrozen(oldFrozen);
-            record.setStopped(oldStopped);
-            record.setQuarantined(oldQuarantined);
             return new Rejected("无法提交删除事务：" + error.getMessage());
         }
         UniverseScheduler.reset(owner);

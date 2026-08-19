@@ -42,7 +42,7 @@ public class UniverseCatalog {
 
     public UniverseRecord getOrCreate(UUID owner) {
         return players.computeIfAbsent(owner, key -> new UniverseRecord(key, UUID.randomUUID(), 0,
-                defaultMaxRadiusChunks, defaultBudgetMillisPerSecond, true, false, false, false));
+                defaultMaxRadiusChunks, defaultBudgetMillisPerSecond, true, false));
     }
 
 }

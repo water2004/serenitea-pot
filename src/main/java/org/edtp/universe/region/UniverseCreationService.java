@@ -47,8 +47,6 @@ public final class UniverseCreationService {
 
         UniverseRecord record = UniverseManager.getOrCreateRecord(owner);
         if (!record.isEnabled()) return new Rejected("你的小宇宙功能已被管理员禁用");
-        if (record.isQuarantined()) return new Rejected("你的小宇宙已被隔离，请联系管理员");
-        if (record.isFrozen() || record.isStopped()) return new Rejected("你的小宇宙已被管理员冻结或停止");
         if (jobs.containsKey(owner)) return new Rejected("已有一个小宇宙创建任务正在运行");
         if (radiusChunks < 0 || radiusChunks > record.getMaxRadiusChunks()) {
             return new Rejected("区块半径必须在 0 到 " + record.getMaxRadiusChunks() + " 之间");
@@ -265,16 +263,16 @@ public final class UniverseCreationService {
             try {
                 job.step(started + (long) reservation.reservedNanos());
             } catch (Throwable error) {
-                UniverseScheduler.completeCreationSlice(server, reservation, System.nanoTime() - started);
+                UniverseScheduler.completeCreationSlice(reservation, System.nanoTime() - started);
                 UniverseMod.LOGGER.error("Universe creation failed for {}", job.owner, error);
                 fail(server, job, errorMessage(error));
                 jobs.remove(owner);
                 continue;
             }
-            UniverseScheduler.completeCreationSlice(server, reservation, System.nanoTime() - started);
+            UniverseScheduler.completeCreationSlice(reservation, System.nanoTime() - started);
             UniverseRecord updated = UniverseManager.record(owner);
             if (!job.canContinue(updated)) {
-                fail(server, job, "创建复制触发性能隔离");
+                fail(server, job, "创建任务期间小宇宙被禁用或删除");
                 jobs.remove(owner);
                 continue;
             }
@@ -420,8 +418,7 @@ public final class UniverseCreationService {
             if (kind == JobKind.MAXIMUM_TRIM) {
                 return administrativeState.equals(AdministrativeState.capture(record));
             }
-            return record.isEnabled() && !record.isFrozen()
-                && !record.isStopped() && !record.isQuarantined();
+            return record.isEnabled();
         }
 
         private void step(long deadline) {
@@ -450,19 +447,9 @@ public final class UniverseCreationService {
         MAXIMUM_TRIM
     }
 
-    private record AdministrativeState(
-        boolean enabled,
-        boolean frozen,
-        boolean stopped,
-        boolean quarantined
-    ) {
+    private record AdministrativeState(boolean enabled) {
         private static AdministrativeState capture(UniverseRecord record) {
-            return new AdministrativeState(
-                record.isEnabled(),
-                record.isFrozen(),
-                record.isStopped(),
-                record.isQuarantined()
-            );
+            return new AdministrativeState(record.isEnabled());
         }
     }
 
