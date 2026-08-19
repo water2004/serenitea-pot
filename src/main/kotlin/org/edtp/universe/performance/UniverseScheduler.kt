@@ -1,6 +1,7 @@
 package org.edtp.universe.performance
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
@@ -8,6 +9,7 @@ import net.minecraft.server.permissions.Permissions
 import org.edtp.universe.UniverseMod
 import org.edtp.universe.level.UniverseLevelKeys
 import org.edtp.universe.level.UniverseManager
+import org.edtp.universe.level.UniverseLifecycleService
 import org.edtp.universe.model.UniverseDimension
 import org.edtp.universe.region.UniverseCreationService
 import java.util.EnumMap
@@ -25,6 +27,8 @@ object UniverseScheduler {
 
     fun register() {
         ServerTickEvents.START_SERVER_TICK.register(::startServerTick)
+        ServerLifecycleEvents.SERVER_STARTED.register { resetAll() }
+        ServerLifecycleEvents.SERVER_STOPPED.register { resetAll() }
     }
 
     @JvmStatic
@@ -72,6 +76,7 @@ object UniverseScheduler {
             if (!record.quarantined) {
                 record.quarantined = true
                 UniverseManager.saveCatalog()
+                UniverseLifecycleService.forceUnload(identity.owner)
                 notifyQuarantine(level.server, identity.owner, elapsedNanos)
             }
         }
@@ -82,6 +87,7 @@ object UniverseScheduler {
         val budget = owners[owner] ?: return UniversePerformanceSnapshot(
             owner,
             record.budgetMillisPerSecond,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -101,6 +107,52 @@ object UniverseScheduler {
         owners.remove(owner)
     }
 
+    private fun resetAll() {
+        owners.clear()
+        globalTokensNanos = 0.0
+        serverTicks = 0L
+    }
+
+    /**
+     * Reserves time for a region-copy slice from the same owner/global token
+     * buckets used by custom level ticks. The actual elapsed time is corrected
+     * by [completeCreationSlice], so a slow chunk load creates budget debt.
+     */
+    fun reserveCreationSlice(owner: UUID, maximumNanos: Long): CreationReservation? {
+        val record = UniverseManager.record(owner) ?: return null
+        val budget = owners.getOrPut(owner) { OwnerBudget(record.budgetMillisPerSecond) }
+        budget.updateLimit(record.budgetMillisPerSecond)
+        val reserved = min(maximumNanos.toDouble(), min(budget.tokensNanos, globalTokensNanos))
+        if (reserved < MINIMUM_RESERVATION_NANOS) {
+            return null
+        }
+        budget.tokensNanos -= reserved
+        globalTokensNanos -= reserved
+        return CreationReservation(owner, reserved)
+    }
+
+    fun completeCreationSlice(server: MinecraftServer, reservation: CreationReservation, elapsedNanos: Long) {
+        if (reservation.completed) {
+            UniverseMod.logger.warn("Ignored duplicate completion for universe {} creation reservation", reservation.owner)
+            return
+        }
+        reservation.completed = true
+        val budget = owners[reservation.owner] ?: return
+        val correction = elapsedNanos - reservation.reservedNanos
+        budget.tokensNanos -= correction
+        globalTokensNanos -= correction
+        budget.recordCreation(elapsedNanos)
+        if (elapsedNanos >= QUARANTINE_SINGLE_TICK_NANOS) {
+            val record = UniverseManager.record(reservation.owner) ?: return
+            if (!record.quarantined) {
+                record.quarantined = true
+                UniverseManager.saveCatalog()
+                UniverseLifecycleService.forceUnload(reservation.owner)
+                notifyQuarantine(server, reservation.owner, elapsedNanos)
+            }
+        }
+    }
+
     private fun startServerTick(server: MinecraftServer) {
         serverTicks++
         val globalLimit = UniverseManager.catalog().globalBudgetMillisPerSecond * 1_000_000.0
@@ -118,12 +170,12 @@ object UniverseScheduler {
     private fun notifyQuarantine(server: MinecraftServer, owner: UUID, elapsedNanos: Long) {
         val millis = elapsedNanos / 1_000_000.0
         UniverseMod.logger.error(
-            "Universe {} produced a single {} ms level tick and was quarantined",
+            "Universe {} produced a single {} ms level/copy slice and was quarantined",
             owner,
             "%.2f".format(millis),
         )
         val message = Component.literal(
-            "[Universe 647] $owner 单次维度 tick 耗时 ${"%.2f".format(millis)} ms，已自动隔离",
+            "[Universe 647] $owner 单次维度 tick/复制片段耗时 ${"%.2f".format(millis)} ms，已自动隔离",
         )
         for (player in server.playerList.players) {
             if (player.permissions().hasPermission(Permissions.COMMANDS_OWNER)) {
@@ -143,11 +195,13 @@ object UniverseScheduler {
         private var skips = 0L
         private var consumed = 0L
         private var maximum = 0L
+        private var creationConsumed = 0L
         private var lastCalls = 0L
         private var lastRuns = 0L
         private var lastSkips = 0L
         private var lastConsumed = 0L
         private var lastMaximum = 0L
+        private var lastCreationConsumed = 0L
 
         fun updateLimit(millisPerSecond: Double) {
             limitNanos = max(0.0, millisPerSecond * 1_000_000.0)
@@ -174,29 +228,39 @@ object UniverseScheduler {
             dimension(dimension).recordRun(elapsedNanos)
         }
 
+        fun recordCreation(elapsedNanos: Long) {
+            consumed += elapsedNanos
+            creationConsumed += elapsedNanos
+            maximum = max(maximum, elapsedNanos)
+        }
+
         fun rollWindow() {
             lastCalls = calls
             lastRuns = runs
             lastSkips = skips
             lastConsumed = consumed
             lastMaximum = maximum
+            lastCreationConsumed = creationConsumed
             calls = 0
             runs = 0
             skips = 0
             consumed = 0
             maximum = 0
+            creationConsumed = 0
             for (dimension in dimensions.values) {
                 dimension.rollWindow()
             }
         }
 
         fun snapshot(owner: UUID, limitMillis: Double): UniversePerformanceSnapshot {
-            val average = if (lastRuns == 0L) 0.0 else lastConsumed / lastRuns / 1_000_000.0
+            val levelConsumed = lastConsumed - lastCreationConsumed
+            val average = if (lastRuns == 0L) 0.0 else levelConsumed / lastRuns / 1_000_000.0
             val effectiveTps = if (lastCalls == 0L) 0.0 else lastRuns.toDouble() / lastCalls * 20.0
             return UniversePerformanceSnapshot(
                 owner = owner,
                 budgetMillisPerSecond = limitMillis,
                 consumedMillisLastSecond = lastConsumed / 1_000_000.0,
+                creationMillisLastSecond = lastCreationConsumed / 1_000_000.0,
                 averageTickMillis = average,
                 maximumTickMillis = lastMaximum / 1_000_000.0,
                 effectiveTps = effectiveTps,
@@ -205,6 +269,10 @@ object UniverseScheduler {
                 dimensions = dimensions.mapValues { it.value.snapshot() },
             )
         }
+    }
+
+    class CreationReservation internal constructor(val owner: UUID, val reservedNanos: Double) {
+        internal var completed = false
     }
 
     private class DimensionBudget {

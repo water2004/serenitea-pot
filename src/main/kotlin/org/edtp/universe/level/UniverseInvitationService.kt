@@ -1,5 +1,7 @@
 package org.edtp.universe.level
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
@@ -11,6 +13,14 @@ object UniverseInvitationService {
     private val pending = LinkedHashMap<UUID, LinkedHashMap<UUID, Long>>()
     private val entryGrants = LinkedHashMap<Pair<UUID, UUID>, Long>()
 
+    fun register() {
+        ServerTickEvents.END_SERVER_TICK.register { cleanupExpired() }
+        ServerLifecycleEvents.SERVER_STOPPED.register {
+            pending.clear()
+            entryGrants.clear()
+        }
+    }
+
     fun request(requester: ServerPlayer, owner: UUID): Result {
         if (requester.uuid == owner) {
             return Result.Rejected("不能申请加入自己的小宇宙")
@@ -19,6 +29,9 @@ object UniverseInvitationService {
             ?: return Result.Rejected("该玩家还没有小宇宙")
         if (!record.exists || !record.enabled || record.stopped || record.quarantined) {
             return Result.Rejected("该小宇宙当前不可申请")
+        }
+        if (record.frozen || UniverseLifecycleService.isUnavailable(owner)) {
+            return Result.Rejected("该小宇宙当前正在冻结、关闭或维护")
         }
         if (!UniverseAccessPolicy.isRealOwnerInside(requester.level().server, owner)) {
             return Result.Rejected("只有主人本人正在小宇宙内时才能提交申请")
@@ -42,15 +55,26 @@ object UniverseInvitationService {
         val record = UniverseManager.record(owner.uuid)
             ?: return Result.Rejected("你还没有小宇宙")
         val requests = pending[owner.uuid]
-        val expiresAt = requests?.remove(visitor)
+        val expiresAt = requests?.get(visitor)
         if (expiresAt == null || expiresAt <= System.currentTimeMillis()) {
             return Result.Rejected("没有找到该玩家的待处理申请")
         }
+        val visitorPlayer = owner.level().server.playerList.getPlayer(visitor)
+            ?: return Result.Rejected("申请者已离线，申请会保留到过期")
         entryGrants[owner.uuid to visitor] = System.currentTimeMillis() + ENTRY_GRANT_TTL_MILLIS
-        if (requests.isEmpty()) {
-            pending.remove(owner.uuid)
+        return when (val travel = UniverseTravelService.enter(visitorPlayer, owner.uuid)) {
+            UniverseTravelService.Result.Success -> {
+                requests.remove(visitor)
+                if (requests.isEmpty()) {
+                    pending.remove(owner.uuid)
+                }
+                Result.Approved(visitor)
+            }
+            is UniverseTravelService.Result.Rejected -> {
+                entryGrants.remove(owner.uuid to visitor)
+                Result.Rejected("批准后传送失败，申请仍有效：${travel.reason}")
+            }
         }
-        return Result.Approved(visitor)
     }
 
     fun deny(owner: ServerPlayer, visitor: UUID): Result {
@@ -83,6 +107,19 @@ object UniverseInvitationService {
         val key = owner to visitor
         val expiresAt = entryGrants.remove(key) ?: return false
         return expiresAt > System.currentTimeMillis()
+    }
+
+    private fun cleanupExpired() {
+        val now = System.currentTimeMillis()
+        val ownerIterator = pending.entries.iterator()
+        while (ownerIterator.hasNext()) {
+            val requests = ownerIterator.next().value
+            requests.entries.removeIf { it.value <= now }
+            if (requests.isEmpty()) {
+                ownerIterator.remove()
+            }
+        }
+        entryGrants.entries.removeIf { it.value <= now }
     }
 
     sealed interface Result {

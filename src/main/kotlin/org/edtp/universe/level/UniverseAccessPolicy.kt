@@ -10,13 +10,13 @@ import java.util.UUID
 object UniverseAccessPolicy {
     fun denialReason(player: ServerPlayer, destination: ServerLevel): Component? {
         val identity = UniverseLevelKeys.identify(destination.dimension()) ?: return null
-        if (UniverseLevelKeys.identify(player.level().dimension())?.owner == identity.owner) {
-            return null
-        }
         val record = UniverseManager.record(identity.owner)
             ?: return Component.literal("目标小宇宙不存在")
         if (identity.generation != record.activeGeneration) {
             return Component.literal("不能进入非活动的小宇宙代际")
+        }
+        if (UniverseLifecycleService.isUnavailable(identity.owner)) {
+            return Component.literal("目标小宇宙正在关闭或维护")
         }
         if (!record.enabled) {
             return Component.literal("目标小宇宙已被管理员禁用")
@@ -24,8 +24,14 @@ object UniverseAccessPolicy {
         if (record.stopped) {
             return Component.literal("目标小宇宙已被管理员停止")
         }
+        if (record.frozen) {
+            return Component.literal("目标小宇宙已被管理员冻结")
+        }
         if (record.quarantined) {
             return Component.literal("目标小宇宙因性能异常被隔离")
+        }
+        if (UniverseLevelKeys.identify(player.level().dimension())?.owner == identity.owner) {
+            return null
         }
 
         if (player.uuid == identity.owner) {

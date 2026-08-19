@@ -34,14 +34,6 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
-loom {
-    runs {
-        named("server") {
-            runDir("run")
-        }
-    }
-}
-
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(25))
     withSourcesJar()
@@ -64,7 +56,7 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    compilerOptions.freeCompilerArgs.add("-Xjvm-default=all")
+    compilerOptions.freeCompilerArgs.add("-jvm-default=no-compatibility")
 }
 
 tasks.test {

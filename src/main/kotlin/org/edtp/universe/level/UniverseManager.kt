@@ -8,6 +8,7 @@ import net.casual.arcade.dimensions.utils.addCustomLevel
 import net.casual.arcade.dimensions.utils.deleteCustomLevel
 import net.casual.arcade.dimensions.utils.loadCustomLevel
 import net.casual.arcade.dimensions.utils.removeCustomLevel
+import net.casual.arcade.dimensions.utils.getDimensionPath
 import net.minecraft.server.MinecraftServer
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.levelgen.FlatLevelSource
@@ -18,7 +19,10 @@ import org.edtp.universe.UniverseMod
 import org.edtp.universe.model.UniverseCatalog
 import org.edtp.universe.model.UniverseDimension
 import org.edtp.universe.model.UniverseRecord
+import org.edtp.universe.model.UniverseSlotRecord
 import org.edtp.universe.persistence.UniverseCatalogRepository
+import org.apache.commons.io.file.PathUtils
+import java.nio.file.Files
 import java.util.EnumMap
 import java.util.Optional
 import java.util.UUID
@@ -36,6 +40,7 @@ object UniverseManager {
             server.getWorldPath(LevelResource.ROOT).resolve(UniverseMod.MOD_ID),
         )
         this.catalog = requireNotNull(repository).load()
+        cleanupInactiveGenerations(server)
 
         UniverseMod.logger.info("Loaded metadata for {} personal universes; dimensions remain unloaded", catalog.players.size)
     }
@@ -59,6 +64,8 @@ object UniverseManager {
     fun removeRecord(owner: UUID): UniverseRecord? = catalog.players.remove(owner)
 
     fun loaded(owner: UUID): UniverseBundle? = loaded[owner]
+
+    internal fun loadedOwners(): Set<UUID> = loaded.keys.toSet()
 
     fun ownerOf(level: net.minecraft.server.level.ServerLevel): UUID? =
         UniverseLevelKeys.identify(level.dimension())?.owner
@@ -103,27 +110,47 @@ object UniverseManager {
         return UniverseBundle(owner, generation, levels)
     }
 
-    fun activate(bundle: UniverseBundle) {
+    fun activate(
+        bundle: UniverseBundle,
+        replacementSlots: Map<UniverseDimension, UniverseSlotRecord>,
+    ): UniverseBundle? {
         requireServerThread()
         val previous = loaded[bundle.owner]
         require(previous == null || previous === bundle || previous.generation != bundle.generation) {
             "Universe ${bundle.owner} generation ${bundle.generation} is already active"
+        }
+        require(previous == null || previous.levels.values.all { it.players().isEmpty() }) {
+            "Cannot replace universe ${bundle.owner} while players still occupy the previous generation"
         }
 
         for (level in bundle.levels.values) {
             level.save(null, true, false)
         }
         val record = catalog.getOrCreate(bundle.owner)
+        val oldGeneration = record.activeGeneration
+        val oldSlots = EnumMap<UniverseDimension, UniverseSlotRecord>(UniverseDimension::class.java)
+        oldSlots.putAll(record.slots.mapValues { (_, slot) -> slot.copy() })
+        val oldStopped = record.stopped
+        val oldQuarantined = record.quarantined
         record.activeGeneration = bundle.generation
+        record.slots.clear()
+        record.slots.putAll(replacementSlots.mapValues { (_, slot) -> slot.copy() })
         record.stopped = false
         record.quarantined = false
-        loaded[bundle.owner] = bundle
-        applyBorders(bundle, record)
-        saveCatalog()
-
-        if (previous != null && previous !== bundle) {
-            unloadBundle(previous)
+        try {
+            applyBorders(bundle, record)
+            saveCatalog()
+        } catch (error: Throwable) {
+            record.activeGeneration = oldGeneration
+            record.slots.clear()
+            record.slots.putAll(oldSlots)
+            record.stopped = oldStopped
+            record.quarantined = oldQuarantined
+            throw error
         }
+
+        loaded[bundle.owner] = bundle
+        return previous?.takeUnless { it === bundle }
     }
 
     fun load(owner: UUID): UniverseBundle {
@@ -153,10 +180,16 @@ object UniverseManager {
         }
     }
 
-    fun unload(owner: UUID): Boolean {
+    internal fun unloadEvacuated(owner: UUID): Boolean {
         requireServerThread()
-        val bundle = loaded.remove(owner) ?: return false
-        unloadBundle(bundle)
+        val bundle = loaded[owner] ?: return true
+        require(bundle.levels.values.all { it.players().isEmpty() }) {
+            "Cannot unload universe $owner while players still occupy it"
+        }
+        if (!unloadBundle(bundle)) {
+            return false
+        }
+        loaded.remove(owner)
         return true
     }
 
@@ -176,13 +209,34 @@ object UniverseManager {
         repository?.save(catalog)
     }
 
-    private fun unloadBundle(bundle: UniverseBundle) {
+    internal fun deleteEvacuatedLevel(level: CustomLevel): Boolean {
         val server = requireServerThread()
+        require(level.players().isEmpty()) { "Cannot delete occupied level ${level.dimension().identifier()}" }
+        runCatching { server.deleteCustomLevel(level) }
+            .onFailure { error ->
+                UniverseMod.logger.warn("Failed to delete universe level {}", level.dimension().identifier(), error)
+            }
+        val detached = server.getLevel(level.dimension()) !== level
+        val directoryRemoved = !Files.exists(server.getDimensionPath(level.dimension()))
+        return detached && directoryRemoved
+    }
+
+    private fun unloadBundle(bundle: UniverseBundle): Boolean {
+        val server = requireServerThread()
+        var complete = true
         for (level in bundle.levels.values.toList().asReversed()) {
-            if (!server.removeCustomLevel(level)) {
-                UniverseMod.logger.warn("Universe level {} was not loaded during unload", level.dimension().identifier())
+            if (server.getLevel(level.dimension()) !== level) {
+                continue
+            }
+            runCatching { server.removeCustomLevel(level) }
+                .onFailure { error ->
+                    UniverseMod.logger.warn("Failed to unload universe level {}", level.dimension().identifier(), error)
+                }
+            if (server.getLevel(level.dimension()) === level) {
+                complete = false
             }
         }
+        return complete
     }
 
     private fun applyBorders(bundle: UniverseBundle, record: UniverseRecord) {
@@ -195,6 +249,59 @@ object UniverseManager {
             } else {
                 border.setCenter(slot.centerX + 0.5, slot.centerZ + 0.5)
                 border.setSize(slot.radius * 2.0 + 1.0)
+            }
+        }
+    }
+
+    /**
+     * Completes an interrupted generation transaction. The catalog's active
+     * pointer is the commit marker; any sibling generation is staging or an
+     * already-replaced generation and is not a backup.
+     */
+    private fun cleanupInactiveGenerations(server: MinecraftServer) {
+        val universeRoot = server.getWorldPath(LevelResource.ROOT)
+            .resolve("dimensions")
+            .resolve(UniverseMod.MOD_ID)
+            .resolve("u")
+            .toAbsolutePath()
+            .normalize()
+        for ((owner, record) in catalog.players) {
+            val ownerRoot = universeRoot.resolve(owner.toString()).normalize()
+            if (ownerRoot.parent != universeRoot || !Files.isDirectory(ownerRoot)) {
+                continue
+            }
+            runCatching {
+                Files.list(ownerRoot).use { children ->
+                    children.filter(Files::isDirectory).forEach { candidate ->
+                        val resolved = candidate.toAbsolutePath().normalize()
+                        val name = resolved.fileName.toString()
+                        val generation = name.takeIf { it.startsWith('g') }
+                            ?.substring(1)
+                            ?.toLongOrNull()
+                            ?: return@forEach
+                        if (resolved.parent != ownerRoot || generation == record.activeGeneration) {
+                            return@forEach
+                        }
+                        runCatching { PathUtils.deleteDirectory(resolved) }
+                            .onSuccess {
+                                UniverseMod.logger.info(
+                                    "Deleted inactive universe generation {} for {}",
+                                    generation,
+                                    owner,
+                                )
+                            }
+                            .onFailure { error ->
+                                UniverseMod.logger.warn(
+                                    "Failed to delete inactive universe generation {} for {}",
+                                    generation,
+                                    owner,
+                                    error,
+                                )
+                            }
+                    }
+                }
+            }.onFailure { error ->
+                UniverseMod.logger.warn("Failed to inspect universe generation directory for {}", owner, error)
             }
         }
     }

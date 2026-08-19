@@ -11,13 +11,14 @@ import net.minecraft.world.effect.MobEffectInstance
 import net.minecraft.world.entity.player.Abilities
 import net.minecraft.world.food.FoodData
 import net.minecraft.world.level.GameType
+import net.minecraft.core.GlobalPos
 import net.minecraft.world.level.storage.LevelResource
 import net.minecraft.world.level.storage.TagValueInput
 import net.minecraft.world.level.storage.TagValueOutput
 import org.edtp.universe.UniverseMod
 import org.edtp.universe.level.UniverseLevelKeys
 import org.edtp.universe.level.UniverseManager
-import org.edtp.universe.level.UniversePresenceService
+import org.edtp.universe.level.UniverseLifecycleService
 import java.util.UUID
 import kotlin.math.min
 
@@ -67,7 +68,7 @@ object PlayerStateManager {
             ?: if (plan.targetOwner == null) blankPublic(player) else blankUniverse(player)
         apply(player, snapshot, plan.targetOwner != null)
         if (plan.sourceOwner == player.uuid && plan.targetOwner != player.uuid) {
-            UniversePresenceService.ownerLeft(player.uuid)
+            UniverseLifecycleService.ownerLeft(player.uuid)
         }
     }
 
@@ -83,7 +84,7 @@ object PlayerStateManager {
             store?.get(player.uuid, stateKey(null))?.let { apply(player, it, false) }
         }
         if (realmOwner == player.uuid) {
-            UniversePresenceService.ownerLeft(player.uuid)
+            UniverseLifecycleService.ownerLeft(player.uuid)
         }
     }
 
@@ -112,6 +113,8 @@ object PlayerStateManager {
         player.foodData.addAdditionalSaveData(output)
         output.store("Abilities", Abilities.Packed.CODEC, player.abilities.pack())
         output.store("GameMode", GameType.CODEC, player.gameMode())
+        output.storeNullable("Respawn", ServerPlayer.RespawnConfig.CODEC, player.respawnConfig)
+        player.lastDeathLocation.ifPresent { output.store("LastDeath", GlobalPos.CODEC, it) }
         val effects = output.list("Effects", MobEffectInstance.CODEC)
         for (effect in player.activeEffects) {
             effects.add(MobEffectInstance(effect))
@@ -137,6 +140,8 @@ object PlayerStateManager {
         }
 
         val storedMode = input.read("GameMode", GameType.CODEC).orElse(GameType.SURVIVAL)
+        player.setRespawnPosition(input.read("Respawn", ServerPlayer.RespawnConfig.CODEC).orElse(null), false)
+        player.lastDeathLocation = input.read("LastDeath", GlobalPos.CODEC)
         player.setGameMode(if (forceCreative) GameType.CREATIVE else storedMode)
         input.read("Abilities", Abilities.Packed.CODEC).ifPresent(player.abilities::apply)
         if (forceCreative) {

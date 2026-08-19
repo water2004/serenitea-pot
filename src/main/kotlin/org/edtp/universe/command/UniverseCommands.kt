@@ -13,6 +13,7 @@ import net.minecraft.server.level.ServerPlayer
 import net.minecraft.server.permissions.Permissions
 import org.edtp.universe.level.UniverseDeletionService
 import org.edtp.universe.level.UniverseInvitationService
+import org.edtp.universe.level.UniverseLifecycleService
 import org.edtp.universe.level.UniverseManager
 import org.edtp.universe.level.UniverseTravelService
 import org.edtp.universe.performance.UniverseScheduler
@@ -124,7 +125,7 @@ object UniverseCommands {
                 val record = UniverseManager.getOrCreateRecord(owner)
                 record.enabled = enabled
                 if (!enabled) {
-                    UniverseManager.unload(owner)
+                    UniverseLifecycleService.requestClose(owner)
                 }
                 UniverseManager.saveCatalog()
                 success(context, "已${if (enabled) "启用" else "禁用"} $owner 的小宇宙功能")
@@ -136,6 +137,9 @@ object UniverseCommands {
             Commands.argument("player", GameProfileArgument.gameProfile()).executes { context ->
                 val owner = profile(context, "player")
                 UniverseManager.getOrCreateRecord(owner).frozen = frozen
+                if (frozen) {
+                    UniverseLifecycleService.requestClose(owner)
+                }
                 UniverseManager.saveCatalog()
                 success(context, "已${if (frozen) "冻结" else "解冻"} $owner 的小宇宙")
             },
@@ -147,7 +151,7 @@ object UniverseCommands {
                 val owner = profile(context, "player")
                 UniverseManager.getOrCreateRecord(owner).stopped = stopped
                 if (stopped) {
-                    UniverseManager.unload(owner)
+                    UniverseLifecycleService.requestClose(owner)
                 }
                 UniverseManager.saveCatalog()
                 val wording = if (stopped) "停止并卸载" else "解除停止（等待主人进入时加载）"
@@ -200,12 +204,7 @@ object UniverseCommands {
         val owner = context.source.playerOrException
         return when (val result = UniverseInvitationService.approve(owner, profile(context, "player"))) {
             is UniverseInvitationService.Result.Approved -> {
-                val visitor = context.source.server.playerList.getPlayer(result.visitor)
-                    ?: return failure(context, "申请者已离线")
-                when (val travel = UniverseTravelService.enter(visitor, owner.uuid)) {
-                    UniverseTravelService.Result.Success -> success(context, "已批准申请并将玩家送入小宇宙")
-                    is UniverseTravelService.Result.Rejected -> failure(context, travel.reason)
-                }
+                success(context, "已批准申请并将玩家送入小宇宙")
             }
             UniverseInvitationService.Result.Accepted -> 0
             is UniverseInvitationService.Result.Rejected -> failure(context, result.reason)
@@ -297,10 +296,22 @@ object UniverseCommands {
         return success(context, "已解除 $owner 的性能隔离；主人下次进入时加载")
     }
 
-    private fun formatPerformance(snapshot: org.edtp.universe.performance.UniversePerformanceSnapshot): String =
-        "${snapshot.owner}: cost=${"%.2f".format(snapshot.consumedMillisLastSecond)}/${"%.2f".format(snapshot.budgetMillisPerSecond)}ms/s, " +
+    private fun formatPerformance(snapshot: org.edtp.universe.performance.UniversePerformanceSnapshot): String {
+        val record = UniverseManager.record(snapshot.owner)
+        val state = when {
+            record?.quarantined == true -> "QUARANTINED"
+            record?.frozen == true -> "FROZEN"
+            record?.stopped == true -> "STOPPED"
+            UniverseCreationService.isBusy(snapshot.owner) -> "COPYING"
+            snapshot.skippedTicks > 0 -> "THROTTLED"
+            UniverseManager.loaded(snapshot.owner) != null -> "RUNNING"
+            else -> "UNLOADED"
+        }
+        return "${snapshot.owner}: state=$state, cost=${"%.2f".format(snapshot.consumedMillisLastSecond)}/${"%.2f".format(snapshot.budgetMillisPerSecond)}ms/s, " +
+            "copy=${"%.2f".format(snapshot.creationMillisLastSecond)}ms/s, " +
             "avg=${"%.3f".format(snapshot.averageTickMillis)}ms, max=${"%.3f".format(snapshot.maximumTickMillis)}ms, " +
             "effectiveTPS=${"%.2f".format(snapshot.effectiveTps)}, run=${snapshot.executedTicks}, skip=${snapshot.skippedTicks}"
+    }
 
     private fun profile(context: CommandContext<CommandSourceStack>, argument: String): UUID =
         GameProfileArgument.getGameProfiles(context, argument).single().id()

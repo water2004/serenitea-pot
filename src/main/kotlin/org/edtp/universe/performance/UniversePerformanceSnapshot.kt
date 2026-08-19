@@ -7,6 +7,7 @@ data class UniversePerformanceSnapshot(
     val owner: UUID,
     val budgetMillisPerSecond: Double,
     val consumedMillisLastSecond: Double,
+    val creationMillisLastSecond: Double,
     val averageTickMillis: Double,
     val maximumTickMillis: Double,
     val effectiveTps: Double,

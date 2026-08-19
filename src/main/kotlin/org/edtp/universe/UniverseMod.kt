@@ -5,7 +5,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import org.edtp.universe.command.UniverseCommands
 import org.edtp.universe.level.UniverseManager
-import org.edtp.universe.level.UniversePresenceService
+import org.edtp.universe.level.UniverseInvitationService
+import org.edtp.universe.level.UniverseLifecycleService
 import org.edtp.universe.player.PlayerStateManager
 import org.edtp.universe.performance.UniverseScheduler
 import org.edtp.universe.region.UniverseCreationService
@@ -20,7 +21,8 @@ object UniverseMod : ModInitializer {
         UniverseCommands.register()
         UniverseCreationService.register()
         UniverseScheduler.register()
-        UniversePresenceService.register()
+        UniverseLifecycleService.register()
+        UniverseInvitationService.register()
         ServerLifecycleEvents.SERVER_STARTED.register(PlayerStateManager::start)
         ServerLifecycleEvents.SERVER_STARTED.register(UniverseManager::start)
         ServerLifecycleEvents.SERVER_STOPPING.register(UniverseManager::stop)
