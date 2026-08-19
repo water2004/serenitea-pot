@@ -14,10 +14,12 @@ import net.minecraft.world.level.biome.Biome
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.chunk.LevelChunk
 import net.minecraft.world.level.chunk.PalettedContainer
+import net.minecraft.world.level.entity.EntityTypeTest
 import net.minecraft.world.level.storage.TagValueInput
 import net.minecraft.world.level.storage.TagValueOutput
 import net.minecraft.world.phys.AABB
 import java.util.ArrayDeque
+import java.util.ArrayList
 import java.util.HashSet
 import java.util.UUID
 import kotlin.math.max
@@ -241,7 +243,18 @@ class RegionCopyTask(
             return
         }
         val area = AABB.of(chunkBox(entityScanChunkCursor++))
-        for (entity in source.getEntities(null as Entity?, area) { it !is ServerPlayer && !it.isPassenger }) {
+        val found = ArrayList<Entity>(MAX_ENTITY_ROOTS_PER_CHUNK + 1)
+        source.getEntities(
+            EntityTypeTest.forClass(Entity::class.java),
+            area,
+            { it !is ServerPlayer && !it.isPassenger },
+            found,
+            MAX_ENTITY_ROOTS_PER_CHUNK + 1,
+        )
+        check(found.size <= MAX_ENTITY_ROOTS_PER_CHUNK) {
+            "区域内单区块实体根节点超过安全上限 $MAX_ENTITY_ROOTS_PER_CHUNK"
+        }
+        for (entity in found) {
             if (collectedEntityIds.add(entity.uuid)) {
                 entities.addLast(entity)
             }
@@ -295,5 +308,9 @@ class RegionCopyTask(
         ENTITY_SCAN,
         ENTITIES,
         DONE,
+    }
+
+    private companion object {
+        const val MAX_ENTITY_ROOTS_PER_CHUNK = 256
     }
 }

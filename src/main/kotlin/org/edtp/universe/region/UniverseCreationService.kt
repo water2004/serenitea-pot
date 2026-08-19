@@ -123,7 +123,7 @@ object UniverseCreationService {
 
     fun cancel(owner: UUID): Boolean {
         val job = jobs.remove(owner) ?: return false
-        UniverseManager.discard(job.staging)
+        UniverseLifecycleService.deleteEvacuated(job.staging)
         abortMaintenance(owner)
         return true
     }
@@ -177,7 +177,7 @@ object UniverseCreationService {
                     continue
                 }
                 jobs.remove(owner)
-                previous?.let(UniverseLifecycleService::deleteReplaced)
+                previous?.let(UniverseLifecycleService::deleteEvacuated)
                 finishCommitted(server, job)
             }
         }
@@ -187,7 +187,7 @@ object UniverseCreationService {
     private fun stop(server: MinecraftServer) {
         check(server.isSameThread)
         for (job in jobs.values) {
-            runCatching { UniverseManager.discard(job.staging) }
+            runCatching { UniverseLifecycleService.deleteEvacuated(job.staging) }
                 .onFailure { error ->
                     UniverseMod.logger.error("Failed to discard staging universe for {} during shutdown", job.owner, error)
                 }
@@ -226,7 +226,7 @@ object UniverseCreationService {
     }
 
     private fun fail(server: MinecraftServer, job: CreationJob, reason: String) {
-        runCatching { UniverseManager.discard(job.staging) }
+        runCatching { UniverseLifecycleService.deleteEvacuated(job.staging) }
         abortMaintenance(job.owner)
         server.playerList.getPlayer(job.requester)?.sendSystemMessage(
             Component.literal("小宇宙创建失败：$reason"),

@@ -56,6 +56,8 @@ OP4 也可用 `/universe enter <owner>` 进入主人当前已加载的小宇宙�
 
 单次维度 tick、同步区块加载或模组回调无法从中途安全终止；如果一次调用超过预算，实际耗时会形成 token 债务，后续 tick 被节流。单片达到 200 ms 会自动隔离并关闭该小宇宙。这能限制长期占用和连续卡顿，但不能保证任意第三方模组的一次失控调用绝不造成瞬时卡顿。
 
+为避免病态实体堆积绕过复制预算，提取区域中任一区块若超过 256 个非玩家根实体，创建会安全失败并清理暂存代际；乘客树随根实体整体复制。
+
 ## 模组兼容边界
 
 产物内嵌并强依赖 Arcade Dimensions 0.13.0-beta.6。小宇宙三维度由 `VanillaLikeLevelsBuilder` 组成；Arcade 的 Nether/End portal mixin 和 `VanillaDimensionMapper` 负责让玩家及实体只在同一名主人的主世界、下界、末地之间传送。不要从 jar 中移除或替换这组 Arcade 依赖。

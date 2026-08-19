@@ -193,18 +193,6 @@ object UniverseManager {
         return true
     }
 
-    fun discard(bundle: UniverseBundle) {
-        val server = requireServerThread()
-        if (loaded[bundle.owner] === bundle) {
-            loaded.remove(bundle.owner)
-        }
-        for (level in bundle.levels.values.toList().asReversed()) {
-            if (!server.deleteCustomLevel(level)) {
-                UniverseMod.logger.warn("Failed to delete staging level {}", level.dimension().identifier())
-            }
-        }
-    }
-
     fun saveCatalog() {
         repository?.save(catalog)
     }

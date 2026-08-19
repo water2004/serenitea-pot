@@ -104,7 +104,7 @@ object UniverseLifecycleService {
         pendingDeletes.keys.removeIf { it.first == owner }
     }
 
-    fun deleteReplaced(bundle: UniverseBundle) {
+    fun deleteEvacuated(bundle: UniverseBundle) {
         require(bundle.levels.values.all { it.players().isEmpty() }) {
             "Cannot delete occupied replacement generation ${bundle.generation}"
         }
