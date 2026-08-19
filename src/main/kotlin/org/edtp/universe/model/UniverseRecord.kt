@@ -13,6 +13,7 @@ data class UniverseSlotRecord(
 
 data class UniverseRecord(
     val owner: UUID,
+    var stateId: UUID = UUID.randomUUID(),
     var activeGeneration: Long = 0,
     var maxRadius: Int = DEFAULT_MAX_RADIUS,
     var budgetMillisPerSecond: Double = DEFAULT_BUDGET_MILLIS_PER_SECOND,

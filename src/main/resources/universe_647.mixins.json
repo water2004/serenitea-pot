@@ -4,7 +4,9 @@
   "package": "org.edtp.universe.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
+    "MinecraftServerTickMixin",
     "PlayerListMixin",
+    "ServerCommonPacketListenerAccessor",
     "ServerPlayerTeleportMixin"
   ],
   "injectors": {

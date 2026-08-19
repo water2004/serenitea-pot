@@ -16,6 +16,8 @@ import net.minecraft.world.level.storage.TagValueInput
 import net.minecraft.world.level.storage.TagValueOutput
 import org.edtp.universe.UniverseMod
 import org.edtp.universe.level.UniverseLevelKeys
+import org.edtp.universe.level.UniverseManager
+import org.edtp.universe.level.UniversePresenceService
 import java.util.UUID
 import kotlin.math.min
 
@@ -54,7 +56,7 @@ object PlayerStateManager {
 
         player.closeContainer()
         capture(player, sourceRealm)
-        return StateSwitchPlan(destinationRealm)
+        return StateSwitchPlan(sourceRealm, destinationRealm)
     }
 
     @JvmStatic
@@ -64,6 +66,9 @@ object PlayerStateManager {
         val snapshot = store?.get(player.uuid, key)
             ?: if (plan.targetOwner == null) blankPublic(player) else blankUniverse(player)
         apply(player, snapshot, plan.targetOwner != null)
+        if (plan.sourceOwner == player.uuid && plan.targetOwner != player.uuid) {
+            UniversePresenceService.ownerLeft(player.uuid)
+        }
     }
 
     @JvmStatic
@@ -72,7 +77,25 @@ object PlayerStateManager {
             return
         }
         requireServerThread(player.level().server)
-        capture(player, realm(player.level()))
+        val realmOwner = realm(player.level())
+        capture(player, realmOwner)
+        if (realmOwner != null) {
+            store?.get(player.uuid, stateKey(null))?.let { apply(player, it, false) }
+        }
+        if (realmOwner == player.uuid) {
+            UniversePresenceService.ownerLeft(player.uuid)
+        }
+    }
+
+    @JvmStatic
+    fun onJoin(player: ServerPlayer) {
+        if (server == null) {
+            return
+        }
+        requireServerThread(player.level().server)
+        val realmOwner = realm(player.level())
+        val snapshot = store?.get(player.uuid, stateKey(realmOwner)) ?: return
+        apply(player, snapshot, realmOwner != null)
     }
 
     private fun capture(player: ServerPlayer, realmOwner: UUID?) {
@@ -180,14 +203,20 @@ object PlayerStateManager {
 
     private fun realm(level: ServerLevel): UUID? = UniverseLevelKeys.identify(level.dimension())?.owner
 
-    private fun stateKey(owner: UUID?): String = owner?.let { "universe_$it" } ?: "public"
+    private fun stateKey(owner: UUID?): String {
+        if (owner == null) {
+            return "public"
+        }
+        val stateId = UniverseManager.record(owner)?.stateId ?: owner
+        return "universe_${owner}_$stateId"
+    }
 
     private fun requireServerThread(server: MinecraftServer) {
         check(this.server === server) { "PlayerStateManager is attached to another server" }
         check(server.isSameThread) { "Player state mutation must run on the server thread" }
     }
 
-    data class StateSwitchPlan(val targetOwner: UUID?)
+    data class StateSwitchPlan(val sourceOwner: UUID?, val targetOwner: UUID?)
 
     private const val SNAPSHOT_VERSION = 1
 }

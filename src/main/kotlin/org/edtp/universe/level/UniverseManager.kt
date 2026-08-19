@@ -37,22 +37,7 @@ object UniverseManager {
         )
         this.catalog = requireNotNull(repository).load()
 
-        for (record in catalog.players.values) {
-            if (!record.exists || !record.enabled || record.stopped || record.quarantined) {
-                continue
-            }
-            runCatching { load(record.owner) }.onFailure { error ->
-                record.quarantined = true
-                UniverseMod.logger.error(
-                    "Failed to load universe {} generation {}; it has been quarantined",
-                    record.owner,
-                    record.activeGeneration,
-                    error,
-                )
-            }
-        }
-        saveCatalog()
-        UniverseMod.logger.info("Loaded {} personal universe bundles", loaded.size)
+        UniverseMod.logger.info("Loaded metadata for {} personal universes; dimensions remain unloaded", catalog.players.size)
     }
 
     fun stop(server: MinecraftServer) {
@@ -70,6 +55,8 @@ object UniverseManager {
     fun record(owner: UUID): UniverseRecord? = catalog.players[owner]
 
     fun getOrCreateRecord(owner: UUID): UniverseRecord = catalog.getOrCreate(owner)
+
+    fun removeRecord(owner: UUID): UniverseRecord? = catalog.players.remove(owner)
 
     fun loaded(owner: UUID): UniverseBundle? = loaded[owner]
 

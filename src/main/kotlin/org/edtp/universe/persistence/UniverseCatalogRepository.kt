@@ -65,6 +65,7 @@ class UniverseCatalogRepository(private val root: Path) {
     }
 
     private fun encodeRecord(record: UniverseRecord): JsonObject = JsonObject().apply {
+        addProperty("stateId", record.stateId.toString())
         addProperty("activeGeneration", record.activeGeneration)
         addProperty("maxRadius", record.maxRadius)
         addProperty("budgetMillisPerSecond", record.budgetMillisPerSecond)
@@ -105,6 +106,7 @@ class UniverseCatalogRepository(private val root: Path) {
             val recordObject = element.asJsonObject
             val record = UniverseRecord(
                 owner = owner,
+                stateId = recordObject.string("stateId", UUID.randomUUID().toString()).let(UUID::fromString),
                 activeGeneration = recordObject.long("activeGeneration", 0),
                 maxRadius = recordObject.int("maxRadius", catalog.defaultMaxRadius),
                 budgetMillisPerSecond = recordObject.double(
