@@ -4,6 +4,7 @@ import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import org.edtp.universe.level.UniverseManager
 import org.edtp.universe.player.PlayerStateManager
+import org.edtp.universe.region.UniverseCreationService
 import org.slf4j.LoggerFactory
 
 object UniverseMod : ModInitializer {
@@ -12,6 +13,7 @@ object UniverseMod : ModInitializer {
 
     override fun onInitialize() {
         logger.info("Universe 647 initializing")
+        UniverseCreationService.register()
         ServerLifecycleEvents.SERVER_STARTED.register(PlayerStateManager::start)
         ServerLifecycleEvents.SERVER_STARTED.register(UniverseManager::start)
         ServerLifecycleEvents.SERVER_STOPPING.register(UniverseManager::stop)

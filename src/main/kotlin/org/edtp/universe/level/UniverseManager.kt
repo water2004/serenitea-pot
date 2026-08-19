@@ -2,11 +2,17 @@ package org.edtp.universe.level
 
 import net.casual.arcade.dimensions.level.CustomLevel
 import net.casual.arcade.dimensions.level.LevelPersistence
+import net.casual.arcade.dimensions.level.builder.CustomLevelBuilder
 import net.casual.arcade.dimensions.level.vanilla.VanillaLikeLevelsBuilder
 import net.casual.arcade.dimensions.utils.addCustomLevel
+import net.casual.arcade.dimensions.utils.deleteCustomLevel
 import net.casual.arcade.dimensions.utils.loadCustomLevel
 import net.casual.arcade.dimensions.utils.removeCustomLevel
 import net.minecraft.server.MinecraftServer
+import net.minecraft.world.level.block.Blocks
+import net.minecraft.world.level.levelgen.FlatLevelSource
+import net.minecraft.world.level.levelgen.flat.FlatLayerInfo
+import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings
 import net.minecraft.world.level.storage.LevelResource
 import org.edtp.universe.UniverseMod
 import org.edtp.universe.model.UniverseCatalog
@@ -14,6 +20,7 @@ import org.edtp.universe.model.UniverseDimension
 import org.edtp.universe.model.UniverseRecord
 import org.edtp.universe.persistence.UniverseCatalogRepository
 import java.util.EnumMap
+import java.util.Optional
 import java.util.UUID
 
 object UniverseManager {
@@ -78,11 +85,19 @@ object UniverseManager {
 
         val built = VanillaLikeLevelsBuilder.build(server) {
             for (dimension in UniverseDimension.entries) {
-                set(dimension.vanilla) {
-                    dimensionKey(UniverseLevelKeys.key(owner, generation, dimension))
-                    persistence(LevelPersistence.Permanent)
-                    seed(seed)
+                val template = requireNotNull(server.getLevel(dimension.vanillaLevelKey)) {
+                    "Missing vanilla template dimension ${dimension.vanillaLevelKey.identifier()}"
                 }
+                val biome = template.getBiome(template.respawnData.pos())
+                set(
+                    dimension.vanilla,
+                    CustomLevelBuilder()
+                        .dimensionKey(UniverseLevelKeys.key(owner, generation, dimension))
+                        .dimensionType(template.dimensionTypeRegistration())
+                        .chunkGenerator(voidGenerator(biome))
+                        .persistence(LevelPersistence.Permanent)
+                        .seed(seed),
+                )
             }
         }
         val levels = EnumMap<UniverseDimension, CustomLevel>(UniverseDimension::class.java)
@@ -116,6 +131,7 @@ object UniverseManager {
         record.stopped = false
         record.quarantined = false
         loaded[bundle.owner] = bundle
+        applyBorders(bundle, record)
         saveCatalog()
 
         if (previous != null && previous !== bundle) {
@@ -144,7 +160,10 @@ object UniverseManager {
             }
             throw error
         }
-        return UniverseBundle(owner, record.activeGeneration, levels).also { loaded[owner] = it }
+        return UniverseBundle(owner, record.activeGeneration, levels).also {
+            loaded[owner] = it
+            applyBorders(it, record)
+        }
     }
 
     fun unload(owner: UUID): Boolean {
@@ -152,6 +171,18 @@ object UniverseManager {
         val bundle = loaded.remove(owner) ?: return false
         unloadBundle(bundle)
         return true
+    }
+
+    fun discard(bundle: UniverseBundle) {
+        val server = requireServerThread()
+        if (loaded[bundle.owner] === bundle) {
+            loaded.remove(bundle.owner)
+        }
+        for (level in bundle.levels.values.toList().asReversed()) {
+            if (!server.deleteCustomLevel(level)) {
+                UniverseMod.logger.warn("Failed to delete staging level {}", level.dimension().identifier())
+            }
+        }
     }
 
     fun saveCatalog() {
@@ -167,9 +198,30 @@ object UniverseManager {
         }
     }
 
+    private fun applyBorders(bundle: UniverseBundle, record: UniverseRecord) {
+        for (dimension in UniverseDimension.entries) {
+            val slot = record.slots[dimension]
+            val border = bundle[dimension].worldBorder
+            if (slot == null) {
+                border.setCenter(0.0, 0.0)
+                border.setSize(record.maxRadius * 2.0 + 1.0)
+            } else {
+                border.setCenter(slot.centerX + 0.5, slot.centerZ + 0.5)
+                border.setSize(slot.radius * 2.0 + 1.0)
+            }
+        }
+    }
+
     private fun requireServerThread(): MinecraftServer {
         val server = checkNotNull(server) { "UniverseManager is not attached to a server" }
         check(server.isSameThread) { "Universe world mutation must run on the server thread" }
         return server
+    }
+
+    private fun voidGenerator(biome: net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>): FlatLevelSource {
+        val settings = FlatLevelGeneratorSettings(Optional.empty(), biome, listOf())
+        settings.layersInfo.add(FlatLayerInfo(1, Blocks.AIR))
+        settings.updateLayers()
+        return FlatLevelSource(settings)
     }
 }
