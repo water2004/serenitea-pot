@@ -288,23 +288,16 @@ public final class UniverseManager {
     }
 
     private static void applyBorders(UniverseBundle bundle, UniverseRecord record) {
+        double localCenter = ChunkPos.ZERO.getMiddleBlockX();
         for (UniverseDimension dimension : UniverseDimension.values()) {
             UniverseSlotRecord slot = record.getSlots().get(dimension);
             var border = bundle.get(dimension).getWorldBorder();
+            border.setCenter(localCenter, localCenter);
             if (slot == null) {
-                border.setCenter(0.0, 0.0);
                 border.setSize(
                     (record.getMaxRadiusChunks() * 2.0 + 1.0) * SectionPos.SECTION_SIZE
                 );
             } else {
-                ChunkPos center = new ChunkPos(
-                    SectionPos.blockToSectionCoord(slot.entryX()),
-                    SectionPos.blockToSectionCoord(slot.entryZ())
-                );
-                border.setCenter(
-                    center.getMiddleBlockX(),
-                    center.getMiddleBlockZ()
-                );
                 border.setSize((slot.radiusChunks() * 2.0 + 1.0) * SectionPos.SECTION_SIZE);
             }
         }

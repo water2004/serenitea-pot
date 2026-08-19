@@ -29,7 +29,7 @@ import org.edtp.universe.model.UniverseRecord;
 import java.util.UUID;
 
 public final class PlayerStateManager {
-    private static final int SNAPSHOT_VERSION = 2;
+    private static final int SNAPSHOT_VERSION = 3;
 
     private static MinecraftServer server;
     private static PlayerStateStore store;

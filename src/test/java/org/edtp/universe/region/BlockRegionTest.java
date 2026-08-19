@@ -44,6 +44,16 @@ class BlockRegionTest {
     }
 
     @Test
+    void localUniverseRegionIsCenteredOnChunkZero() {
+        var region = BlockRegion.chunkColumns(0, 0, 4, -64, 320);
+
+        assertEquals(-64, region.getMinX());
+        assertEquals(79, region.getMaxX());
+        assertEquals(-64, region.getMinZ());
+        assertEquals(79, region.getMaxZ());
+    }
+
+    @Test
     void rejectsInvalidHeightAndOverflow() {
         assertThrows(IllegalArgumentException.class,
                 () -> BlockRegion.chunkColumns(0, 0, 0, 10, 10));

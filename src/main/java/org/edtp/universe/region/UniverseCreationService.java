@@ -2,7 +2,6 @@ package org.edtp.universe.region;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -92,14 +91,20 @@ public final class UniverseCreationService {
         for (UniverseDimension slotDimension : UniverseDimension.values()) {
             ServerLevel destination = staging.get(slotDimension);
             if (slotDimension == dimension) {
-                tasks.add(new RegionCopyTask(source, destination, region));
+                tasks.add(new RegionCopyTask(
+                    source,
+                    destination,
+                    region,
+                    localRegion(destination, radiusChunks)
+                ));
             } else {
                 UniverseSlotRecord oldSlot = record.getSlots().get(slotDimension);
                 if (previous != null && oldSlot != null) {
                     tasks.add(new RegionCopyTask(
                         previous.get(slotDimension),
                         destination,
-                        regionForSlot(previous.get(slotDimension), oldSlot)
+                        localRegion(previous.get(slotDimension), oldSlot.radiusChunks()),
+                        localRegion(destination, oldSlot.radiusChunks())
                     ));
                 }
             }
@@ -198,7 +203,8 @@ public final class UniverseCreationService {
                 tasks.add(new RegionCopyTask(
                     previous.get(dimension),
                     staging.get(dimension),
-                    regionForSlot(previous.get(dimension), replacement)
+                    localRegion(previous.get(dimension), retainedRadius),
+                    localRegion(staging.get(dimension), retainedRadius)
                 ));
                 long diameter = retainedRadius * 2L + 1L;
                 retainedChunks = Math.addExact(retainedChunks, Math.multiplyExact(diameter, diameter));
@@ -371,10 +377,11 @@ public final class UniverseCreationService {
         return copy;
     }
 
-    private static BlockRegion regionForSlot(ServerLevel level, UniverseSlotRecord slot) {
+    private static BlockRegion localRegion(ServerLevel level, int radiusChunks) {
         return BlockRegion.chunkColumns(
-            new BlockPos(slot.entryX(), slot.entryY(), slot.entryZ()),
-            slot.radiusChunks(),
+            0,
+            0,
+            radiusChunks,
             level.getMinY(),
             level.getMaxY()
         );

@@ -23,6 +23,7 @@ import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -51,13 +52,21 @@ public final class RegionCopyTask {
 
     private final ServerLevel source;
     private final ServerLevel target;
-    private final BlockRegion region;
+    private final BlockRegion sourceRegion;
+    private final BlockRegion targetRegion;
     private Phase phase = Phase.CHUNKS;
 
-    private final int chunkMinX;
-    private final int chunkMinZ;
+    private final int sourceChunkMinX;
+    private final int sourceChunkMinZ;
+    private final int targetChunkMinX;
+    private final int targetChunkMinZ;
     private final int chunkSizeX;
     private final int chunkSizeZ;
+    private final int blockOffsetX;
+    private final int blockOffsetZ;
+    private final int chunkOffsetX;
+    private final int chunkOffsetZ;
+    private final BlockPos blockOffset;
     private final long chunkCount;
     private long chunkCursor;
     private LevelChunk sourceChunk;
@@ -71,24 +80,40 @@ public final class RegionCopyTask {
     private int totalEntities;
     private int copiedEntities;
 
-    public RegionCopyTask(ServerLevel source, ServerLevel target, BlockRegion region) {
+    public RegionCopyTask(
+        ServerLevel source,
+        ServerLevel target,
+        BlockRegion sourceRegion,
+        BlockRegion targetRegion
+    ) {
         this.source = source;
         this.target = target;
-        this.region = region;
-        if ((region.getMinX() & 15) != 0 || (region.getMinZ() & 15) != 0
-                || (region.getMaxX() & 15) != 15 || (region.getMaxZ() & 15) != 15
-                || region.getMinY() != source.getMinY() || region.getMaxY() != source.getMaxY() - 1) {
-            throw new IllegalArgumentException("Fast region copy requires full-height, chunk-aligned bounds");
+        this.sourceRegion = sourceRegion;
+        this.targetRegion = targetRegion;
+        requireCopyRegion(source, sourceRegion, "source");
+        requireCopyRegion(target, targetRegion, "target");
+        if (sourceRegion.getSizeX() != targetRegion.getSizeX()
+                || sourceRegion.getSizeY() != targetRegion.getSizeY()
+                || sourceRegion.getSizeZ() != targetRegion.getSizeZ()
+                || sourceRegion.getMinY() != targetRegion.getMinY()) {
+            throw new IllegalArgumentException("Source and target copy regions must have the same size");
         }
-        this.chunkMinX = region.getMinX() >> 4;
-        this.chunkMinZ = region.getMinZ() >> 4;
-        this.chunkSizeX = (region.getMaxX() >> 4) - chunkMinX + 1;
-        this.chunkSizeZ = (region.getMaxZ() >> 4) - chunkMinZ + 1;
+        this.sourceChunkMinX = sourceRegion.getMinX() >> 4;
+        this.sourceChunkMinZ = sourceRegion.getMinZ() >> 4;
+        this.targetChunkMinX = targetRegion.getMinX() >> 4;
+        this.targetChunkMinZ = targetRegion.getMinZ() >> 4;
+        this.chunkSizeX = (sourceRegion.getMaxX() >> 4) - sourceChunkMinX + 1;
+        this.chunkSizeZ = (sourceRegion.getMaxZ() >> 4) - sourceChunkMinZ + 1;
         this.chunkCount = Math.multiplyExact((long) chunkSizeX, (long) chunkSizeZ);
+        this.blockOffsetX = Math.subtractExact(targetRegion.getMinX(), sourceRegion.getMinX());
+        this.blockOffsetZ = Math.subtractExact(targetRegion.getMinZ(), sourceRegion.getMinZ());
+        this.chunkOffsetX = Math.subtractExact(targetChunkMinX, sourceChunkMinX);
+        this.chunkOffsetZ = Math.subtractExact(targetChunkMinZ, sourceChunkMinZ);
+        this.blockOffset = new BlockPos(blockOffsetX, 0, blockOffsetZ);
     }
 
     public BlockRegion getRegion() {
-        return region;
+        return sourceRegion;
     }
 
     public boolean getComplete() {
@@ -140,10 +165,10 @@ public final class RegionCopyTask {
     }
 
     private void prepareChunk() {
-        int chunkX = chunkMinX + (int) (chunkCursor % chunkSizeX);
-        int chunkZ = chunkMinZ + (int) (chunkCursor / chunkSizeX);
-        sourceChunk = source.getChunk(chunkX, chunkZ);
-        targetChunk = target.getChunk(chunkX, chunkZ);
+        int relativeChunkX = (int) (chunkCursor % chunkSizeX);
+        int relativeChunkZ = (int) (chunkCursor / chunkSizeX);
+        sourceChunk = source.getChunk(sourceChunkMinX + relativeChunkX, sourceChunkMinZ + relativeChunkZ);
+        targetChunk = target.getChunk(targetChunkMinX + relativeChunkX, targetChunkMinZ + relativeChunkZ);
     }
 
     private void copyPreparedChunk() {
@@ -206,12 +231,29 @@ public final class RegionCopyTask {
                     start.createTag(sourceContext, sourceChunk.getPos()),
                     target.getSeed()
             );
-            if (copy != null) starts.put(copy.getStructure(), copy);
+            if (copy == null) return;
+            if (!copy.isValid()) {
+                starts.put(structure, StructureStart.INVALID_START);
+                return;
+            }
+            copy.getPieces().forEach(piece -> piece.move(blockOffsetX, 0, blockOffsetZ));
+            starts.put(copy.getStructure(), new StructureStart(
+                copy.getStructure(),
+                targetChunk.getPos(),
+                copy.getReferences(),
+                new PiecesContainer(copy.getPieces())
+            ));
         });
         targetChunk.setAllStarts(starts);
         HashMap<Structure, LongSet> references = new HashMap<>();
-        sourceChunk.getAllReferences().forEach((structure, positions) ->
-                references.put(structure, new LongOpenHashSet(positions)));
+        sourceChunk.getAllReferences().forEach((structure, positions) -> {
+            LongSet translated = new LongOpenHashSet(positions.size());
+            positions.forEach(position -> translated.add(ChunkPos.pack(
+                Math.addExact(ChunkPos.getX(position), chunkOffsetX),
+                Math.addExact(ChunkPos.getZ(position), chunkOffsetZ)
+            )));
+            references.put(structure, translated);
+        });
         targetChunk.setAllReferences(references);
     }
 
@@ -226,41 +268,48 @@ public final class RegionCopyTask {
         for (BlockPos blockPos : sourceChunk.getBlockEntitiesPos()) {
             var tag = sourceChunk.getBlockEntityNbtForSaving(blockPos, source.registryAccess());
             if (tag == null) continue;
-            targetChunk.setBlockEntityNbt(tag.copy());
-            targetChunk.getBlockEntity(blockPos, LevelChunk.EntityCreationType.IMMEDIATE);
+            BlockPos targetPos = blockPos.offset(blockOffset);
+            var translated = tag.copy();
+            translated.putInt("x", targetPos.getX());
+            translated.putInt("y", targetPos.getY());
+            translated.putInt("z", targetPos.getZ());
+            targetChunk.setBlockEntityNbt(translated);
+            targetChunk.getBlockEntity(targetPos, LevelChunk.EntityCreationType.IMMEDIATE);
         }
     }
 
     private void refreshPoiAndLighting() {
-        ChunkPos chunkPos = targetChunk.getPos();
+        ChunkPos sourceChunkPos = sourceChunk.getPos();
+        ChunkPos targetChunkPos = targetChunk.getPos();
         var sourceLight = source.getChunkSource().getLightEngine();
         var targetLight = target.getChunkSource().getLightEngine();
         boolean lightCorrect = sourceChunk.isLightCorrect();
         List<PoiSnapshot> poiSnapshots = source.getPoiManager()
-                .getInChunk(type -> true, chunkPos, PoiManager.Occupancy.ANY)
+                .getInChunk(type -> true, sourceChunkPos, PoiManager.Occupancy.ANY)
                 .map(record -> {
                     var packed = record.pack();
                     int occupiedTickets = packed.poiType().value().maxTickets() - packed.freeTickets();
-                    return new PoiSnapshot(packed.pos(), packed.poiType(), occupiedTickets);
+                    return new PoiSnapshot(packed.pos().offset(blockOffset), packed.poiType(), occupiedTickets);
                 })
                 .toList();
 
-        targetLight.retainData(chunkPos, true);
+        targetLight.retainData(targetChunkPos, true);
         for (int sectionY = targetLight.getMinLightSection();
              sectionY < targetLight.getMaxLightSection(); sectionY++) {
-            SectionPos sectionPos = SectionPos.of(chunkPos, sectionY);
-            var blockLight = sourceLight.getLayerListener(LightLayer.BLOCK).getDataLayerData(sectionPos);
-            var skyLight = sourceLight.getLayerListener(LightLayer.SKY).getDataLayerData(sectionPos);
+            SectionPos sourceSectionPos = SectionPos.of(sourceChunkPos, sectionY);
+            SectionPos targetSectionPos = SectionPos.of(targetChunkPos, sectionY);
+            var blockLight = sourceLight.getLayerListener(LightLayer.BLOCK).getDataLayerData(sourceSectionPos);
+            var skyLight = sourceLight.getLayerListener(LightLayer.SKY).getDataLayerData(sourceSectionPos);
             targetLight.queueSectionData(
-                    LightLayer.BLOCK, sectionPos,
+                    LightLayer.BLOCK, targetSectionPos,
                     lightCorrect && blockLight != null ? blockLight.copy() : null);
             targetLight.queueSectionData(
-                    LightLayer.SKY, sectionPos,
+                    LightLayer.SKY, targetSectionPos,
                     lightCorrect && skyLight != null ? skyLight.copy() : null);
         }
         for (int index = 0; index < targetChunk.getSections().length; index++) {
             int sectionY = targetChunk.getSectionYFromSectionIndex(index);
-            SectionPos sectionPos = SectionPos.of(chunkPos, sectionY);
+            SectionPos sectionPos = SectionPos.of(targetChunkPos, sectionY);
             var section = targetChunk.getSections()[index];
             target.getPoiManager().checkConsistencyWithBlocks(sectionPos, section);
             targetLight.updateSectionStatus(sectionPos, section.hasOnlyAir());
@@ -268,9 +317,9 @@ public final class RegionCopyTask {
         restorePoiOccupancy(poiSnapshots);
         targetChunk.setLightCorrect(lightCorrect);
         if (lightCorrect) {
-            targetLight.setLightEnabled(chunkPos, true);
-            targetLight.retainData(chunkPos, false);
-            lightingBarriers.add(targetLight.waitForPendingTasks(chunkPos.x(), chunkPos.z()));
+            targetLight.setLightEnabled(targetChunkPos, true);
+            targetLight.retainData(targetChunkPos, false);
+            lightingBarriers.add(targetLight.waitForPendingTasks(targetChunkPos.x(), targetChunkPos.z()));
         } else {
             lightingBarriers.add(targetLight.initializeLight(targetChunk, false)
                     .thenCompose(chunk -> targetLight.lightChunk(chunk, false)));
@@ -300,11 +349,13 @@ public final class RegionCopyTask {
             phase = Phase.ENTITY_SCAN;
             return;
         }
-        var box = chunkBox(tickChunkCursor++);
-        target.getBlockTicks().clearArea(box);
-        target.getBlockTicks().copyAreaFrom(source.getBlockTicks(), box, BlockPos.ZERO);
-        target.getFluidTicks().clearArea(box);
-        target.getFluidTicks().copyAreaFrom(source.getFluidTicks(), box, BlockPos.ZERO);
+        long index = tickChunkCursor++;
+        var sourceBox = sourceChunkBox(index);
+        var targetBox = targetChunkBox(index);
+        target.getBlockTicks().clearArea(targetBox);
+        target.getBlockTicks().copyAreaFrom(source.getBlockTicks(), sourceBox, blockOffset);
+        target.getFluidTicks().clearArea(targetBox);
+        target.getFluidTicks().copyAreaFrom(source.getFluidTicks(), sourceBox, blockOffset);
         if (tickChunkCursor >= chunkCount) phase = Phase.ENTITY_SCAN;
     }
 
@@ -314,7 +365,7 @@ public final class RegionCopyTask {
             phase = Phase.ENTITIES;
             return;
         }
-        var area = AABB.of(chunkBox(entityScanChunkCursor));
+        var area = AABB.of(sourceChunkBox(entityScanChunkCursor));
         var found = new ArrayList<Entity>(ENTITY_ROOTS_PER_SLICE);
         source.getEntities(EntityTypeTest.forClass(Entity.class), area,
                 entity -> !(entity instanceof ServerPlayer)
@@ -344,6 +395,7 @@ public final class RegionCopyTask {
                     new EntitySpawnRequest(EntitySpawnReason.LOAD, false), loaded -> loaded);
             if (copy != null) {
                 copy.getSelfAndPassengers().forEach(loaded -> loaded.setUUID(UUID.randomUUID()));
+                copy.teleportRelative(blockOffsetX, 0.0, blockOffsetZ);
                 target.tryAddFreshEntityWithPassengers(copy);
             }
         }
@@ -372,12 +424,30 @@ public final class RegionCopyTask {
         }
     }
 
-    private BoundingBox chunkBox(long index) {
+    private BoundingBox sourceChunkBox(long index) {
+        return chunkBox(sourceRegion, sourceChunkMinX, sourceChunkMinZ, index);
+    }
+
+    private BoundingBox targetChunkBox(long index) {
+        return chunkBox(targetRegion, targetChunkMinX, targetChunkMinZ, index);
+    }
+
+    private BoundingBox chunkBox(BlockRegion region, int chunkMinX, int chunkMinZ, long index) {
         int chunkX = chunkMinX + (int) (index % chunkSizeX);
         int chunkZ = chunkMinZ + (int) (index / chunkSizeX);
         return new BoundingBox(
                 Math.max(region.getMinX(), chunkX << 4), region.getMinY(), Math.max(region.getMinZ(), chunkZ << 4),
                 Math.min(region.getMaxX(), (chunkX << 4) + 15), region.getMaxY(), Math.min(region.getMaxZ(), (chunkZ << 4) + 15));
+    }
+
+    private static void requireCopyRegion(ServerLevel level, BlockRegion region, String role) {
+        if ((region.getMinX() & 15) != 0 || (region.getMinZ() & 15) != 0
+                || (region.getMaxX() & 15) != 15 || (region.getMaxZ() & 15) != 15
+                || region.getMinY() != level.getMinY() || region.getMaxY() != level.getMaxY() - 1) {
+            throw new IllegalArgumentException(
+                "Fast region copy requires full-height, chunk-aligned " + role + " bounds"
+            );
+        }
     }
 
     private record PoiSnapshot(BlockPos pos, Holder<PoiType> type, int occupiedTickets) {

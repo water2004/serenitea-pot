@@ -75,7 +75,7 @@ public final class UniverseTravelService {
             UniverseSlotRecord slot = record.getSlots().get(destinationDimension);
             destination = new Destination(
                 bundle.get(destinationDimension),
-                new Vec3(slot.entryX() + 0.5, slot.entryY(), slot.entryZ() + 0.5),
+                new Vec3(slot.localEntryX() + 0.5, slot.localEntryY(), slot.localEntryZ() + 0.5),
                 player.getYRot(),
                 player.getXRot()
             );
