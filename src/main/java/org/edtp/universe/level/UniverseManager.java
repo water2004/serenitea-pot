@@ -7,15 +7,16 @@ import net.casual.arcade.dimensions.level.vanilla.VanillaLikeLevels;
 import net.casual.arcade.dimensions.level.vanilla.VanillaLikeLevelsBuilder;
 import net.casual.arcade.dimensions.utils.DimensionUtilsKt;
 import net.minecraft.core.Holder;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.FlatLevelSource;
 import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.storage.LevelResource;
-import org.apache.commons.io.file.PathUtils;
 import org.edtp.universe.UniverseMod;
 import org.edtp.universe.model.UniverseCatalog;
 import org.edtp.universe.model.UniverseDimension;
@@ -25,7 +26,6 @@ import org.edtp.universe.persistence.UniverseCatalogRepository;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Stream;
 
 public final class UniverseManager {
     private static MinecraftServer server;
@@ -58,7 +57,6 @@ public final class UniverseManager {
         } catch (IOException error) {
             throw new IllegalStateException("Failed to load universe catalog", error);
         }
-        cleanupInactiveGenerations(server);
         UniverseMod.LOGGER.info(
             "Loaded metadata for {} personal universes; dimensions remain unloaded",
             catalog.getPlayers().size()
@@ -154,9 +152,11 @@ public final class UniverseManager {
         return new UniverseBundle(owner, generation, levels);
     }
 
-    public static UniverseBundle activate(
+    /** Atomically persists a new active generation and returns the generation it replaced. */
+    public static UniverseBundle commitGeneration(
         UniverseBundle bundle,
-        Map<UniverseDimension, UniverseSlotRecord> replacementSlots
+        Map<UniverseDimension, UniverseSlotRecord> replacementSlots,
+        int maximumRadiusChunks
     ) {
         requireServerThread();
         UniverseBundle previous = loaded.get(bundle.owner());
@@ -176,23 +176,20 @@ public final class UniverseManager {
         }
         UniverseRecord record = catalog.getOrCreate(bundle.owner());
         long oldGeneration = record.getActiveGeneration();
+        int oldMaximumRadiusChunks = record.getMaxRadiusChunks();
         EnumMap<UniverseDimension, UniverseSlotRecord> oldSlots = copySlots(record.getSlots());
-        boolean oldStopped = record.isStopped();
-        boolean oldQuarantined = record.isQuarantined();
         record.setActiveGeneration(bundle.generation());
+        record.setMaxRadiusChunks(maximumRadiusChunks);
         record.getSlots().clear();
         record.getSlots().putAll(copySlots(replacementSlots));
-        record.setStopped(false);
-        record.setQuarantined(false);
         try {
             applyBorders(bundle, record);
             saveCatalog();
         } catch (Throwable error) {
             record.setActiveGeneration(oldGeneration);
+            record.setMaxRadiusChunks(oldMaximumRadiusChunks);
             record.getSlots().clear();
             record.getSlots().putAll(oldSlots);
-            record.setStopped(oldStopped);
-            record.setQuarantined(oldQuarantined);
             throw error;
         }
         loaded.put(bundle.owner(), bundle);
@@ -293,53 +290,20 @@ public final class UniverseManager {
             var border = bundle.get(dimension).getWorldBorder();
             if (slot == null) {
                 border.setCenter(0.0, 0.0);
-                border.setSize(record.getMaxRadius() * 2.0 + 1.0);
+                border.setSize(
+                    (record.getMaxRadiusChunks() * 2.0 + 1.0) * SectionPos.SECTION_SIZE
+                );
             } else {
-                border.setCenter(slot.centerX() + 0.5, slot.centerZ() + 0.5);
-                border.setSize(slot.radius() * 2.0 + 1.0);
+                ChunkPos center = new ChunkPos(
+                    SectionPos.blockToSectionCoord(slot.entryX()),
+                    SectionPos.blockToSectionCoord(slot.entryZ())
+                );
+                border.setCenter(
+                    center.getMiddleBlockX(),
+                    center.getMiddleBlockZ()
+                );
+                border.setSize((slot.radiusChunks() * 2.0 + 1.0) * SectionPos.SECTION_SIZE);
             }
-        }
-    }
-
-    private static void cleanupInactiveGenerations(MinecraftServer server) {
-        Path universeRoot = server.getWorldPath(LevelResource.ROOT)
-            .resolve("dimensions").resolve(UniverseMod.MOD_ID).resolve("u").toAbsolutePath().normalize();
-        for (Map.Entry<UUID, UniverseRecord> entry : catalog.getPlayers().entrySet()) {
-            UUID owner = entry.getKey();
-            UniverseRecord record = entry.getValue();
-            Path ownerRoot = universeRoot.resolve(owner.toString()).normalize();
-            if (!universeRoot.equals(ownerRoot.getParent()) || !Files.isDirectory(ownerRoot)) continue;
-            try (Stream<Path> children = Files.list(ownerRoot)) {
-                children.filter(Files::isDirectory).forEach(candidate -> {
-                    Path resolved = candidate.toAbsolutePath().normalize();
-                    String name = resolved.getFileName().toString();
-                    Long generation = parseGeneration(name);
-                    if (!ownerRoot.equals(resolved.getParent())
-                        || generation == null
-                        || generation == record.getActiveGeneration()) {
-                        return;
-                    }
-                    try {
-                        PathUtils.deleteDirectory(resolved);
-                        UniverseMod.LOGGER.info("Deleted inactive universe generation {} for {}", generation, owner);
-                    } catch (IOException error) {
-                        UniverseMod.LOGGER.warn(
-                            "Failed to delete inactive universe generation {} for {}", generation, owner, error
-                        );
-                    }
-                });
-            } catch (IOException error) {
-                UniverseMod.LOGGER.warn("Failed to inspect universe generation directory for {}", owner, error);
-            }
-        }
-    }
-
-    private static Long parseGeneration(String name) {
-        if (!name.startsWith("g")) return null;
-        try {
-            return Long.parseLong(name.substring(1));
-        } catch (NumberFormatException ignored) {
-            return null;
         }
     }
 

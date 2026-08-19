@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.GameProfileArgument;
+import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
@@ -40,7 +41,7 @@ public final class UniverseCommands {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("universe")
             .executes(UniverseCommands::statusSelf)
             .then(Commands.literal("create")
-                .then(Commands.argument("radius", IntegerArgumentType.integer(1)).executes(UniverseCommands::create)))
+                .then(Commands.argument("radius", IntegerArgumentType.integer(0)).executes(UniverseCommands::create)))
             .then(Commands.literal("enter")
                 .executes(context -> enter(context, context.getSource().getPlayerOrException().getUUID()))
                 .then(Commands.argument("owner", GameProfileArgument.gameProfile())
@@ -50,9 +51,15 @@ public final class UniverseCommands {
                 .then(Commands.argument("owner", GameProfileArgument.gameProfile()).executes(UniverseCommands::request)))
             .then(Commands.literal("requests").executes(UniverseCommands::requests))
             .then(Commands.literal("approve")
-                .then(Commands.argument("player", GameProfileArgument.gameProfile()).executes(UniverseCommands::approve)))
+                .then(Commands.argument("player", GameProfileArgument.gameProfile())
+                    .executes(UniverseCommands::approve)
+                    .then(Commands.argument("request-id", UuidArgument.uuid())
+                        .executes(UniverseCommands::approveFromButton))))
             .then(Commands.literal("deny")
-                .then(Commands.argument("player", GameProfileArgument.gameProfile()).executes(UniverseCommands::deny)))
+                .then(Commands.argument("player", GameProfileArgument.gameProfile())
+                    .executes(UniverseCommands::deny)
+                    .then(Commands.argument("request-id", UuidArgument.uuid())
+                        .executes(UniverseCommands::denyFromButton))))
             .then(Commands.literal("delete")
                 .then(Commands.literal("confirm").executes(UniverseCommands::deleteSelf)))
             .then(adminCommands());
@@ -70,7 +77,8 @@ public final class UniverseCommands {
             .then(adminStop("start", false))
             .then(Commands.literal("max-radius")
                 .then(Commands.argument("player", GameProfileArgument.gameProfile())
-                    .then(Commands.argument("radius", IntegerArgumentType.integer(1, 4096))
+                    .then(Commands.argument("radius", IntegerArgumentType.integer(
+                            0, UniverseRecord.MAX_RADIUS_CHUNKS))
                         .executes(UniverseCommands::adminMaxRadius))))
             .then(Commands.literal("budget")
                 .then(Commands.argument("player", GameProfileArgument.gameProfile())
@@ -138,7 +146,8 @@ public final class UniverseCommands {
         );
         if (result instanceof UniverseCreationService.Accepted accepted) {
             return success(context,
-                "开始提取 " + accepted.volume() + " 个方块（代际 " + accepted.generation() + "），过程按 tick 分批执行"
+                "开始提取 " + accepted.chunkCount() + " 个区块的完整高度（" + accepted.volume()
+                    + " 个方块，代际 " + accepted.generation() + "），过程按 tick 分批执行"
             );
         }
         return failure(context, ((UniverseCreationService.Rejected) result).reason());
@@ -182,8 +191,18 @@ public final class UniverseCommands {
     }
 
     private static int approve(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return approve(context, null);
+    }
+
+    private static int approveFromButton(CommandContext<CommandSourceStack> context)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return approve(context, UuidArgument.getUuid(context, "request-id"));
+    }
+
+    private static int approve(CommandContext<CommandSourceStack> context, UUID requestId)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         UniverseInvitationService.Result result = UniverseInvitationService.approve(
-            context.getSource().getPlayerOrException(), profile(context, "player")
+            context.getSource().getPlayerOrException(), profile(context, "player"), requestId
         );
         if (result instanceof UniverseInvitationService.Approved) {
             return success(context, "已批准申请并将玩家送入小宇宙");
@@ -192,8 +211,18 @@ public final class UniverseCommands {
     }
 
     private static int deny(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return deny(context, null);
+    }
+
+    private static int denyFromButton(CommandContext<CommandSourceStack> context)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return deny(context, UuidArgument.getUuid(context, "request-id"));
+    }
+
+    private static int deny(CommandContext<CommandSourceStack> context, UUID requestId)
+        throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         UniverseInvitationService.Result result = UniverseInvitationService.deny(
-            context.getSource().getPlayerOrException(), profile(context, "player")
+            context.getSource().getPlayerOrException(), profile(context, "player"), requestId
         );
         return result == UniverseInvitationService.Accepted.INSTANCE
             ? success(context, "已拒绝申请")
@@ -218,9 +247,25 @@ public final class UniverseCommands {
     private static int adminMaxRadius(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         UUID owner = profile(context, "player");
         int radius = IntegerArgumentType.getInteger(context, "radius");
-        UniverseManager.getOrCreateRecord(owner).setMaxRadius(radius);
-        UniverseManager.saveCatalog();
-        return success(context, owner + " 的最大半径已设为 " + radius + "（边长 " + (radius * 2 + 1) + "）");
+        ServerPlayer requester = context.getSource().getPlayer();
+        UniverseCreationService.MaximumChangeResult result = UniverseCreationService.changeMaximum(
+            context.getSource().getServer(),
+            owner,
+            radius,
+            requester == null ? null : requester.getUUID()
+        );
+        if (result == UniverseCreationService.MaximumUpdated.INSTANCE) {
+            return success(context, owner + " 的最大区块半径已设为 " + radius
+                + "（每边 " + ((long) radius * 2L + 1L) + " 个区块）");
+        }
+        if (result instanceof UniverseCreationService.MaximumTrimStarted started) {
+            return success(context,
+                "已开始将 " + owner + " 的 " + started.dimensionCount() + " 个维度裁剪到最大区块半径 "
+                    + radius + "（保留 " + started.retainedChunks() + " 个区块，代际 "
+                    + started.generation() + "）"
+            );
+        }
+        return failure(context, ((UniverseCreationService.Rejected) result).reason());
     }
 
     private static int adminBudget(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
@@ -255,7 +300,7 @@ public final class UniverseCommands {
             "owner=" + owner + ", 存在=" + record.exists() + ", 已加载=" + (UniverseManager.loaded(owner) != null)
                 + ", enabled=" + record.isEnabled() + ", frozen=" + record.isFrozen()
                 + ", stopped=" + record.isStopped() + ", quarantined=" + record.isQuarantined()
-                + ", maxRadius=" + record.getMaxRadius() + ", budget=" + record.getBudgetMillisPerSecond()
+                + ", maxRadiusChunks=" + record.getMaxRadiusChunks() + ", budget=" + record.getBudgetMillisPerSecond()
                 + "ms/s" + creation
         );
     }

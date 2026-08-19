@@ -46,8 +46,8 @@ public final class RegionCopyTask {
     private final int chunkMinZ;
     private final int chunkSizeX;
     private final int chunkSizeZ;
-    private final int chunkCount;
-    private int chunkCursor;
+    private final long chunkCount;
+    private long chunkCursor;
     private LevelChunk sourceChunk;
     private LevelChunk targetChunk;
     private int blockX;
@@ -78,8 +78,8 @@ public final class RegionCopyTask {
 
     private final ArrayDeque<Entity> entities = new ArrayDeque<>();
     private final HashSet<UUID> collectedEntityIds = new HashSet<>();
-    private int tickChunkCursor;
-    private int entityScanChunkCursor;
+    private long tickChunkCursor;
+    private long entityScanChunkCursor;
     private int totalEntities;
     private int copiedEntities;
 
@@ -91,7 +91,7 @@ public final class RegionCopyTask {
         this.chunkMinZ = region.getMinZ() >> 4;
         this.chunkSizeX = (region.getMaxX() >> 4) - chunkMinX + 1;
         this.chunkSizeZ = (region.getMaxZ() >> 4) - chunkMinZ + 1;
-        this.chunkCount = chunkSizeX * chunkSizeZ;
+        this.chunkCount = Math.multiplyExact((long) chunkSizeX, (long) chunkSizeZ);
         this.quartMinX = QuartPos.fromBlock(region.getMinX());
         this.quartMinY = QuartPos.fromBlock(region.getMinY());
         this.quartMinZ = QuartPos.fromBlock(region.getMinZ());
@@ -149,8 +149,8 @@ public final class RegionCopyTask {
     }
 
     private void prepareChunk() {
-        int chunkX = chunkMinX + chunkCursor % chunkSizeX;
-        int chunkZ = chunkMinZ + chunkCursor / chunkSizeX;
+        int chunkX = chunkMinX + (int) (chunkCursor % chunkSizeX);
+        int chunkZ = chunkMinZ + (int) (chunkCursor / chunkSizeX);
         sourceChunk = source.getChunk(chunkX, chunkZ);
         targetChunk = target.getChunk(chunkX, chunkZ);
         sliceMinX = Math.max(region.getMinX(), chunkX << 4);
@@ -291,9 +291,9 @@ public final class RegionCopyTask {
         if (entities.isEmpty()) phase = Phase.DONE;
     }
 
-    private BoundingBox chunkBox(int index) {
-        int chunkX = chunkMinX + index % chunkSizeX;
-        int chunkZ = chunkMinZ + index / chunkSizeX;
+    private BoundingBox chunkBox(long index) {
+        int chunkX = chunkMinX + (int) (index % chunkSizeX);
+        int chunkZ = chunkMinZ + (int) (index / chunkSizeX);
         return new BoundingBox(
                 Math.max(region.getMinX(), chunkX << 4), region.getMinY(), Math.max(region.getMinZ(), chunkZ << 4),
                 Math.min(region.getMaxX(), (chunkX << 4) + 15), region.getMaxY(), Math.min(region.getMaxZ(), (chunkZ << 4) + 15));

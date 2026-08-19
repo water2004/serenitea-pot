@@ -1,7 +1,10 @@
 package org.edtp.universe.region;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+
+import java.util.Objects;
 
 /** An inclusive, axis-aligned block region. */
 public final class BlockRegion {
@@ -58,18 +61,51 @@ public final class BlockRegion {
         return mutable.set(minX + x, minY + y, minZ + z);
     }
 
-    public static BlockRegion centered(BlockPos center, int radius) {
-        if (radius < 0) {
-            throw new IllegalArgumentException("Radius must not be negative");
-        }
-        return new BlockRegion(
-                Math.subtractExact(center.getX(), radius),
-                Math.subtractExact(center.getY(), radius),
-                Math.subtractExact(center.getZ(), radius),
-                Math.addExact(center.getX(), radius),
-                Math.addExact(center.getY(), radius),
-                Math.addExact(center.getZ(), radius)
+    /**
+     * Creates a region covering whole chunk columns around the block's chunk.
+     * The vertical interval is half-open: {@code [minY, maxYExclusive)}.
+     */
+    public static BlockRegion chunkColumns(
+            BlockPos centerBlockPos, int radiusChunks, int minY, int maxYExclusive) {
+        Objects.requireNonNull(centerBlockPos, "centerBlockPos");
+        return chunkColumns(
+                SectionPos.blockToSectionCoord(centerBlockPos.getX()),
+                SectionPos.blockToSectionCoord(centerBlockPos.getZ()),
+                radiusChunks,
+                minY,
+                maxYExclusive
         );
+    }
+
+    /**
+     * Creates a region covering whole chunk columns around a chunk coordinate.
+     * The vertical interval is half-open: {@code [minY, maxYExclusive)}.
+     */
+    public static BlockRegion chunkColumns(
+            int centerChunkX, int centerChunkZ, int radiusChunks, int minY, int maxYExclusive) {
+        if (radiusChunks < 0) {
+            throw new IllegalArgumentException("Chunk radius must not be negative");
+        }
+        if (minY >= maxYExclusive) {
+            throw new IllegalArgumentException("Maximum Y must be greater than minimum Y");
+        }
+
+        int minChunkX = Math.subtractExact(centerChunkX, radiusChunks);
+        int maxChunkX = Math.addExact(centerChunkX, radiusChunks);
+        int minChunkZ = Math.subtractExact(centerChunkZ, radiusChunks);
+        int maxChunkZ = Math.addExact(centerChunkZ, radiusChunks);
+        int minX = Math.multiplyExact(minChunkX, SectionPos.SECTION_SIZE);
+        int minZ = Math.multiplyExact(minChunkZ, SectionPos.SECTION_SIZE);
+        int maxX = Math.addExact(
+                Math.multiplyExact(maxChunkX, SectionPos.SECTION_SIZE),
+                SectionPos.SECTION_MAX_INDEX
+        );
+        int maxZ = Math.addExact(
+                Math.multiplyExact(maxChunkZ, SectionPos.SECTION_SIZE),
+                SectionPos.SECTION_MAX_INDEX
+        );
+        int maxY = Math.subtractExact(maxYExclusive, 1);
+        return new BlockRegion(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
     @Override

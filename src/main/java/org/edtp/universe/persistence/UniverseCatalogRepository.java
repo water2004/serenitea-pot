@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public class UniverseCatalogRepository {
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 2;
 
     private final Path root;
     private final com.google.gson.Gson gson = new GsonBuilder().setPrettyPrinting().create();
@@ -62,7 +62,7 @@ public class UniverseCatalogRepository {
     private JsonObject encode(UniverseCatalog catalog) {
         JsonObject result = new JsonObject();
         result.addProperty("version", FORMAT_VERSION);
-        result.addProperty("defaultMaxRadius", catalog.getDefaultMaxRadius());
+        result.addProperty("defaultMaxRadiusChunks", catalog.getDefaultMaxRadiusChunks());
         result.addProperty("defaultBudgetMillisPerSecond", catalog.getDefaultBudgetMillisPerSecond());
         result.addProperty("globalBudgetMillisPerSecond", catalog.getGlobalBudgetMillisPerSecond());
 
@@ -78,7 +78,7 @@ public class UniverseCatalogRepository {
         JsonObject result = new JsonObject();
         result.addProperty("stateId", record.getStateId().toString());
         result.addProperty("activeGeneration", record.getActiveGeneration());
-        result.addProperty("maxRadius", record.getMaxRadius());
+        result.addProperty("maxRadiusChunks", record.getMaxRadiusChunks());
         result.addProperty("budgetMillisPerSecond", record.getBudgetMillisPerSecond());
         result.addProperty("enabled", record.isEnabled());
         result.addProperty("frozen", record.isFrozen());
@@ -91,10 +91,10 @@ public class UniverseCatalogRepository {
             UniverseSlotRecord slot = entry.getValue();
             JsonObject slotObject = new JsonObject();
             slotObject.addProperty("sourceDimension", slot.sourceDimension());
-            slotObject.addProperty("centerX", slot.centerX());
-            slotObject.addProperty("centerY", slot.centerY());
-            slotObject.addProperty("centerZ", slot.centerZ());
-            slotObject.addProperty("radius", slot.radius());
+            slotObject.addProperty("entryX", slot.entryX());
+            slotObject.addProperty("entryY", slot.entryY());
+            slotObject.addProperty("entryZ", slot.entryZ());
+            slotObject.addProperty("radiusChunks", slot.radiusChunks());
             slots.add(dimension.id(), slotObject);
         }
         result.add("slots", slots);
@@ -109,7 +109,7 @@ public class UniverseCatalogRepository {
         }
 
         UniverseCatalog catalog = new UniverseCatalog(
-                intValue(root, "defaultMaxRadius", UniverseRecord.DEFAULT_MAX_RADIUS),
+                intValue(root, "defaultMaxRadiusChunks", UniverseRecord.DEFAULT_MAX_RADIUS_CHUNKS),
                 doubleValue(root, "defaultBudgetMillisPerSecond", UniverseRecord.DEFAULT_BUDGET_MILLIS_PER_SECOND),
                 doubleValue(root, "globalBudgetMillisPerSecond", 100.0));
         JsonObject players = objectValue(root, "players");
@@ -120,7 +120,7 @@ public class UniverseCatalogRepository {
                     owner,
                     UUID.fromString(stringValue(recordObject, "stateId", UUID.randomUUID().toString())),
                     longValue(recordObject, "activeGeneration", 0),
-                    intValue(recordObject, "maxRadius", catalog.getDefaultMaxRadius()),
+                    intValue(recordObject, "maxRadiusChunks", catalog.getDefaultMaxRadiusChunks()),
                     doubleValue(recordObject, "budgetMillisPerSecond", catalog.getDefaultBudgetMillisPerSecond()),
                     booleanValue(recordObject, "enabled", true),
                     booleanValue(recordObject, "frozen", false),
@@ -136,10 +136,10 @@ public class UniverseCatalogRepository {
                 JsonObject slot = slotEntry.getValue().getAsJsonObject();
                 record.getSlots().put(dimension, new UniverseSlotRecord(
                         stringValue(slot, "sourceDimension", dimension.vanillaId()),
-                        intValue(slot, "centerX", 0),
-                        intValue(slot, "centerY", 0),
-                        intValue(slot, "centerZ", 0),
-                        intValue(slot, "radius", 0)));
+                        intValue(slot, "entryX", 0),
+                        intValue(slot, "entryY", 0),
+                        intValue(slot, "entryZ", 0),
+                        intValue(slot, "radiusChunks", 0)));
             }
             catalog.getPlayers().put(owner, record);
         }

@@ -6,32 +6,34 @@ import java.util.UUID;
 
 /** Mutable top-level catalog persisted to universes.json. */
 public class UniverseCatalog {
-    private int defaultMaxRadius;
+    private int defaultMaxRadiusChunks;
     private double defaultBudgetMillisPerSecond;
     private double globalBudgetMillisPerSecond;
     private final Map<UUID, UniverseRecord> players;
 
     public UniverseCatalog() {
-        this(UniverseRecord.DEFAULT_MAX_RADIUS, UniverseRecord.DEFAULT_BUDGET_MILLIS_PER_SECOND,
+        this(UniverseRecord.DEFAULT_MAX_RADIUS_CHUNKS, UniverseRecord.DEFAULT_BUDGET_MILLIS_PER_SECOND,
                 100.0, new LinkedHashMap<>());
     }
 
-    public UniverseCatalog(int defaultMaxRadius, double defaultBudgetMillisPerSecond,
+    public UniverseCatalog(int defaultMaxRadiusChunks, double defaultBudgetMillisPerSecond,
                            double globalBudgetMillisPerSecond) {
-        this(defaultMaxRadius, defaultBudgetMillisPerSecond, globalBudgetMillisPerSecond,
+        this(defaultMaxRadiusChunks, defaultBudgetMillisPerSecond, globalBudgetMillisPerSecond,
                 new LinkedHashMap<>());
     }
 
-    public UniverseCatalog(int defaultMaxRadius, double defaultBudgetMillisPerSecond,
+    public UniverseCatalog(int defaultMaxRadiusChunks, double defaultBudgetMillisPerSecond,
                            double globalBudgetMillisPerSecond, Map<UUID, UniverseRecord> players) {
-        this.defaultMaxRadius = defaultMaxRadius;
+        this.defaultMaxRadiusChunks = UniverseRecord.requireValidRadiusChunks(defaultMaxRadiusChunks);
         this.defaultBudgetMillisPerSecond = defaultBudgetMillisPerSecond;
         this.globalBudgetMillisPerSecond = globalBudgetMillisPerSecond;
         this.players = java.util.Objects.requireNonNull(players, "players");
     }
 
-    public int getDefaultMaxRadius() { return defaultMaxRadius; }
-    public void setDefaultMaxRadius(int value) { defaultMaxRadius = value; }
+    public int getDefaultMaxRadiusChunks() { return defaultMaxRadiusChunks; }
+    public void setDefaultMaxRadiusChunks(int value) {
+        defaultMaxRadiusChunks = UniverseRecord.requireValidRadiusChunks(value);
+    }
     public double getDefaultBudgetMillisPerSecond() { return defaultBudgetMillisPerSecond; }
     public void setDefaultBudgetMillisPerSecond(double value) { defaultBudgetMillisPerSecond = value; }
     public double getGlobalBudgetMillisPerSecond() { return globalBudgetMillisPerSecond; }
@@ -40,7 +42,7 @@ public class UniverseCatalog {
 
     public UniverseRecord getOrCreate(UUID owner) {
         return players.computeIfAbsent(owner, key -> new UniverseRecord(key, UUID.randomUUID(), 0,
-                defaultMaxRadius, defaultBudgetMillisPerSecond, true, false, false, false));
+                defaultMaxRadiusChunks, defaultBudgetMillisPerSecond, true, false, false, false));
     }
 
 }

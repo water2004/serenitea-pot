@@ -1,11 +1,15 @@
 package org.edtp.universe.model;
 
-/** Immutable metadata describing one generated dimension slot. */
+/** Immutable metadata for one full-height, chunk-aligned universe dimension. */
 public record UniverseSlotRecord(
     String sourceDimension,
-    int centerX,
-    int centerY,
-    int centerZ,
-    int radius
+    int entryX,
+    int entryY,
+    int entryZ,
+    int radiusChunks
 ) {
+    public UniverseSlotRecord {
+        java.util.Objects.requireNonNull(sourceDimension, "sourceDimension");
+        UniverseRecord.requireValidRadiusChunks(radiusChunks);
+    }
 }

@@ -2,6 +2,8 @@ package org.edtp.universe.level;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import org.edtp.universe.model.UniverseRecord;
@@ -16,7 +18,7 @@ public final class UniverseInvitationService {
     private static final long REQUEST_TTL_MILLIS = 60_000L;
     private static final long ENTRY_GRANT_TTL_MILLIS = 5_000L;
 
-    private static final Map<UUID, LinkedHashMap<UUID, Long>> pending = new LinkedHashMap<>();
+    private static final Map<UUID, LinkedHashMap<UUID, PendingRequest>> pending = new LinkedHashMap<>();
     private static final Map<EntryGrantKey, Long> entryGrants = new LinkedHashMap<>();
 
     private UniverseInvitationService() {
@@ -47,29 +49,36 @@ public final class UniverseInvitationService {
         }
 
         long now = System.currentTimeMillis();
-        LinkedHashMap<UUID, Long> requests = pending.computeIfAbsent(owner, ignored -> new LinkedHashMap<>());
-        Long existing = requests.get(requester.getUUID());
-        if (existing != null && existing > now) {
+        LinkedHashMap<UUID, PendingRequest> requests = pending.computeIfAbsent(
+            owner, ignored -> new LinkedHashMap<>()
+        );
+        PendingRequest existing = requests.get(requester.getUUID());
+        if (existing != null && existing.expiresAt() > now) {
             return new Rejected("你的申请已经在等待处理");
         }
-        requests.put(requester.getUUID(), now + REQUEST_TTL_MILLIS);
+        UUID requestId = UUID.randomUUID();
+        requests.put(requester.getUUID(), new PendingRequest(now + REQUEST_TTL_MILLIS, requestId));
         ServerPlayer ownerPlayer = requester.level().getServer().getPlayerList().getPlayer(owner);
         if (ownerPlayer != null) {
-            ownerPlayer.sendSystemMessage(Component.literal(
-                requester.getScoreboardName() + " 申请进入你的小宇宙。使用 /universe approve "
-                    + requester.getScoreboardName() + " 批准"
-            ));
+            ownerPlayer.sendSystemMessage(requestMessage(requester.getScoreboardName(), requestId));
         }
         return Accepted.INSTANCE;
     }
 
     public static Result approve(ServerPlayer owner, UUID visitor) {
+        return approve(owner, visitor, null);
+    }
+
+    public static Result approve(ServerPlayer owner, UUID visitor, UUID requestId) {
         UniverseRecord record = UniverseManager.record(owner.getUUID());
         if (record == null) return new Rejected("你还没有小宇宙");
-        LinkedHashMap<UUID, Long> requests = pending.get(owner.getUUID());
-        Long expiresAt = requests == null ? null : requests.get(visitor);
-        if (expiresAt == null || expiresAt <= System.currentTimeMillis()) {
+        LinkedHashMap<UUID, PendingRequest> requests = pending.get(owner.getUUID());
+        PendingRequest request = requests == null ? null : requests.get(visitor);
+        if (request == null || request.expiresAt() <= System.currentTimeMillis()) {
             return new Rejected("没有找到该玩家的待处理申请");
+        }
+        if (requestId != null && !request.id().equals(requestId)) {
+            return new Rejected("该按钮对应的申请已经失效");
         }
         ServerPlayer visitorPlayer = owner.level().getServer().getPlayerList().getPlayer(visitor);
         if (visitorPlayer == null) {
@@ -89,11 +98,19 @@ public final class UniverseInvitationService {
     }
 
     public static Result deny(ServerPlayer owner, UUID visitor) {
-        LinkedHashMap<UUID, Long> requests = pending.get(owner.getUUID());
-        Long expiresAt = requests == null ? null : requests.remove(visitor);
-        if (expiresAt == null || expiresAt <= System.currentTimeMillis()) {
+        return deny(owner, visitor, null);
+    }
+
+    public static Result deny(ServerPlayer owner, UUID visitor, UUID requestId) {
+        LinkedHashMap<UUID, PendingRequest> requests = pending.get(owner.getUUID());
+        PendingRequest request = requests == null ? null : requests.get(visitor);
+        if (request == null || request.expiresAt() <= System.currentTimeMillis()) {
             return new Rejected("没有找到该玩家的待处理申请");
         }
+        if (requestId != null && !request.id().equals(requestId)) {
+            return new Rejected("该按钮对应的申请已经失效");
+        }
+        requests.remove(visitor);
         if (requests.isEmpty()) pending.remove(owner.getUUID());
         ServerPlayer visitorPlayer = owner.level().getServer().getPlayerList().getPlayer(visitor);
         if (visitorPlayer != null) {
@@ -106,9 +123,9 @@ public final class UniverseInvitationService {
 
     public static Set<UUID> pending(UUID owner) {
         long now = System.currentTimeMillis();
-        LinkedHashMap<UUID, Long> requests = pending.get(owner);
+        LinkedHashMap<UUID, PendingRequest> requests = pending.get(owner);
         if (requests == null) return Set.of();
-        requests.entrySet().removeIf(entry -> entry.getValue() <= now);
+        requests.entrySet().removeIf(entry -> entry.getValue().expiresAt() <= now);
         if (requests.isEmpty()) {
             pending.remove(owner);
             return Set.of();
@@ -124,13 +141,30 @@ public final class UniverseInvitationService {
     private static void cleanupExpired() {
         long now = System.currentTimeMillis();
         pending.entrySet().removeIf(entry -> {
-            entry.getValue().entrySet().removeIf(request -> request.getValue() <= now);
+            entry.getValue().entrySet().removeIf(request -> request.getValue().expiresAt() <= now);
             return entry.getValue().isEmpty();
         });
         entryGrants.entrySet().removeIf(entry -> entry.getValue() <= now);
     }
 
     private record EntryGrantKey(UUID owner, UUID visitor) {
+    }
+
+    private record PendingRequest(long expiresAt, UUID id) {
+    }
+
+    private static Component requestMessage(String requesterName, UUID requestId) {
+        String approve = "universe approve " + requesterName + " " + requestId;
+        String deny = "universe deny " + requesterName + " " + requestId;
+        return Component.literal(requesterName + " 申请进入你的小宇宙（60 秒内有效）")
+            .append("\n")
+            .append(Component.literal("[接受]")
+                .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
+                .withStyle(style -> style.withClickEvent(new ClickEvent.RunCommand(approve))))
+            .append(" ")
+            .append(Component.literal("[拒绝]")
+                .withStyle(ChatFormatting.RED, ChatFormatting.BOLD)
+                .withStyle(style -> style.withClickEvent(new ClickEvent.RunCommand(deny))));
     }
 
     public sealed interface Result permits Accepted, Approved, Rejected {

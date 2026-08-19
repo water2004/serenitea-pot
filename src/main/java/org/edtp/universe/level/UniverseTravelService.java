@@ -69,9 +69,9 @@ public final class UniverseTravelService {
         UniverseSlotRecord slot = record.getSlots().get(destinationDimension);
         boolean success = player.teleportTo(
             bundle.get(destinationDimension),
-            slot.centerX() + 0.5,
-            slot.centerY(),
-            slot.centerZ() + 0.5,
+            slot.entryX() + 0.5,
+            slot.entryY(),
+            slot.entryZ() + 0.5,
             Set.of(),
             player.getYRot(),
             player.getXRot(),
@@ -112,7 +112,7 @@ public final class UniverseTravelService {
         ServerLevel target = publicTarget(server.overworld(), candidate);
         Vec3 position;
         if (slot != null && target.dimension().identifier().toString().equals(slot.sourceDimension())) {
-            position = new Vec3(slot.centerX() + 0.5, slot.centerY(), slot.centerZ() + 0.5);
+            position = new Vec3(slot.entryX() + 0.5, slot.entryY(), slot.entryZ() + 0.5);
         } else {
             position = Vec3.atBottomCenterOf(target.getRespawnData().pos());
         }

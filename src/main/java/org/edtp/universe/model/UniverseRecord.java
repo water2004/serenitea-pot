@@ -7,13 +7,14 @@ import java.util.UUID;
 
 /** Mutable administrative metadata for one owner's personal universe. */
 public class UniverseRecord {
-    public static final int DEFAULT_MAX_RADIUS = 64;
+    public static final int DEFAULT_MAX_RADIUS_CHUNKS = 4;
+    public static final int MAX_RADIUS_CHUNKS = 256;
     public static final double DEFAULT_BUDGET_MILLIS_PER_SECOND = 25.0;
 
     private final UUID owner;
     private UUID stateId;
     private long activeGeneration;
-    private int maxRadius;
+    private int maxRadiusChunks;
     private double budgetMillisPerSecond;
     private boolean enabled;
     private boolean frozen;
@@ -22,25 +23,25 @@ public class UniverseRecord {
     private final Map<UniverseDimension, UniverseSlotRecord> slots;
 
     public UniverseRecord(UUID owner) {
-        this(owner, UUID.randomUUID(), 0, DEFAULT_MAX_RADIUS, DEFAULT_BUDGET_MILLIS_PER_SECOND,
+        this(owner, UUID.randomUUID(), 0, DEFAULT_MAX_RADIUS_CHUNKS, DEFAULT_BUDGET_MILLIS_PER_SECOND,
                 true, false, false, false, new EnumMap<>(UniverseDimension.class));
     }
 
-    public UniverseRecord(UUID owner, UUID stateId, long activeGeneration, int maxRadius,
+    public UniverseRecord(UUID owner, UUID stateId, long activeGeneration, int maxRadiusChunks,
                           double budgetMillisPerSecond, boolean enabled, boolean frozen,
                           boolean stopped, boolean quarantined) {
-        this(owner, stateId, activeGeneration, maxRadius, budgetMillisPerSecond, enabled, frozen,
+        this(owner, stateId, activeGeneration, maxRadiusChunks, budgetMillisPerSecond, enabled, frozen,
                 stopped, quarantined, new EnumMap<>(UniverseDimension.class));
     }
 
-    public UniverseRecord(UUID owner, UUID stateId, long activeGeneration, int maxRadius,
+    public UniverseRecord(UUID owner, UUID stateId, long activeGeneration, int maxRadiusChunks,
                           double budgetMillisPerSecond, boolean enabled, boolean frozen,
                           boolean stopped, boolean quarantined,
                           Map<UniverseDimension, UniverseSlotRecord> slots) {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.stateId = Objects.requireNonNull(stateId, "stateId");
         this.activeGeneration = activeGeneration;
-        this.maxRadius = maxRadius;
+        this.maxRadiusChunks = requireValidRadiusChunks(maxRadiusChunks);
         this.budgetMillisPerSecond = budgetMillisPerSecond;
         this.enabled = enabled;
         this.frozen = frozen;
@@ -69,12 +70,12 @@ public class UniverseRecord {
         this.activeGeneration = activeGeneration;
     }
 
-    public int getMaxRadius() {
-        return maxRadius;
+    public int getMaxRadiusChunks() {
+        return maxRadiusChunks;
     }
 
-    public void setMaxRadius(int maxRadius) {
-        this.maxRadius = maxRadius;
+    public void setMaxRadiusChunks(int maxRadiusChunks) {
+        this.maxRadiusChunks = requireValidRadiusChunks(maxRadiusChunks);
     }
 
     public double getBudgetMillisPerSecond() {
@@ -123,6 +124,15 @@ public class UniverseRecord {
 
     public Map<UniverseDimension, UniverseSlotRecord> getSlots() {
         return slots;
+    }
+
+    static int requireValidRadiusChunks(int radiusChunks) {
+        if (radiusChunks < 0 || radiusChunks > MAX_RADIUS_CHUNKS) {
+            throw new IllegalArgumentException(
+                "Chunk radius must be between 0 and " + MAX_RADIUS_CHUNKS
+            );
+        }
+        return radiusChunks;
     }
 
 }
