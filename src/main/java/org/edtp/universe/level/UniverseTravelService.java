@@ -11,6 +11,7 @@ import org.edtp.universe.model.UniverseDimension;
 import org.edtp.universe.model.UniverseRecord;
 import org.edtp.universe.model.UniverseSlotRecord;
 import org.edtp.universe.player.HumanPlayerDetector;
+import org.edtp.universe.region.UniverseCreationService;
 
 import java.util.Set;
 import java.util.UUID;
@@ -21,6 +22,11 @@ public final class UniverseTravelService {
 
     public static Result enter(ServerPlayer player, UUID owner) {
         UniverseRecord record = UniverseManager.record(owner);
+        Double creationProgress = UniverseCreationService.progress(owner);
+        if (creationProgress != null && (record == null || !record.exists())) {
+            return new Rejected("目标小宇宙正在创建（%.1f%%），完成后才能进入"
+                    .formatted(creationProgress * 100.0));
+        }
         if (record == null || !record.exists()) {
             return new Rejected("目标玩家还没有创建小宇宙");
         }

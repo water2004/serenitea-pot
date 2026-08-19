@@ -119,7 +119,7 @@ public final class UniverseCreationService {
             null
         ));
         long diameterChunks = Math.addExact(Math.multiplyExact((long) radiusChunks, 2L), 1L);
-        return new Accepted(Math.multiplyExact(diameterChunks, diameterChunks), region.getVolume(), generation);
+        return new Accepted(Math.multiplyExact(diameterChunks, diameterChunks), generation);
     }
 
     /**
@@ -456,7 +456,7 @@ public final class UniverseCreationService {
     public sealed interface RequestResult permits Accepted, Rejected {
     }
 
-    public record Accepted(long chunkCount, long volume, long generation) implements RequestResult {
+    public record Accepted(long chunkCount, long generation) implements RequestResult {
     }
 
     public record Rejected(String reason) implements RequestResult, MaximumChangeResult {

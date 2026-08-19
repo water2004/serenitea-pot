@@ -142,8 +142,8 @@ public final class UniverseCommands {
         );
         if (result instanceof UniverseCreationService.Accepted accepted) {
             return success(context,
-                "开始提取 " + accepted.chunkCount() + " 个区块的完整高度（" + accepted.volume()
-                    + " 个方块，代际 " + accepted.generation() + "），过程按 tick 分批执行"
+                "开始按区块批量提取 " + accepted.chunkCount() + " 个区块的完整高度（代际 "
+                    + accepted.generation() + "），执行 /universe 可查询进度"
             );
         }
         return failure(context, ((UniverseCreationService.Rejected) result).reason());
