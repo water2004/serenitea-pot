@@ -9,7 +9,7 @@
   "entrypoints": {
     "main": [
       {
-        "adapter": "kotlin",
+        "adapter": "default",
         "value": "org.edtp.universe.UniverseMod"
       }
     ]

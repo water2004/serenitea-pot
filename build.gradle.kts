@@ -1,10 +1,4 @@
 plugins {
-    val kotlinVersion = libs.versions.fabric.kotlin.get()
-        .substringAfter("+kotlin.")
-        .substringBefore("+")
-
-    kotlin("jvm").version(kotlinVersion)
-    kotlin("plugin.serialization").version(kotlinVersion)
     alias(libs.plugins.fabric.loom)
     `maven-publish`
 }
@@ -39,10 +33,6 @@ java {
     withSourcesJar()
 }
 
-kotlin {
-    jvmToolchain(25)
-}
-
 tasks.processResources {
     inputs.property("version", project.version)
     filesMatching("fabric.mod.json") {
@@ -53,10 +43,6 @@ tasks.processResources {
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
     options.release.set(25)
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    compilerOptions.freeCompilerArgs.add("-jvm-default=no-compatibility")
 }
 
 tasks.test {

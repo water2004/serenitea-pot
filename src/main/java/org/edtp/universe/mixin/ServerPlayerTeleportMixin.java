@@ -21,7 +21,7 @@ public abstract class ServerPlayerTeleportMixin {
         CallbackInfoReturnable<ServerPlayer> cir
     ) {
         ServerPlayer player = (ServerPlayer) (Object) this;
-        var denial = UniverseAccessPolicy.INSTANCE.denialReason(player, transition.newLevel());
+        var denial = UniverseAccessPolicy.denialReason(player, transition.newLevel());
         if (denial != null) {
             player.sendSystemMessage(denial);
             cir.setReturnValue(null);
