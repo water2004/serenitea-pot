@@ -28,6 +28,16 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'serenitea_pot_tests'
+        enableGameTests = true
+        enableClientGameTests = false
+        eula = true
+    }
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)

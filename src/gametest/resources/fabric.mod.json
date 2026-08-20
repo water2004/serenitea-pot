@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "serenitea_pot_tests",
+  "version": "1.0.0",
+  "name": "Serenitea Pot Game Tests",
+  "environment": "server",
+  "entrypoints": {
+    "fabric-gametest": [
+      "org.edtp.sereniteapot.gametest.RegionCopyGameTest"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "fabric-api": "=0.158.0+26.2",
+    "serenitea_pot": "*"
+  }
+}

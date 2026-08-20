@@ -76,7 +76,7 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 使用 IntelliJ IDEA 直接打开仓库根目录即可导入 Gradle 工程。源码位于 `src/main/java`，需要 Java 25：
 
 ```powershell
-.\gradlew.bat build
+.\gradlew.bat clean check
 ```
 
-产物位于 `build/libs/`。项目包含 JUnit 测试，并已用 26.2 专用服务端验证模组加载、mixin 应用、命令注册、元数据保存和正常停服。
+`check` 会先运行纯 Java 的模型与持久化测试，再启动 Minecraft 26.2 专用 GameTest 服务器，加载 Fabric、Arcade、mixin 和本模组，并验证区块 section 及持久化 chunk attachment 的复制结果彼此独立。只需重跑服务端测试时可执行 `.\gradlew.bat runGameTest`。构建产物位于 `build/libs/`。
