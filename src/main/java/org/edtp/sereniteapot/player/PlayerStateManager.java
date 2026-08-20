@@ -98,8 +98,8 @@ public final class PlayerStateManager {
         UUID realmOwner = realm(player.level());
         capture(player, realmOwner);
         if (realmOwner != null && store != null) {
-            // Vanilla 会在 PlayerList.remove 之后保存 playerdata。先恢复公共快照，防止
-            // 壶内创造物品和创造模式被写进服务器公共 playerdata。
+            // 正常断线已由 PlayerListMixin 先传送至公共世界。若其他模组阻止了该次
+            // 传送，这里仍恢复公共状态，至少避免壶内创造物品写入公共 playerdata。
             CompoundTag publicState = store.get(player.getUUID(), stateKey(null));
             if (publicState != null) {
                 apply(player, publicState, false);
