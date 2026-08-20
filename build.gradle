@@ -1,0 +1,60 @@
+plugins {
+    alias(libs.plugins.fabric.loom)
+    id 'maven-publish'
+}
+
+version = project.property('mod_version')
+group = project.property('maven_group')
+
+base {
+    archivesName = project.property('archives_base_name')
+}
+
+repositories {
+    maven { url = uri('https://maven.supersanta.me/snapshots') }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft(libs.minecraft)
+    implementation(libs.fabric.loader)
+    implementation(libs.fabric.api)
+    implementation(libs.fabric.kotlin)
+
+    implementation(libs.bundles.arcade)
+    include(libs.bundles.arcade)
+
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    withSourcesJar()
+}
+
+tasks.named('processResources', ProcessResources) {
+    inputs.property('version', project.version)
+    filesMatching('fabric.mod.json') {
+        expand(version: project.version)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 25
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+}
+
+publishing {
+    publications {
+        create('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+}
