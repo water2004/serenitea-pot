@@ -168,9 +168,12 @@ All project business code is Java 25. The final JAR still depends on Fabric Lang
 ### Entering and leaving a pot
 
 <p align="center">
-  <img src="docs/images/enter.png" width="32%" alt="Entering a Serenitea Pot from the public world">
-  <img src="docs/images/entered.png" width="32%" alt="The extracted region inside a Serenitea Pot's local world border">
-  <img src="docs/images/leave.png" width="32%" alt="Leaving a Serenitea Pot">
+  <img src="docs/images/enter.png" width="49%" alt="Entering a Serenitea Pot from the public world">
+  <img src="docs/images/entered.png" width="49%" alt="The extracted region inside a Serenitea Pot's local world border">
+</p>
+<p align="center">
+  <img src="docs/images/leave.png" width="49%" alt="Leaving a Serenitea Pot">
+  <img src="docs/images/left.png" width="49%" alt="Returned to the saved public-world position">
 </p>
 
 ## Development and verification

@@ -122,9 +122,12 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 ### 进入和离开尘歌壶
 
 <p align="center">
-  <img src="docs/images/enter.png" width="32%" alt="从公共世界进入尘歌壶">
-  <img src="docs/images/entered.png" width="32%" alt="尘歌壶局部世界边界内的提取区域">
-  <img src="docs/images/leave.png" width="32%" alt="离开尘歌壶">
+  <img src="docs/images/enter.png" width="49%" alt="从公共世界进入尘歌壶">
+  <img src="docs/images/entered.png" width="49%" alt="尘歌壶局部世界边界内的提取区域">
+</p>
+<p align="center">
+  <img src="docs/images/leave.png" width="49%" alt="离开尘歌壶">
+  <img src="docs/images/left.png" width="49%" alt="返回保存的公共世界位置">
 </p>
 
 ## 构建与验证
