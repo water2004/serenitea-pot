@@ -152,7 +152,18 @@ All project business code is Java 25. The final JAR still depends on Fabric Lang
 
 ## Screenshots
 
-Screenshots will be added under `docs/images/` as the user interface and visual behavior stabilize.
+### Extracting a region
+
+<p align="center">
+  <img src="docs/images/create.png" width="49%" alt="Public Overworld region selected for extraction">
+  <img src="docs/images/created.png" width="49%" alt="Serenitea Pot extraction completed">
+</p>
+
+### Public Overworld
+
+<p align="center">
+  <img src="docs/images/overworld.png" width="100%" alt="Players in the public Overworld">
+</p>
 
 ## Development and verification
 

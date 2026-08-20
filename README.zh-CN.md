@@ -106,7 +106,18 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 
 ## 截图
 
-界面和视觉行为稳定后，截图会放在 `docs/images/` 目录中。
+### 提取区域
+
+<p align="center">
+  <img src="docs/images/create.png" width="49%" alt="在公共主世界选择要提取的区域">
+  <img src="docs/images/created.png" width="49%" alt="尘歌壶区域提取完成">
+</p>
+
+### 公共主世界
+
+<p align="center">
+  <img src="docs/images/overworld.png" width="100%" alt="公共主世界中的玩家">
+</p>
 
 ## 构建与验证
 
