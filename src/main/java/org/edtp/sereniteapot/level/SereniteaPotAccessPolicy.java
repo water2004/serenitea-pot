@@ -10,6 +10,12 @@ import org.edtp.sereniteapot.player.HumanPlayerDetector;
 
 import java.util.UUID;
 
+/**
+ * 所有进入尘歌壶维度的最终访问检查。
+ *
+ * <p>命令只负责发起传送；传送门、管理员命令和其他模组触发的玩家跨维度传送也会
+ * 经过这里，因此不能只在命令层检查权限。</p>
+ */
 public final class SereniteaPotAccessPolicy {
     private SereniteaPotAccessPolicy() {
     }
@@ -40,6 +46,7 @@ public final class SereniteaPotAccessPolicy {
             return HumanPlayerDetector.isHuman(player) ? null : Component.literal("假玩家不能加载或维持尘歌壶");
         }
         if (!player.permissions().hasPermission(Permissions.COMMANDS_OWNER)) {
+            // 临时许可只消费一次，批准申请不会变成永久访客名单。
             return SereniteaPotInvitationService.consumeEntryGrant(identity.owner(), player.getUUID())
                 ? null
                 : Component.literal("需要提交申请，并由主人批准本次进入");

@@ -35,6 +35,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 尘歌壶元数据和 Arcade 自定义维度的运行时所有者。
+ *
+ * <p>持久化目录可以存在但维度默认不加载；只有主人进入时才调用 {@link #load(UUID)}。
+ * 所有增删维度操作都要求位于服务器线程，并由生命周期服务保证其中已经没有玩家。</p>
+ */
 public final class SereniteaPotManager {
     private static MinecraftServer server;
     private static SereniteaPotCatalogRepository repository;
@@ -114,6 +120,8 @@ public final class SereniteaPotManager {
             }
         }
 
+        // 三个维度必须由同一个 VanillaLikeLevelsBuilder 创建，Arcade 才会为它们建立
+        // 主世界/下界/末地的成组传送门映射。
         VanillaLikeLevelsBuilder builder = new VanillaLikeLevelsBuilder();
         for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
             ServerLevel template = server.getLevel(dimension.vanillaLevelKey());
@@ -288,6 +296,7 @@ public final class SereniteaPotManager {
     }
 
     private static void applyBorders(SereniteaPotBundle bundle, SereniteaPotRecord record) {
+        // 私有坐标以源区块映射后的 (0, 0) 区块为中心，而不是沿用公共世界坐标。
         double localCenter = ChunkPos.ZERO.getMiddleBlockX();
         for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
             SereniteaPotSlotRecord slot = record.getSlots().get(dimension);

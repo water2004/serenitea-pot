@@ -10,10 +10,19 @@ import org.edtp.sereniteapot.level.SereniteaPotDeletionService;
 
 import java.util.UUID;
 
+/** 命令实现之间共享的少量 Brigadier 组装与反馈工具。 */
 final class SereniteaPotCommandSupport {
     private SereniteaPotCommandSupport() {
     }
 
+    /**
+     * 将参数按从左到右的顺序组装成一条命令路径。
+     *
+     * <p>例如 {@code route(root, a, b, c)} 等价于先执行
+     * {@code b.then(c)}、再执行 {@code a.then(b)}、最后执行
+     * {@code root.then(a)}。这里只隐藏 Brigadier 重复的树节点连接，不负责解析、
+     * 权限判断或执行命令。</p>
+     */
     static void route(
             ArgumentBuilder<CommandSourceStack, ?> parent,
             ArgumentBuilder<CommandSourceStack, ?> child) {

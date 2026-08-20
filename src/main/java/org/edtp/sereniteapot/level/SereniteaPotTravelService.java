@@ -17,6 +17,12 @@ import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 玩家进入、离开和生命周期驱逐共用的传送入口。
+ *
+ * <p>这里只选择安全目的地；访问控制由 teleport Mixin 统一执行，玩家物品和坐标的
+ * realm 切换也由同一次 teleport 的前后钩子完成。</p>
+ */
 public final class SereniteaPotTravelService {
     private SereniteaPotTravelService() {
     }
@@ -57,6 +63,7 @@ public final class SereniteaPotTravelService {
             }
         }
 
+        // 优先进入与玩家当前公共维度对应的壶内维度；尚未提取该维度时再选择已有槽位。
         SereniteaPotDimension destinationDimension = SereniteaPotDimension.fromVanillaLevel(player.level().dimension());
         if (destinationDimension == null || !record.getSlots().containsKey(destinationDimension)) {
             destinationDimension = null;
@@ -109,6 +116,7 @@ public final class SereniteaPotTravelService {
         }
 
         var server = player.level().getServer();
+        // 正常离开应精确回到进入前的位置；下方逻辑只处理旧/损坏快照的安全回退。
         Destination savedPublic = savedPublicDestination(player);
         if (savedPublic != null) {
             boolean success = player.teleportTo(

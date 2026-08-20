@@ -23,6 +23,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * 以可分片任务创建或裁剪尘歌壶，而不是在命令处理期间阻塞复制整个区域。
+ *
+ * <p>任务先构造一个不可进入的暂存代际，在每个服务器 tick 内按性能预算逐段复制；
+ * 所有维度成功后才原子切换活动代际，随后删除被替换的旧代际。失败只丢弃暂存代际，
+ * 不会把半成品设为活动世界。</p>
+ */
 public final class SereniteaPotCreationService {
     private static final long COPY_BUDGET_NANOS_PER_TICK = 4_000_000L;
     private static final Map<UUID, CreationJob> jobs = new LinkedHashMap<>();
@@ -249,6 +256,7 @@ public final class SereniteaPotCreationService {
         if (jobs.isEmpty()) return;
         long globalDeadline = System.nanoTime() + COPY_BUDGET_NANOS_PER_TICK;
         List<UUID> owners = new ArrayList<>(jobs.keySet());
+        // 每 tick 轮换起始玩家，避免任务列表前面的玩家长期占满全局复制预算。
         int start = Math.floorMod(roundRobinOffset, owners.size());
         for (int visited = 0; visited < owners.size(); visited++) {
             long now = System.nanoTime();
@@ -283,6 +291,7 @@ public final class SereniteaPotCreationService {
                 continue;
             }
             if (job.complete()) {
+                // 只有全部复制任务成功后才发布新代际；commit 之前旧元数据仍是权威状态。
                 SereniteaPotBundle replaced;
                 try {
                     replaced = SereniteaPotManager.commitGeneration(

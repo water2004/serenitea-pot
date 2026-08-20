@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 
 import java.util.function.BooleanSupplier;
 
+/** 在原版逐维度 tick 的调用点施加预算，并测量完整的维度 tick 耗时。 */
 @Mixin(MinecraftServer.class)
 public abstract class MinecraftServerTickMixin {
     @WrapOperation(
@@ -24,6 +25,7 @@ public abstract class MinecraftServerTickMixin {
         BooleanSupplier hasTimeLeft,
         Operation<Void> original
     ) {
+        // 公共维度总是放行；只有可识别为尘歌壶的自定义维度可能被跳过。
         if (!SereniteaPotScheduler.beforeLevelTick(level)) {
             return;
         }

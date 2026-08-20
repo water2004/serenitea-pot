@@ -34,6 +34,8 @@ final class SereniteaPotInvitationCommands {
                 argument(OWNER_ARGUMENT, GameProfileArgument.gameProfile())
                         .executes(SereniteaPotInvitationCommands::request));
         route(root, literal("requests").executes(SereniteaPotInvitationCommands::requests));
+        // request-id 只由聊天中的接受/拒绝按钮附带，用来阻止过期按钮处理后来的同名申请。
+        // 不带 request-id 的较短路径仍保留给玩家手动输入。
         route(root,
                 literal("approve"),
                 argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())

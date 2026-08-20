@@ -14,6 +14,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 保存仅存在于本次服务器进程中的临时访问申请。
+ *
+ * <p>批准时先签发一个短时、一次性的进入许可，再让正常传送路径消费它；因此访客和
+ * OP 最终走的是同一套访问策略与状态隔离流程。</p>
+ */
 public final class SereniteaPotInvitationService {
     private static final long REQUEST_TTL_MILLIS = 60_000L;
     private static final long ENTRY_GRANT_TTL_MILLIS = 5_000L;
@@ -85,6 +91,7 @@ public final class SereniteaPotInvitationService {
             return new Rejected("申请者已离线，申请会保留到过期");
         }
 
+        // AccessPolicy 会在 teleport HEAD 消费许可；失败时撤销许可并保留原申请供重试。
         EntryGrantKey key = new EntryGrantKey(owner.getUUID(), visitor);
         entryGrants.put(key, System.currentTimeMillis() + ENTRY_GRANT_TTL_MILLIS);
         SereniteaPotTravelService.Result travel = SereniteaPotTravelService.enter(visitorPlayer, owner.getUUID());

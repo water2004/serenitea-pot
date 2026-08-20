@@ -28,6 +28,14 @@ import org.edtp.sereniteapot.model.SereniteaPotRecord;
 
 import java.util.UUID;
 
+/**
+ * 在公共服务器世界与每个尘歌壶之间隔离玩家自身状态。
+ *
+ * <p>每个 realm 分别保存物品栏、末影箱、经验、生命、效果、游戏模式和所在位置。
+ * 跨 realm 传送分为 {@link #beforeTeleport(ServerPlayer, ServerLevel)} 的保存阶段与
+ * {@link #afterTeleport(ServerPlayer, StateSwitchPlan)} 的恢复阶段；同一尘歌壶三个维度
+ * 之间传送不会切换快照。</p>
+ */
 public final class PlayerStateManager {
     private static final int SNAPSHOT_VERSION = 3;
 
@@ -63,6 +71,7 @@ public final class PlayerStateManager {
             return null;
         }
 
+        // 先关闭容器，避免跨 realm 时仍有公共世界容器菜单引用或未提交的物品操作。
         player.closeContainer();
         capture(player, sourceRealm);
         return new StateSwitchPlan(sourceRealm, destinationRealm);
@@ -89,6 +98,8 @@ public final class PlayerStateManager {
         UUID realmOwner = realm(player.level());
         capture(player, realmOwner);
         if (realmOwner != null && store != null) {
+            // Vanilla 会在 PlayerList.remove 之后保存 playerdata。先恢复公共快照，防止
+            // 壶内创造物品和创造模式被写进服务器公共 playerdata。
             CompoundTag publicState = store.get(player.getUUID(), stateKey(null));
             if (publicState != null) {
                 apply(player, publicState, false);
@@ -251,6 +262,7 @@ public final class PlayerStateManager {
         if (owner == null) {
             return "public";
         }
+        // stateId 在删除尘歌壶时重置，使旧壶的玩家状态自然失效，无需读取或迁移旧快照。
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
         UUID stateId = record == null ? owner : record.getStateId();
         return "serenitea_pot_" + owner + "_" + stateId;

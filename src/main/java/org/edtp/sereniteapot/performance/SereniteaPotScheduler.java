@@ -19,6 +19,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * 在服务器主线程上为尘歌壶 tick 和创建复制共享时间预算。
+ *
+ * <p>调度器使用玩家级与全局两层令牌桶：执行前按历史耗时预扣，执行后按真实耗时
+ * 修正。它可以降低后续 tick 频率，但无法中断一个已经进入模组代码的慢 tick；单次
+ * 维度 tick 超过安全阈值时会自动冻结该尘歌壶。</p>
+ */
 public final class SereniteaPotScheduler {
     private static final double TICKS_PER_SECOND = 20.0;
     private static final long MINIMUM_RESERVATION_NANOS = 50_000L;
@@ -61,6 +68,7 @@ public final class SereniteaPotScheduler {
         }
 
         budget.updateLimit(record.getBudgetMillisPerSecond());
+        // 先按指数移动平均值预扣；真实耗时可能更高，差额会在 afterLevelTick 形成预算债务。
         double reservation = Math.max(MINIMUM_RESERVATION_NANOS, budget.estimatedNanos);
         if (budget.tokensNanos < reservation || globalTokensNanos < reservation) {
             budget.recordSkip(dimension);
@@ -90,6 +98,7 @@ public final class SereniteaPotScheduler {
         globalTokensNanos -= correction;
         budget.recordRun(dimension, elapsedNanos);
 
+        // 自动冻结只停止后续 tick，不禁用或删除尘歌壶，主人仍可进入并手动修复。
         if (elapsedNanos >= AUTO_FREEZE_LEVEL_TICK_NANOS) {
             var record = SereniteaPotManager.record(owner);
             if (record == null) {
