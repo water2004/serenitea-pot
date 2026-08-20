@@ -13,21 +13,15 @@ public class SereniteaPotCatalog {
 
     public SereniteaPotCatalog() {
         this(SereniteaPotRecord.DEFAULT_MAX_RADIUS_CHUNKS, SereniteaPotRecord.DEFAULT_BUDGET_MILLIS_PER_SECOND,
-                100.0, new LinkedHashMap<>());
+                100.0);
     }
 
     public SereniteaPotCatalog(int defaultMaxRadiusChunks, double defaultBudgetMillisPerSecond,
                            double globalBudgetMillisPerSecond) {
-        this(defaultMaxRadiusChunks, defaultBudgetMillisPerSecond, globalBudgetMillisPerSecond,
-                new LinkedHashMap<>());
-    }
-
-    public SereniteaPotCatalog(int defaultMaxRadiusChunks, double defaultBudgetMillisPerSecond,
-                           double globalBudgetMillisPerSecond, Map<UUID, SereniteaPotRecord> players) {
         this.defaultMaxRadiusChunks = SereniteaPotRecord.requireValidRadiusChunks(defaultMaxRadiusChunks);
         this.defaultBudgetMillisPerSecond = defaultBudgetMillisPerSecond;
         this.globalBudgetMillisPerSecond = globalBudgetMillisPerSecond;
-        this.players = java.util.Objects.requireNonNull(players, "players");
+        this.players = new LinkedHashMap<>();
     }
 
     public int getDefaultMaxRadiusChunks() { return defaultMaxRadiusChunks; }
@@ -35,13 +29,12 @@ public class SereniteaPotCatalog {
         defaultMaxRadiusChunks = SereniteaPotRecord.requireValidRadiusChunks(value);
     }
     public double getDefaultBudgetMillisPerSecond() { return defaultBudgetMillisPerSecond; }
-    public void setDefaultBudgetMillisPerSecond(double value) { defaultBudgetMillisPerSecond = value; }
     public double getGlobalBudgetMillisPerSecond() { return globalBudgetMillisPerSecond; }
     public void setGlobalBudgetMillisPerSecond(double value) { globalBudgetMillisPerSecond = value; }
     public Map<UUID, SereniteaPotRecord> getPlayers() { return players; }
 
     public SereniteaPotRecord getOrCreate(UUID owner) {
-        return players.computeIfAbsent(owner, key -> new SereniteaPotRecord(key, UUID.randomUUID(), 0,
+        return players.computeIfAbsent(owner, ignored -> new SereniteaPotRecord(UUID.randomUUID(), 0,
                 defaultMaxRadiusChunks, defaultBudgetMillisPerSecond, true, false));
     }
 

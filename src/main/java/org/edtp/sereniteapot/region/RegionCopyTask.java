@@ -61,7 +61,6 @@ public final class RegionCopyTask {
     private final int targetChunkMinX;
     private final int targetChunkMinZ;
     private final int chunkSizeX;
-    private final int chunkSizeZ;
     private final int blockOffsetX;
     private final int blockOffsetZ;
     private final int chunkOffsetX;
@@ -103,8 +102,8 @@ public final class RegionCopyTask {
         this.targetChunkMinX = targetRegion.getMinX() >> 4;
         this.targetChunkMinZ = targetRegion.getMinZ() >> 4;
         this.chunkSizeX = (sourceRegion.getMaxX() >> 4) - sourceChunkMinX + 1;
-        this.chunkSizeZ = (sourceRegion.getMaxZ() >> 4) - sourceChunkMinZ + 1;
-        this.chunkCount = Math.multiplyExact((long) chunkSizeX, (long) chunkSizeZ);
+        int chunkSizeZ = (sourceRegion.getMaxZ() >> 4) - sourceChunkMinZ + 1;
+        this.chunkCount = Math.multiplyExact((long) chunkSizeX, chunkSizeZ);
         this.blockOffsetX = Math.subtractExact(targetRegion.getMinX(), sourceRegion.getMinX());
         this.blockOffsetZ = Math.subtractExact(targetRegion.getMinZ(), sourceRegion.getMinZ());
         this.chunkOffsetX = Math.subtractExact(targetChunkMinX, sourceChunkMinX);

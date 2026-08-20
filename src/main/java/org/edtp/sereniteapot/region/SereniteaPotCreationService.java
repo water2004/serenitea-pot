@@ -135,7 +135,7 @@ public final class SereniteaPotCreationService {
             JobKind.EXTRACTION,
             true
         ));
-        long diameterChunks = Math.addExact(Math.multiplyExact((long) radiusChunks, 2L), 1L);
+        long diameterChunks = Math.addExact(Math.multiplyExact(radiusChunks, 2L), 1L);
         return new Accepted(Math.multiplyExact(diameterChunks, diameterChunks), generation);
     }
 
@@ -252,12 +252,11 @@ public final class SereniteaPotCreationService {
         return job == null ? null : job.progress();
     }
 
-    public static boolean cancel(UUID owner) {
+    public static void cancel(UUID owner) {
         CreationJob job = jobs.remove(owner);
-        if (job == null) return false;
+        if (job == null) return;
         SereniteaPotLifecycleService.deleteEvacuated(job.staging);
         abortMaintenance(owner);
-        return true;
     }
 
     private static void tick(MinecraftServer server) {
@@ -273,7 +272,7 @@ public final class SereniteaPotCreationService {
             CreationJob job = jobs.get(owner);
             if (job == null) continue;
             SereniteaPotRecord record = SereniteaPotManager.record(owner);
-            if (!job.canContinue(record)) {
+            if (job.shouldStop(record)) {
                 fail(server, job, message(MessageKey.CREATION_STOPPED_BY_ADMIN_CHANGE));
                 jobs.remove(owner);
                 continue;
@@ -293,7 +292,7 @@ public final class SereniteaPotCreationService {
             }
             SereniteaPotScheduler.completeCreationSlice(reservation, System.nanoTime() - started);
             SereniteaPotRecord updated = SereniteaPotManager.record(owner);
-            if (!job.canContinue(updated)) {
+            if (job.shouldStop(updated)) {
                 fail(server, job, message(MessageKey.CREATION_DISABLED_DURING_JOB));
                 jobs.remove(owner);
                 continue;
@@ -439,12 +438,12 @@ public final class SereniteaPotCreationService {
             this.totalTasks = tasks.size();
         }
 
-        private boolean canContinue(SereniteaPotRecord record) {
-            if (record == null) return false;
+        private boolean shouldStop(SereniteaPotRecord record) {
+            if (record == null) return true;
             if (kind == JobKind.MAXIMUM_TRIM) {
-                return record.isEnabled() == expectedEnabled;
+                return record.isEnabled() != expectedEnabled;
             }
-            return record.isEnabled();
+            return !record.isEnabled();
         }
 
         private void step(long deadline) {

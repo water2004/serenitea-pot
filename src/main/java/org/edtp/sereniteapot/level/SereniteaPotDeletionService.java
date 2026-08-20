@@ -15,7 +15,6 @@ import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumMap;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
@@ -37,10 +36,7 @@ public final class SereniteaPotDeletionService {
 
         UUID oldStateId = record.getStateId();
         long oldGeneration = record.getActiveGeneration();
-        EnumMap<SereniteaPotDimension, SereniteaPotSlotRecord> oldSlots = new EnumMap<>(SereniteaPotDimension.class);
-        for (Map.Entry<SereniteaPotDimension, SereniteaPotSlotRecord> entry : record.getSlots().entrySet()) {
-            oldSlots.put(entry.getKey(), entry.getValue());
-        }
+        EnumMap<SereniteaPotDimension, SereniteaPotSlotRecord> oldSlots = new EnumMap<>(record.getSlots());
         boolean oldFrozen = record.isFrozen();
 
         record.setActiveGeneration(0);

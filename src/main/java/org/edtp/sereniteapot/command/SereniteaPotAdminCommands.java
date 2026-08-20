@@ -149,9 +149,9 @@ final class SereniteaPotAdminCommands {
             throws CommandSyntaxException {
         UUID owner = profile(context, PLAYER_ARGUMENT);
         SereniteaPotPerformanceSnapshot snapshot = SereniteaPotScheduler.snapshot(owner);
-        return snapshot == null
-                ? failure(context, MessageKey.ERROR_TARGET_NO_CONFIG)
-                : sendPerformance(context, snapshot);
+        if (snapshot == null) return failure(context, MessageKey.ERROR_TARGET_NO_CONFIG);
+        sendPerformance(context, snapshot);
+        return 1;
     }
 
     private static int showPerformanceList(CommandContext<CommandSourceStack> context) {
@@ -161,18 +161,16 @@ final class SereniteaPotAdminCommands {
         Message heading = message(MessageKey.COMMAND_ADMIN_PERF_HEADING);
         context.getSource().sendSuccess(() -> component(context.getSource(), heading), false);
         for (SereniteaPotPerformanceSnapshot snapshot : snapshots) {
-            Message row = performance(snapshot);
-            context.getSource().sendSuccess(() -> component(context.getSource(), row), false);
+            sendPerformance(context, snapshot);
         }
         return snapshots.size();
     }
 
-    private static int sendPerformance(
+    private static void sendPerformance(
             CommandContext<CommandSourceStack> context,
             SereniteaPotPerformanceSnapshot snapshot) {
         Message row = performance(snapshot);
         context.getSource().sendSuccess(() -> component(context.getSource(), row), false);
-        return 1;
     }
 
     private static Message performance(SereniteaPotPerformanceSnapshot snapshot) {

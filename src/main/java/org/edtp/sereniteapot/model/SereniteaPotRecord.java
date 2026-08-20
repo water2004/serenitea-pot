@@ -11,7 +11,6 @@ public class SereniteaPotRecord {
     public static final int MAX_RADIUS_CHUNKS = 256;
     public static final double DEFAULT_BUDGET_MILLIS_PER_SECOND = 25.0;
 
-    private final UUID owner;
     private UUID stateId;
     private long activeGeneration;
     private int maxRadiusChunks;
@@ -20,27 +19,15 @@ public class SereniteaPotRecord {
     private boolean frozen;
     private final Map<SereniteaPotDimension, SereniteaPotSlotRecord> slots;
 
-    public SereniteaPotRecord(UUID owner, UUID stateId, long activeGeneration, int maxRadiusChunks,
+    public SereniteaPotRecord(UUID stateId, long activeGeneration, int maxRadiusChunks,
                           double budgetMillisPerSecond, boolean enabled, boolean frozen) {
-        this(owner, stateId, activeGeneration, maxRadiusChunks, budgetMillisPerSecond, enabled, frozen,
-                new EnumMap<>(SereniteaPotDimension.class));
-    }
-
-    public SereniteaPotRecord(UUID owner, UUID stateId, long activeGeneration, int maxRadiusChunks,
-                          double budgetMillisPerSecond, boolean enabled, boolean frozen,
-                          Map<SereniteaPotDimension, SereniteaPotSlotRecord> slots) {
-        this.owner = Objects.requireNonNull(owner, "owner");
         this.stateId = Objects.requireNonNull(stateId, "stateId");
         this.activeGeneration = activeGeneration;
         this.maxRadiusChunks = requireValidRadiusChunks(maxRadiusChunks);
         this.budgetMillisPerSecond = budgetMillisPerSecond;
         this.enabled = enabled;
         this.frozen = frozen;
-        this.slots = Objects.requireNonNull(slots, "slots");
-    }
-
-    public UUID getOwner() {
-        return owner;
+        this.slots = new EnumMap<>(SereniteaPotDimension.class);
     }
 
     public UUID getStateId() {

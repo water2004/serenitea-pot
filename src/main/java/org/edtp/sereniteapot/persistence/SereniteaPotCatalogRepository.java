@@ -115,12 +115,11 @@ public class SereniteaPotCatalogRepository {
                 doubleValue(root, "globalBudgetMillisPerSecond", 100.0));
         JsonObject players = objectValue(root, "players");
         for (Map.Entry<String, JsonElement> entry : players.entrySet()) {
-            UUID owner = UUID.fromString(entry.getKey());
             JsonObject recordObject = entry.getValue().getAsJsonObject();
+            JsonElement activeGeneration = nonNull(recordObject, "activeGeneration");
             SereniteaPotRecord record = new SereniteaPotRecord(
-                    owner,
                     UUID.fromString(stringValue(recordObject, "stateId", UUID.randomUUID().toString())),
-                    longValue(recordObject, "activeGeneration", 0),
+                    activeGeneration == null ? 0 : activeGeneration.getAsLong(),
                     intValue(recordObject, "maxRadiusChunks", catalog.getDefaultMaxRadiusChunks()),
                     doubleValue(recordObject, "budgetMillisPerSecond", catalog.getDefaultBudgetMillisPerSecond()),
                     booleanValue(recordObject, "enabled", true),
@@ -140,7 +139,7 @@ public class SereniteaPotCatalogRepository {
                         intValue(slot, "entryZ", 0),
                         intValue(slot, "radiusChunks", 0)));
             }
-            catalog.getPlayers().put(owner, record);
+            catalog.getPlayers().put(UUID.fromString(entry.getKey()), record);
         }
         return catalog;
     }
@@ -153,11 +152,6 @@ public class SereniteaPotCatalogRepository {
     private static int intValue(JsonObject object, String name, int fallback) {
         JsonElement value = nonNull(object, name);
         return value == null ? fallback : value.getAsInt();
-    }
-
-    private static long longValue(JsonObject object, String name, long fallback) {
-        JsonElement value = nonNull(object, name);
-        return value == null ? fallback : value.getAsLong();
     }
 
     private static double doubleValue(JsonObject object, String name, double fallback) {

@@ -5,7 +5,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
@@ -146,14 +145,13 @@ public final class SereniteaPotTravelService {
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
         SereniteaPotSlotRecord slot = record == null ? null : record.getSlots().get(identity.dimension());
         ServerLevel candidate = null;
-        if (slot != null && slot.sourceDimension() != null) {
-            try {
+        if (slot != null) {
+            Identifier sourceDimension = Identifier.tryParse(slot.sourceDimension());
+            if (sourceDimension != null) {
                 candidate = server.getLevel(ResourceKey.create(
                     Registries.DIMENSION,
-                    Identifier.parse(slot.sourceDimension())
+                    sourceDimension
                 ));
-            } catch (RuntimeException ignored) {
-                candidate = null;
             }
         }
         ServerLevel target = publicTarget(server.overworld(), candidate);
