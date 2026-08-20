@@ -8,9 +8,6 @@
   <a href="README.md">English</a> | <strong>简体中文</strong>
 </p>
 
-> [!WARNING]
-> 项目仍处于开发阶段，尚未发布稳定版本。数据格式和行为可能继续调整，请勿直接用于无法接受存档损失的生产服务器。
-
 Minecraft 26.2 的 Fabric 服务端尘歌壶模组，支持独立服务器和单人游戏的集成服务器。每名玩家拥有一组三维度尘歌壶（主世界、下界、末地），使用服务器现有的模组、注册表与游戏逻辑，同时隔离世界存档和玩家创造状态。联机时只需安装在服务端，客户端无需安装。
 
 ## 环境要求
@@ -25,15 +22,16 @@ Minecraft 26.2 的 Fabric 服务端尘歌壶模组，支持独立服务器和单
 
 Arcade Dimensions `0.13.0-beta.6+26.2` 及其相关模块已嵌入最终 JAR，不需要另外安装，也不应从产物中移除。
 
+当前快照版本：`1.0.0-snapshot.1-26.2`
+
 ## 安装
 
-当前没有稳定 Release，需要使用 Java 25 从源码构建：
+1. 在服务端安装 Minecraft 26.2 和 Fabric Loader 0.19.3 或更高版本。
+2. 从 [GitHub Releases](https://github.com/water2004/serenitea-pot/releases) 下载 `serenitea-pot-1.0.0-snapshot.1-26.2.jar`。
+3. 下载 Fabric API `0.158.0+26.2`，以及 Fabric Language Kotlin `1.13.12+kotlin.2.4.0` 或更高版本。
+4. 将三个 JAR 放入服务端 `mods` 目录，并使用 Java 25 启动服务器。
 
-```powershell
-.\gradlew.bat build
-```
-
-将 `build/libs/serenitea-pot-0.1.0.jar`、Fabric API 和 Fabric Language Kotlin 放入服务端 `mods` 目录，然后启动 Minecraft 26.2 Fabric 服务端。客户端不需要安装尘歌壶，也不需要额外配置文件；管理员通过游戏内命令设置限制。
+尘歌壶没有客户端组件，也不需要单独的配置文件；所有限制通过游戏内 OP4 管理命令设置。Arcade Dimensions 已嵌入尘歌壶 JAR，不能重复安装。
 
 ## 核心规则
 
@@ -106,28 +104,34 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 
 ## 截图
 
-### 提取区域
-
-<p align="center">
-  <img src="docs/images/create.png" width="49%" alt="在公共主世界选择要提取的区域">
-  <img src="docs/images/created.png" width="49%" alt="尘歌壶区域提取完成">
-</p>
-
 ### 公共主世界
 
 <p align="center">
   <img src="docs/images/overworld.png" width="100%" alt="公共主世界中的玩家">
 </p>
 
+### 提取区域
+
+<p align="center">
+  <img src="docs/images/create.png" width="100%" alt="在公共主世界选择要提取的区域">
+</p>
+<p align="center">
+  <img src="docs/images/created.png" width="100%" alt="尘歌壶区域提取完成">
+</p>
+
 ### 进入和离开尘歌壶
 
 <p align="center">
-  <img src="docs/images/enter.png" width="49%" alt="从公共世界进入尘歌壶">
-  <img src="docs/images/entered.png" width="49%" alt="尘歌壶局部世界边界内的提取区域">
+  <img src="docs/images/enter.png" width="100%" alt="从公共世界进入尘歌壶">
 </p>
 <p align="center">
-  <img src="docs/images/leave.png" width="49%" alt="离开尘歌壶">
-  <img src="docs/images/left.png" width="49%" alt="返回保存的公共世界位置">
+  <img src="docs/images/entered.png" width="100%" alt="尘歌壶局部世界边界内的提取区域">
+</p>
+<p align="center">
+  <img src="docs/images/leave.png" width="100%" alt="离开尘歌壶">
+</p>
+<p align="center">
+  <img src="docs/images/left.png" width="100%" alt="返回保存的公共世界位置">
 </p>
 
 ## 构建与验证

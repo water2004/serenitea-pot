@@ -12,9 +12,6 @@
   <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-> [!WARNING]
-> Serenitea Pot is under active development and has not reached a stable release. Data formats and behavior may still change. Do not use it on a production world unless you can tolerate data loss.
-
 Serenitea Pot lets each player extract a full-height chunk region from the public server world into a personal Overworld, Nether, and End. Pot worlds use the server's existing registries, mods, and game logic while keeping their world data and player state isolated. Players are always in Creative mode inside a pot, and the complete three-dimension bundle unloads as soon as its owner leaves.
 
 The mod is server-side only. Clients joining the server do not need Serenitea Pot installed; other server mods may still have their own client requirements.
@@ -44,21 +41,16 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 
 Arcade Dimensions `0.13.0-beta.6+26.2` and its supporting modules are embedded in the built mod. Do not install a second copy or remove the embedded Arcade modules from the JAR.
 
+Current snapshot: `1.0.0-snapshot.1-26.2`
+
 ## Installation
 
-There is no stable release yet. Build the current source with Java 25:
+1. Install Minecraft 26.2 with Fabric Loader 0.19.3 or newer on the server.
+2. Download `serenitea-pot-1.0.0-snapshot.1-26.2.jar` from [GitHub Releases](https://github.com/water2004/serenitea-pot/releases).
+3. Download Fabric API `0.158.0+26.2` and Fabric Language Kotlin `1.13.12+kotlin.2.4.0` or newer.
+4. Place all three JAR files in the server's `mods` directory and start the server with Java 25.
 
-```powershell
-.\gradlew.bat build
-```
-
-Copy these files into the server's `mods` directory:
-
-- `build/libs/serenitea-pot-0.1.0.jar`
-- Fabric API
-- Fabric Language Kotlin
-
-Then start a Minecraft 26.2 Fabric server with Java 25. No client installation or separate configuration file is required; limits are managed through in-game operator commands.
+Serenitea Pot has no client component and needs no separate configuration file. Limits are managed through in-game level-4 operator commands. Arcade Dimensions is already nested inside the Serenitea Pot JAR and must not be installed separately.
 
 ## How extraction works
 
@@ -152,28 +144,34 @@ All project business code is Java 25. The final JAR still depends on Fabric Lang
 
 ## Screenshots
 
-### Extracting a region
-
-<p align="center">
-  <img src="docs/images/create.png" width="49%" alt="Public Overworld region selected for extraction">
-  <img src="docs/images/created.png" width="49%" alt="Serenitea Pot extraction completed">
-</p>
-
 ### Public Overworld
 
 <p align="center">
   <img src="docs/images/overworld.png" width="100%" alt="Players in the public Overworld">
 </p>
 
+### Extracting a region
+
+<p align="center">
+  <img src="docs/images/create.png" width="100%" alt="Public Overworld region selected for extraction">
+</p>
+<p align="center">
+  <img src="docs/images/created.png" width="100%" alt="Serenitea Pot extraction completed">
+</p>
+
 ### Entering and leaving a pot
 
 <p align="center">
-  <img src="docs/images/enter.png" width="49%" alt="Entering a Serenitea Pot from the public world">
-  <img src="docs/images/entered.png" width="49%" alt="The extracted region inside a Serenitea Pot's local world border">
+  <img src="docs/images/enter.png" width="100%" alt="Entering a Serenitea Pot from the public world">
 </p>
 <p align="center">
-  <img src="docs/images/leave.png" width="49%" alt="Leaving a Serenitea Pot">
-  <img src="docs/images/left.png" width="49%" alt="Returned to the saved public-world position">
+  <img src="docs/images/entered.png" width="100%" alt="The extracted region inside a Serenitea Pot's local world border">
+</p>
+<p align="center">
+  <img src="docs/images/leave.png" width="100%" alt="Leaving a Serenitea Pot">
+</p>
+<p align="center">
+  <img src="docs/images/left.png" width="100%" alt="Returned to the saved public-world position">
 </p>
 
 ## Development and verification
