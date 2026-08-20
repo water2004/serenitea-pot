@@ -5,6 +5,7 @@
   "name": "尘歌壶",
   "description": "Server-side personal three-realm Serenitea Pots with isolated state and performance budgets.",
   "authors": ["EDTP"],
+  "icon": "assets/serenitea_pot/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
