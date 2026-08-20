@@ -4,14 +4,16 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import org.edtp.sereniteapot.level.SereniteaPotTravelService;
 
 import java.util.UUID;
 
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.profile;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.route;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
 
 final class SereniteaPotTravelCommands {
@@ -21,11 +23,13 @@ final class SereniteaPotTravelCommands {
     }
 
     static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
-        root.then(Commands.literal("enter")
-                .executes(context -> enter(context, context.getSource().getPlayerOrException().getUUID()))
-                .then(Commands.argument(OWNER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .executes(SereniteaPotTravelCommands::enterTarget)));
-        root.then(Commands.literal("leave").executes(SereniteaPotTravelCommands::leave));
+        route(root,
+                literal("enter")
+                        .executes(context -> enter(
+                                context, context.getSource().getPlayerOrException().getUUID())),
+                argument(OWNER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .executes(SereniteaPotTravelCommands::enterTarget));
+        route(root, literal("leave").executes(SereniteaPotTravelCommands::leave));
     }
 
     private static int enterTarget(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

@@ -1,5 +1,6 @@
 package org.edtp.sereniteapot.command;
 
+import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
@@ -11,6 +12,30 @@ import java.util.UUID;
 
 final class SereniteaPotCommandSupport {
     private SereniteaPotCommandSupport() {
+    }
+
+    static void route(
+            ArgumentBuilder<CommandSourceStack, ?> parent,
+            ArgumentBuilder<CommandSourceStack, ?> child) {
+        parent.then(child);
+    }
+
+    static void route(
+            ArgumentBuilder<CommandSourceStack, ?> parent,
+            ArgumentBuilder<CommandSourceStack, ?> child,
+            ArgumentBuilder<CommandSourceStack, ?> grandchild) {
+        child.then(grandchild);
+        parent.then(child);
+    }
+
+    static void route(
+            ArgumentBuilder<CommandSourceStack, ?> parent,
+            ArgumentBuilder<CommandSourceStack, ?> child,
+            ArgumentBuilder<CommandSourceStack, ?> grandchild,
+            ArgumentBuilder<CommandSourceStack, ?> greatGrandchild) {
+        grandchild.then(greatGrandchild);
+        child.then(grandchild);
+        parent.then(child);
     }
 
     static UUID profile(CommandContext<CommandSourceStack> context, String argument)

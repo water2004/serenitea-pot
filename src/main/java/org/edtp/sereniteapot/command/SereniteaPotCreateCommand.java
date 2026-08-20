@@ -5,11 +5,13 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerPlayer;
 import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.route;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
 
 final class SereniteaPotCreateCommand {
@@ -19,9 +21,10 @@ final class SereniteaPotCreateCommand {
     }
 
     static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
-        root.then(Commands.literal("create")
-                .then(Commands.argument(RADIUS_ARGUMENT, IntegerArgumentType.integer(0))
-                        .executes(SereniteaPotCreateCommand::execute)));
+        route(root,
+                literal("create"),
+                argument(RADIUS_ARGUMENT, IntegerArgumentType.integer(0))
+                        .executes(SereniteaPotCreateCommand::execute));
     }
 
     private static int execute(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

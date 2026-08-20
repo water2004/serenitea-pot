@@ -4,7 +4,6 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 import org.edtp.sereniteapot.region.SereniteaPotCreationService;
@@ -12,8 +11,10 @@ import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 import java.util.Locale;
 import java.util.UUID;
 
+import static net.minecraft.commands.Commands.literal;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.deletePot;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.route;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
 
 final class SereniteaPotOwnerCommands {
@@ -22,9 +23,10 @@ final class SereniteaPotOwnerCommands {
 
     static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
         root.executes(SereniteaPotOwnerCommands::statusSelf);
-        root.then(Commands.literal("unfreeze").executes(SereniteaPotOwnerCommands::unfreeze));
-        root.then(Commands.literal("delete")
-                .then(Commands.literal("confirm").executes(SereniteaPotOwnerCommands::delete)));
+        route(root, literal("unfreeze").executes(SereniteaPotOwnerCommands::unfreeze));
+        route(root,
+                literal("delete"),
+                literal("confirm").executes(SereniteaPotOwnerCommands::delete));
     }
 
     private static int unfreeze(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

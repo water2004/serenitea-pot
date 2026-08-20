@@ -4,7 +4,6 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.server.level.ServerPlayer;
@@ -14,8 +13,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.profile;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.route;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
 
 final class SereniteaPotInvitationCommands {
@@ -27,20 +29,23 @@ final class SereniteaPotInvitationCommands {
     }
 
     static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
-        root.then(Commands.literal("request")
-                .then(Commands.argument(OWNER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .executes(SereniteaPotInvitationCommands::request)));
-        root.then(Commands.literal("requests").executes(SereniteaPotInvitationCommands::requests));
-        root.then(Commands.literal("approve")
-                .then(Commands.argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .executes(SereniteaPotInvitationCommands::approve)
-                        .then(Commands.argument(REQUEST_ID_ARGUMENT, UuidArgument.uuid())
-                                .executes(SereniteaPotInvitationCommands::approveFromButton))));
-        root.then(Commands.literal("deny")
-                .then(Commands.argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .executes(SereniteaPotInvitationCommands::deny)
-                        .then(Commands.argument(REQUEST_ID_ARGUMENT, UuidArgument.uuid())
-                                .executes(SereniteaPotInvitationCommands::denyFromButton))));
+        route(root,
+                literal("request"),
+                argument(OWNER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .executes(SereniteaPotInvitationCommands::request));
+        route(root, literal("requests").executes(SereniteaPotInvitationCommands::requests));
+        route(root,
+                literal("approve"),
+                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .executes(SereniteaPotInvitationCommands::approve),
+                argument(REQUEST_ID_ARGUMENT, UuidArgument.uuid())
+                        .executes(SereniteaPotInvitationCommands::approveFromButton));
+        route(root,
+                literal("deny"),
+                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .executes(SereniteaPotInvitationCommands::deny),
+                argument(REQUEST_ID_ARGUMENT, UuidArgument.uuid())
+                        .executes(SereniteaPotInvitationCommands::denyFromButton));
     }
 
     private static int request(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

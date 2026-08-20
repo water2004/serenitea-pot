@@ -6,7 +6,6 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -22,9 +21,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.deletePot;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.profile;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.route;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
 import static org.edtp.sereniteapot.command.SereniteaPotOwnerCommands.status;
 
@@ -39,42 +41,47 @@ final class SereniteaPotAdminCommands {
     }
 
     static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
-        LiteralArgumentBuilder<CommandSourceStack> admin = Commands.literal("admin")
+        LiteralArgumentBuilder<CommandSourceStack> admin = literal("admin")
                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_OWNER));
-        admin.then(toggleCommand("enable", true));
-        admin.then(toggleCommand("disable", false));
-        admin.then(Commands.literal("max-radius")
-                .then(Commands.argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .then(Commands.argument(RADIUS_ARGUMENT, IntegerArgumentType.integer(
-                                        0, SereniteaPotRecord.MAX_RADIUS_CHUNKS))
-                                .executes(SereniteaPotAdminCommands::setMaximumRadius))));
-        admin.then(Commands.literal("budget")
-                .then(Commands.argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .then(Commands.argument(BUDGET_ARGUMENT, DoubleArgumentType.doubleArg(
-                                        0.0, MAX_PLAYER_BUDGET_MILLIS_PER_SECOND))
-                                .executes(SereniteaPotAdminCommands::setPlayerBudget))));
-        admin.then(Commands.literal("global-budget")
-                .then(Commands.argument(BUDGET_ARGUMENT, DoubleArgumentType.doubleArg(
-                                0.0, MAX_GLOBAL_BUDGET_MILLIS_PER_SECOND))
-                        .executes(SereniteaPotAdminCommands::setGlobalBudget)));
-        admin.then(Commands.literal("status")
-                .then(Commands.argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .executes(SereniteaPotAdminCommands::showStatus)));
-        admin.then(Commands.literal("perf")
-                .executes(SereniteaPotAdminCommands::showPerformanceList)
-                .then(Commands.argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .executes(SereniteaPotAdminCommands::showPerformance)));
-        admin.then(Commands.literal("delete")
-                .then(Commands.argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .then(Commands.literal("confirm")
-                                .executes(SereniteaPotAdminCommands::deleteTarget))));
-        root.then(admin);
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> toggleCommand(String literal, boolean enabled) {
-        return Commands.literal(literal)
-                .then(Commands.argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .executes(context -> setEnabled(context, enabled)));
+        route(admin,
+                literal("enable"),
+                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .executes(context -> setEnabled(context, true)));
+        route(admin,
+                literal("disable"),
+                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .executes(context -> setEnabled(context, false)));
+        route(admin,
+                literal("max-radius"),
+                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile()),
+                argument(RADIUS_ARGUMENT, IntegerArgumentType.integer(
+                        0, SereniteaPotRecord.MAX_RADIUS_CHUNKS))
+                        .executes(SereniteaPotAdminCommands::setMaximumRadius));
+        route(admin,
+                literal("budget"),
+                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile()),
+                argument(BUDGET_ARGUMENT, DoubleArgumentType.doubleArg(
+                        0.0, MAX_PLAYER_BUDGET_MILLIS_PER_SECOND))
+                        .executes(SereniteaPotAdminCommands::setPlayerBudget));
+        route(admin,
+                literal("global-budget"),
+                argument(BUDGET_ARGUMENT, DoubleArgumentType.doubleArg(
+                        0.0, MAX_GLOBAL_BUDGET_MILLIS_PER_SECOND))
+                        .executes(SereniteaPotAdminCommands::setGlobalBudget));
+        route(admin,
+                literal("status"),
+                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .executes(SereniteaPotAdminCommands::showStatus));
+        route(admin,
+                literal("perf")
+                        .executes(SereniteaPotAdminCommands::showPerformanceList),
+                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .executes(SereniteaPotAdminCommands::showPerformance));
+        route(admin,
+                literal("delete"),
+                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile()),
+                literal("confirm").executes(SereniteaPotAdminCommands::deleteTarget));
+        route(root, admin);
     }
 
     private static int setEnabled(CommandContext<CommandSourceStack> context, boolean enabled)
