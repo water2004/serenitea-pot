@@ -30,7 +30,7 @@ public final class SereniteaPotInvitationService {
     private static final long ENTRY_GRANT_TTL_MILLIS = 5_000L;
 
     private static final Map<UUID, LinkedHashMap<UUID, PendingRequest>> pending = new LinkedHashMap<>();
-    private static final Map<EntryGrantKey, Long> entryGrants = new LinkedHashMap<>();
+    private static final Map<UUID, LinkedHashMap<UUID, Long>> entryGrants = new LinkedHashMap<>();
 
     private SereniteaPotInvitationService() {
     }
@@ -76,10 +76,6 @@ public final class SereniteaPotInvitationService {
         return Accepted.INSTANCE;
     }
 
-    public static Result approve(ServerPlayer owner, UUID visitor) {
-        return approve(owner, visitor, null);
-    }
-
     public static Result approve(ServerPlayer owner, UUID visitor, UUID requestId) {
         SereniteaPotRecord record = SereniteaPotManager.record(owner.getUUID());
         if (record == null) return new Rejected(message(MessageKey.ERROR_SELF_NO_POT));
@@ -97,23 +93,22 @@ public final class SereniteaPotInvitationService {
         }
 
         // AccessPolicy 会在 teleport HEAD 消费许可；失败时撤销许可并保留原申请供重试。
-        EntryGrantKey key = new EntryGrantKey(owner.getUUID(), visitor);
-        entryGrants.put(key, System.currentTimeMillis() + ENTRY_GRANT_TTL_MILLIS);
+        LinkedHashMap<UUID, Long> ownerGrants = entryGrants.computeIfAbsent(
+            owner.getUUID(), ignored -> new LinkedHashMap<>()
+        );
+        ownerGrants.put(visitor, System.currentTimeMillis() + ENTRY_GRANT_TTL_MILLIS);
         SereniteaPotTravelService.Result travel = SereniteaPotTravelService.enter(visitorPlayer, owner.getUUID());
         if (travel == SereniteaPotTravelService.Success.INSTANCE) {
             requests.remove(visitor);
             if (requests.isEmpty()) pending.remove(owner.getUUID());
             return new Approved(visitor);
         }
-        entryGrants.remove(key);
+        ownerGrants.remove(visitor);
+        if (ownerGrants.isEmpty()) entryGrants.remove(owner.getUUID());
         return new Rejected(message(
             MessageKey.INVITATION_TELEPORT_FAILED,
             ((SereniteaPotTravelService.Rejected) travel).reason()
         ));
-    }
-
-    public static Result deny(ServerPlayer owner, UUID visitor) {
-        return deny(owner, visitor, null);
     }
 
     public static Result deny(ServerPlayer owner, UUID visitor, UUID requestId) {
@@ -150,7 +145,10 @@ public final class SereniteaPotInvitationService {
     }
 
     public static boolean consumeEntryGrant(UUID owner, UUID visitor) {
-        Long expiresAt = entryGrants.remove(new EntryGrantKey(owner, visitor));
+        LinkedHashMap<UUID, Long> ownerGrants = entryGrants.get(owner);
+        if (ownerGrants == null) return false;
+        Long expiresAt = ownerGrants.remove(visitor);
+        if (ownerGrants.isEmpty()) entryGrants.remove(owner);
         return expiresAt != null && expiresAt > System.currentTimeMillis();
     }
 
@@ -160,10 +158,10 @@ public final class SereniteaPotInvitationService {
             entry.getValue().entrySet().removeIf(request -> request.getValue().expiresAt() <= now);
             return entry.getValue().isEmpty();
         });
-        entryGrants.entrySet().removeIf(entry -> entry.getValue() <= now);
-    }
-
-    private record EntryGrantKey(UUID owner, UUID visitor) {
+        entryGrants.entrySet().removeIf(entry -> {
+            entry.getValue().entrySet().removeIf(grant -> grant.getValue() <= now);
+            return entry.getValue().isEmpty();
+        });
     }
 
     private record PendingRequest(long expiresAt, UUID id) {

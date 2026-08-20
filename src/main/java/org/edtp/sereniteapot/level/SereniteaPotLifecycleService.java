@@ -46,14 +46,6 @@ public final class SereniteaPotLifecycleService {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> clearAll());
     }
 
-    public static void ownerLeft(UUID owner) {
-        requestClose(owner);
-    }
-
-    public static void forceUnload(UUID owner) {
-        requestClose(owner);
-    }
-
     public static void requestClose(UUID owner) {
         pendingCloses.add(owner);
     }

@@ -92,21 +92,12 @@ public final class SereniteaPotManager {
         return catalog.getOrCreate(owner);
     }
 
-    public static SereniteaPotRecord removeRecord(UUID owner) {
-        return catalog.getPlayers().remove(owner);
-    }
-
     public static SereniteaPotBundle loaded(UUID owner) {
         return loaded.get(owner);
     }
 
     static Set<UUID> loadedOwners() {
         return Set.copyOf(loaded.keySet());
-    }
-
-    public static UUID ownerOf(ServerLevel level) {
-        SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(level.dimension());
-        return identity == null ? null : identity.owner();
     }
 
     public static SereniteaPotBundle createStaging(UUID owner, long generation, long seed) {

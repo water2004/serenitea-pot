@@ -86,7 +86,7 @@ public final class PlayerStateManager {
         }
         apply(player, snapshot, targetOwner != null);
         if (player.getUUID().equals(plan.sourceOwner()) && !player.getUUID().equals(targetOwner)) {
-            SereniteaPotLifecycleService.ownerLeft(player.getUUID());
+            SereniteaPotLifecycleService.requestClose(player.getUUID());
         }
     }
 
@@ -106,7 +106,7 @@ public final class PlayerStateManager {
             }
         }
         if (player.getUUID().equals(realmOwner)) {
-            SereniteaPotLifecycleService.ownerLeft(player.getUUID());
+            SereniteaPotLifecycleService.requestClose(player.getUUID());
         }
     }
 

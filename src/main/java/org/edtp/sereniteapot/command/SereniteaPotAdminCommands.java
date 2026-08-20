@@ -26,12 +26,10 @@ import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
-import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.deletePot;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.profile;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.route;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
-import static org.edtp.sereniteapot.command.SereniteaPotOwnerCommands.status;
 
 final class SereniteaPotAdminCommands {
     private static final String PLAYER_ARGUMENT = "player";
@@ -144,7 +142,7 @@ final class SereniteaPotAdminCommands {
     }
 
     private static int showStatus(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        return status(context, profile(context, PLAYER_ARGUMENT));
+        return SereniteaPotTargetCommands.status(context, profile(context, PLAYER_ARGUMENT));
     }
 
     private static int showPerformance(CommandContext<CommandSourceStack> context)
@@ -202,7 +200,7 @@ final class SereniteaPotAdminCommands {
     }
 
     private static int deleteTarget(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        return deletePot(context, profile(context, PLAYER_ARGUMENT));
+        return SereniteaPotTargetCommands.delete(context, profile(context, PLAYER_ARGUMENT));
     }
 
     private static String format(String pattern, double value) {

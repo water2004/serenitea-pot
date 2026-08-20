@@ -6,7 +6,6 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import org.edtp.sereniteapot.i18n.MessageKey;
-import org.edtp.sereniteapot.level.SereniteaPotDeletionService;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 
 import java.util.UUID;
@@ -58,14 +57,6 @@ final class SereniteaPotCommandSupport {
             throw GameProfileArgument.ERROR_UNKNOWN_PLAYER.create();
         }
         return profiles.iterator().next().id();
-    }
-
-    static int deletePot(CommandContext<CommandSourceStack> context, UUID owner) {
-        SereniteaPotDeletionService.Result result = SereniteaPotDeletionService.deleteAndReset(
-                context.getSource().getServer(), owner);
-        return result == SereniteaPotDeletionService.Success.INSTANCE
-                ? success(context, MessageKey.COMMAND_DELETE_SUCCESS)
-                : failure(context, ((SereniteaPotDeletionService.Rejected) result).reason());
     }
 
     static int success(CommandContext<CommandSourceStack> context, MessageKey key, Object... arguments) {

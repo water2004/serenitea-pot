@@ -347,10 +347,6 @@ public final class SereniteaPotScheduler {
             this.reservedNanos = reservedNanos;
         }
 
-        public UUID owner() {
-            return owner;
-        }
-
         public double reservedNanos() {
             return reservedNanos;
         }
