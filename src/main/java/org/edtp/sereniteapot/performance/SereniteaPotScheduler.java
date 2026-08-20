@@ -2,7 +2,6 @@ package org.edtp.sereniteapot.performance;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.permissions.Permissions;
@@ -18,6 +17,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
 
 /**
  * 在服务器主线程上为尘歌壶 tick 和创建复制共享时间预算。
@@ -223,14 +225,13 @@ public final class SereniteaPotScheduler {
             owner,
             formattedMillis
         );
-        Component message = Component.literal(
-            "[Serenitea Pot] " + owner + " 单次维度 tick 耗时 " + formattedMillis
-                + " ms，已自动冻结；修复后执行 /sereniteapot unfreeze"
-        );
         for (var player : server.getPlayerList().getPlayers()) {
             if (player.getUUID().equals(owner)
                 || player.permissions().hasPermission(Permissions.COMMANDS_OWNER)) {
-                player.sendSystemMessage(message);
+                player.sendSystemMessage(component(
+                    player,
+                    message("performance.auto_freeze", owner, formattedMillis)
+                ));
             }
         }
     }

@@ -5,10 +5,13 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.GameProfileArgument;
-import net.minecraft.network.chat.Component;
 import org.edtp.sereniteapot.level.SereniteaPotDeletionService;
+import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 
 import java.util.UUID;
+
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
 
 /** 命令实现之间共享的少量 Brigadier 组装与反馈工具。 */
 final class SereniteaPotCommandSupport {
@@ -60,17 +63,22 @@ final class SereniteaPotCommandSupport {
         SereniteaPotDeletionService.Result result = SereniteaPotDeletionService.deleteAndReset(
                 context.getSource().getServer(), owner);
         return result == SereniteaPotDeletionService.Success.INSTANCE
-                ? success(context, "尘歌壶已卸载并永久删除")
+                ? success(context, "command.delete.success")
                 : failure(context, ((SereniteaPotDeletionService.Rejected) result).reason());
     }
 
-    static int success(CommandContext<CommandSourceStack> context, String message) {
-        context.getSource().sendSuccess(() -> Component.literal(message), false);
+    static int success(CommandContext<CommandSourceStack> context, String key, Object... arguments) {
+        Message message = message(key, arguments);
+        context.getSource().sendSuccess(() -> component(context.getSource(), message), false);
         return 1;
     }
 
-    static int failure(CommandContext<CommandSourceStack> context, String message) {
-        context.getSource().sendFailure(Component.literal(message));
+    static int failure(CommandContext<CommandSourceStack> context, String key, Object... arguments) {
+        return failure(context, message(key, arguments));
+    }
+
+    static int failure(CommandContext<CommandSourceStack> context, Message message) {
+        context.getSource().sendFailure(component(context.getSource(), message));
         return 0;
     }
 }

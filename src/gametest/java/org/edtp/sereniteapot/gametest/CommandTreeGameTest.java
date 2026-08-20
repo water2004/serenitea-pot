@@ -8,6 +8,9 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.translate;
+
 public final class CommandTreeGameTest {
     @GameTest
     public void registersPublicCommandTree(GameTestHelper helper) {
@@ -24,6 +27,24 @@ public final class CommandTreeGameTest {
         assertChildren(helper, child(root, "delete"), "confirm");
         assertChildren(helper, child(root, "admin", "max-radius", "player"), "radius");
         assertChildren(helper, child(root, "admin", "delete", "player"), "confirm");
+        helper.succeed();
+    }
+
+    @GameTest
+    public void translatesOnTheServerAndFallsBackToEnglish(GameTestHelper helper) {
+        var message = message("invitation.teleport_failed", message("travel.denied"));
+        helper.assertValueEqual(
+                "批准后传送失败，申请仍有效：传送被访问策略拒绝",
+                translate("zh_cn", message),
+                "Chinese server translation differs");
+        helper.assertValueEqual(
+                "Teleport failed after approval; the request remains valid: The access policy rejected the teleport",
+                translate("en_us", message),
+                "English server translation differs");
+        helper.assertValueEqual(
+                translate("en_us", message),
+                translate("unsupported_language", message),
+                "Unknown client languages must fall back to English");
         helper.succeed();
     }
 

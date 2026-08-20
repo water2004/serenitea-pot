@@ -10,6 +10,9 @@ import org.edtp.sereniteapot.player.HumanPlayerDetector;
 
 import java.util.UUID;
 
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
+
 /**
  * 所有进入尘歌壶维度的最终访问检查。
  *
@@ -27,33 +30,35 @@ public final class SereniteaPotAccessPolicy {
         }
         SereniteaPotRecord record = SereniteaPotManager.record(identity.owner());
         if (record == null) {
-            return Component.literal("目标尘歌壶不存在");
+            return component(player, message("access.target_missing"));
         }
         if (identity.generation() != record.getActiveGeneration()) {
-            return Component.literal("不能进入非活动的尘歌壶代际");
+            return component(player, message("access.inactive_generation"));
         }
         if (SereniteaPotLifecycleService.isUnavailable(identity.owner())) {
-            return Component.literal("目标尘歌壶正在关闭或维护");
+            return component(player, message("access.unavailable"));
         }
         if (!record.isEnabled()) {
-            return Component.literal("目标尘歌壶已被管理员禁用");
+            return component(player, message("access.disabled"));
         }
         SereniteaPotLevelKeys.Identity current = SereniteaPotLevelKeys.identify(player.level().dimension());
         if (current != null && current.owner().equals(identity.owner())) {
             return null;
         }
         if (player.getUUID().equals(identity.owner())) {
-            return HumanPlayerDetector.isHuman(player) ? null : Component.literal("假玩家不能加载或维持尘歌壶");
+            return HumanPlayerDetector.isHuman(player)
+                ? null
+                : component(player, message("access.fake_player"));
         }
         if (!player.permissions().hasPermission(Permissions.COMMANDS_OWNER)) {
             // 临时许可只消费一次，批准申请不会变成永久访客名单。
             return SereniteaPotInvitationService.consumeEntryGrant(identity.owner(), player.getUUID())
                 ? null
-                : Component.literal("需要提交申请，并由主人批准本次进入");
+                : component(player, message("access.request_required"));
         }
         return isRealOwnerInside(player.level().getServer(), identity.owner())
             ? null
-            : Component.literal("只有主人本人在尘歌壶内时，管理员才能进入");
+            : component(player, message("access.owner_required_for_admin"));
     }
 
     public static boolean isRealOwnerInside(MinecraftServer server, UUID owner) {

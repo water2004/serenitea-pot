@@ -10,12 +10,16 @@ import net.minecraft.world.phys.Vec3;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
+import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.player.HumanPlayerDetector;
 import org.edtp.sereniteapot.player.PlayerStateManager;
 import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
 
 /**
  * 玩家进入、离开和生命周期驱逐共用的传送入口。
@@ -31,35 +35,39 @@ public final class SereniteaPotTravelService {
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
         Double creationProgress = SereniteaPotCreationService.progress(owner);
         if (creationProgress != null && (record == null || !record.exists())) {
-            return new Rejected("目标尘歌壶正在创建（%.1f%%），完成后才能进入"
-                    .formatted(creationProgress * 100.0));
+            return new Rejected(message(
+                "travel.creating",
+                String.format(Locale.ROOT, "%.1f", creationProgress * 100.0)
+            ));
         }
         if (record == null || !record.exists()) {
-            return new Rejected("目标玩家还没有创建尘歌壶");
+            return new Rejected(message("travel.target_no_pot"));
         }
-        if (!record.isEnabled()) return new Rejected("目标尘歌壶已被禁用");
-        if (SereniteaPotLifecycleService.isUnavailable(owner)) return new Rejected("目标尘歌壶正在关闭或维护");
+        if (!record.isEnabled()) return new Rejected(message("travel.disabled"));
+        if (SereniteaPotLifecycleService.isUnavailable(owner)) {
+            return new Rejected(message("travel.unavailable"));
+        }
 
         SereniteaPotBundle bundle;
         if (player.getUUID().equals(owner)) {
             if (!HumanPlayerDetector.isHuman(player)) {
-                return new Rejected("假玩家不能加载尘歌壶");
+                return new Rejected(message("travel.fake_player"));
             }
             bundle = SereniteaPotManager.loaded(owner);
             if (bundle == null) {
                 try {
                     bundle = SereniteaPotManager.load(owner);
                 } catch (RuntimeException error) {
-                    return new Rejected("尘歌壶加载失败：" + error.getMessage());
+                    return new Rejected(message("travel.load_failed", error.getMessage()));
                 }
             }
         } else {
             if (!SereniteaPotAccessPolicy.isRealOwnerInside(player.level().getServer(), owner)) {
-                return new Rejected("只有主人本人在尘歌壶内时才能进入");
+                return new Rejected(message("travel.owner_required"));
             }
             bundle = SereniteaPotManager.loaded(owner);
             if (bundle == null) {
-                return new Rejected("目标尘歌壶尚未加载");
+                return new Rejected(message("travel.not_loaded"));
             }
         }
 
@@ -75,7 +83,7 @@ public final class SereniteaPotTravelService {
             }
         }
         if (destinationDimension == null) {
-            return new Rejected("目标尘歌壶还没有可进入的维度");
+            return new Rejected(message("travel.no_dimension"));
         }
         Destination destination = savedSereniteaPotDestination(player, owner, record, bundle);
         if (destination == null) {
@@ -97,12 +105,12 @@ public final class SereniteaPotTravelService {
             destination.pitch(),
             true
         );
-        return success ? Success.INSTANCE : new Rejected("传送被访问策略拒绝");
+        return success ? Success.INSTANCE : new Rejected(message("travel.denied"));
     }
 
     public static Result leave(ServerPlayer player) {
         SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(player.level().dimension());
-        return identity == null ? new Rejected("你当前不在尘歌壶内") : evict(player, identity.owner());
+        return identity == null ? new Rejected(message("travel.not_inside")) : evict(player, identity.owner());
     }
 
     /** Used only by the lifecycle close transaction. */
@@ -112,7 +120,7 @@ public final class SereniteaPotTravelService {
             return Success.INSTANCE;
         }
         if (!identity.owner().equals(owner)) {
-            return new Rejected("玩家位于另一个尘歌壶");
+            return new Rejected(message("travel.other_pot"));
         }
 
         var server = player.level().getServer();
@@ -129,7 +137,7 @@ public final class SereniteaPotTravelService {
                 savedPublic.pitch(),
                 true
             );
-            return success ? Success.INSTANCE : new Rejected("无法离开尘歌壶");
+            return success ? Success.INSTANCE : new Rejected(message("travel.leave_failed"));
         }
 
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
@@ -155,7 +163,7 @@ public final class SereniteaPotTravelService {
         boolean success = player.teleportTo(
             target, position.x, position.y, position.z, Set.of(), player.getYRot(), player.getXRot(), true
         );
-        return success ? Success.INSTANCE : new Rejected("无法离开尘歌壶");
+        return success ? Success.INSTANCE : new Rejected(message("travel.leave_failed"));
     }
 
     private static Destination savedSereniteaPotDestination(
@@ -211,6 +219,6 @@ public final class SereniteaPotTravelService {
         INSTANCE
     }
 
-    public record Rejected(String reason) implements Result {
+    public record Rejected(Message reason) implements Result {
     }
 }

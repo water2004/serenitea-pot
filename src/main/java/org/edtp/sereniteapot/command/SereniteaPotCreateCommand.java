@@ -33,8 +33,7 @@ final class SereniteaPotCreateCommand {
                 player, IntegerArgumentType.getInteger(context, RADIUS_ARGUMENT));
         if (result instanceof SereniteaPotCreationService.Accepted accepted) {
             return success(context,
-                    "开始按区块批量提取 " + accepted.chunkCount() + " 个区块的完整高度（代际 "
-                            + accepted.generation() + "），执行 /sereniteapot 可查询进度");
+                    "command.create.accepted", accepted.chunkCount(), accepted.generation());
         }
         return failure(context, ((SereniteaPotCreationService.Rejected) result).reason());
     }

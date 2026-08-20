@@ -4,6 +4,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.apache.commons.io.file.PathUtils;
 import org.edtp.sereniteapot.SereniteaPotMod;
+import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
@@ -16,6 +17,8 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
+
 public final class SereniteaPotDeletionService {
     private SereniteaPotDeletionService() {
     }
@@ -23,7 +26,7 @@ public final class SereniteaPotDeletionService {
     public static Result deleteAndReset(MinecraftServer server, UUID owner) {
         if (!server.isSameThread()) throw new IllegalStateException("Deletion must run on the server thread");
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
-        if (record == null) return new Rejected("该玩家没有尘歌壶配置");
+        if (record == null) return new Rejected(message("deletion.no_config"));
 
         SereniteaPotCreationService.cancel(owner);
         SereniteaPotLifecycleService.Result close = SereniteaPotLifecycleService.closeNow(server, owner);
@@ -50,7 +53,7 @@ public final class SereniteaPotDeletionService {
             record.setActiveGeneration(oldGeneration);
             record.getSlots().putAll(oldSlots);
             record.setFrozen(oldFrozen);
-            return new Rejected("无法提交删除事务：" + error.getMessage());
+            return new Rejected(message("deletion.commit_failed", error.getMessage()));
         }
         SereniteaPotScheduler.reset(owner);
         SereniteaPotLifecycleService.forget(owner);
@@ -59,13 +62,13 @@ public final class SereniteaPotDeletionService {
             .resolve("dimensions").resolve(SereniteaPotMod.MOD_ID).resolve("pot").toAbsolutePath().normalize();
         Path resolved = expectedRoot.resolve(owner.toString()).normalize();
         if (!expectedRoot.equals(resolved.getParent()) || !owner.toString().equals(resolved.getFileName().toString())) {
-            return new Rejected("拒绝删除异常的尘歌壶路径：" + resolved);
+            return new Rejected(message("deletion.unsafe_path", resolved));
         }
         if (Files.isDirectory(resolved)) {
             try {
                 PathUtils.deleteDirectory(resolved);
             } catch (Exception error) {
-                return new Rejected("尘歌壶已注销，但磁盘目录删除失败：" + error.getMessage());
+                return new Rejected(message("deletion.directory_failed", error.getMessage()));
             }
         }
         return Success.INSTANCE;
@@ -78,6 +81,6 @@ public final class SereniteaPotDeletionService {
         INSTANCE
     }
 
-    public record Rejected(String reason) implements Result {
+    public record Rejected(Message reason) implements Result {
     }
 }

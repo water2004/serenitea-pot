@@ -2,11 +2,11 @@ package org.edtp.sereniteapot.region;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.edtp.sereniteapot.SereniteaPotMod;
+import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.level.SereniteaPotBundle;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
@@ -22,6 +22,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.fallback;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
 
 /**
  * 以可分片任务创建或裁剪尘歌壶，而不是在命令处理期间阻塞复制整个区域。
@@ -49,13 +53,13 @@ public final class SereniteaPotCreationService {
         UUID owner = player.getUUID();
         ServerLevel source = player.level();
         SereniteaPotDimension dimension = SereniteaPotDimension.fromVanillaLevel(source.dimension());
-        if (dimension == null) return new Rejected("只能从公共主世界、下界或末地提取区域");
+        if (dimension == null) return new Rejected(message("creation.public_dimension_only"));
 
         SereniteaPotRecord record = SereniteaPotManager.getOrCreateRecord(owner);
-        if (!record.isEnabled()) return new Rejected("你的尘歌壶功能已被管理员禁用");
-        if (jobs.containsKey(owner)) return new Rejected("已有一个尘歌壶创建任务正在运行");
+        if (!record.isEnabled()) return new Rejected(message("creation.disabled"));
+        if (jobs.containsKey(owner)) return new Rejected(message("creation.job_exists"));
         if (radiusChunks < 0 || radiusChunks > record.getMaxRadiusChunks()) {
-            return new Rejected("区块半径必须在 0 到 " + record.getMaxRadiusChunks() + " 之间");
+            return new Rejected(message("creation.radius_range", record.getMaxRadiusChunks()));
         }
 
         BlockRegion region;
@@ -64,7 +68,7 @@ public final class SereniteaPotCreationService {
                 player.blockPosition(), radiusChunks, source.getMinY(), source.getMaxY()
             );
         } catch (ArithmeticException | IllegalArgumentException error) {
-            return new Rejected("区域坐标超出可用范围");
+            return new Rejected(message("creation.coordinates_out_of_range"));
         }
 
         SereniteaPotLifecycleService.Result maintenance = SereniteaPotLifecycleService.beginMaintenance(server, owner);
@@ -80,7 +84,7 @@ public final class SereniteaPotCreationService {
                     previous = SereniteaPotManager.load(owner);
                 } catch (RuntimeException error) {
                     abortMaintenance(owner);
-                    return new Rejected("原尘歌壶无法加载：" + error.getMessage());
+                    return new Rejected(message("creation.previous_load_failed", error.getMessage()));
                 }
             }
         }
@@ -90,7 +94,7 @@ public final class SereniteaPotCreationService {
             staging = SereniteaPotManager.createStaging(owner, generation, source.getSeed());
         } catch (RuntimeException error) {
             abortMaintenance(owner);
-            return new Rejected("无法创建暂存维度：" + error.getMessage());
+            return new Rejected(message("creation.staging_failed", error.getMessage()));
         }
 
         ArrayDeque<RegionCopyTask> tasks = new ArrayDeque<>();
@@ -148,10 +152,10 @@ public final class SereniteaPotCreationService {
             throw new IllegalStateException("Maximum change must run on the server thread");
         }
         if (maximumRadiusChunks < 0 || maximumRadiusChunks > SereniteaPotRecord.MAX_RADIUS_CHUNKS) {
-            return new Rejected("区块半径必须在 0 到 " + SereniteaPotRecord.MAX_RADIUS_CHUNKS + " 之间");
+            return new Rejected(message("creation.radius_range", SereniteaPotRecord.MAX_RADIUS_CHUNKS));
         }
         if (jobs.containsKey(owner)) {
-            return new Rejected("该玩家已有一个尘歌壶维护任务正在运行");
+            return new Rejected(message("creation.target_job_exists"));
         }
 
         SereniteaPotRecord record = SereniteaPotManager.getOrCreateRecord(owner);
@@ -174,7 +178,7 @@ public final class SereniteaPotCreationService {
                 previous = SereniteaPotManager.load(owner);
             } catch (RuntimeException error) {
                 abortMaintenance(owner);
-                return new Rejected("原尘歌壶无法加载：" + errorMessage(error));
+                return new Rejected(message("creation.previous_load_failed", errorMessage(error)));
             }
         }
 
@@ -188,7 +192,7 @@ public final class SereniteaPotCreationService {
             );
         } catch (RuntimeException error) {
             abortMaintenance(owner);
-            return new Rejected("无法创建裁剪暂存维度：" + errorMessage(error));
+            return new Rejected(message("creation.trim_staging_failed", errorMessage(error)));
         }
 
         ArrayDeque<RegionCopyTask> tasks = new ArrayDeque<>();
@@ -219,7 +223,7 @@ public final class SereniteaPotCreationService {
         } catch (RuntimeException error) {
             SereniteaPotLifecycleService.deleteEvacuated(staging);
             abortMaintenance(owner);
-            return new Rejected("无法准备边缘裁剪：" + errorMessage(error));
+            return new Rejected(message("creation.trim_prepare_failed", errorMessage(error)));
         }
 
         jobs.put(owner, new CreationJob(
@@ -266,7 +270,7 @@ public final class SereniteaPotCreationService {
             if (job == null) continue;
             SereniteaPotRecord record = SereniteaPotManager.record(owner);
             if (!job.canContinue(record)) {
-                fail(server, job, "创建任务已因管理状态变化而停止");
+                fail(server, job, message("creation.stopped_by_admin_change"));
                 jobs.remove(owner);
                 continue;
             }
@@ -279,14 +283,14 @@ public final class SereniteaPotCreationService {
             } catch (RuntimeException error) {
                 SereniteaPotScheduler.completeCreationSlice(reservation, System.nanoTime() - started);
                 SereniteaPotMod.LOGGER.error("Serenitea Pot creation failed for {}", job.owner, error);
-                fail(server, job, errorMessage(error));
+                fail(server, job, message("creation.internal_error", errorMessage(error)));
                 jobs.remove(owner);
                 continue;
             }
             SereniteaPotScheduler.completeCreationSlice(reservation, System.nanoTime() - started);
             SereniteaPotRecord updated = SereniteaPotManager.record(owner);
             if (!job.canContinue(updated)) {
-                fail(server, job, "创建任务期间尘歌壶被禁用或删除");
+                fail(server, job, message("creation.disabled_during_job"));
                 jobs.remove(owner);
                 continue;
             }
@@ -301,7 +305,7 @@ public final class SereniteaPotCreationService {
                     );
                 } catch (RuntimeException error) {
                     SereniteaPotMod.LOGGER.error("Serenitea Pot creation commit failed for {}", job.owner, error);
-                    fail(server, job, errorMessage(error));
+                    fail(server, job, message("creation.internal_error", errorMessage(error)));
                     jobs.remove(owner);
                     continue;
                 }
@@ -336,7 +340,7 @@ public final class SereniteaPotCreationService {
             if (close instanceof SereniteaPotLifecycleService.Rejected rejected) {
                 SereniteaPotMod.LOGGER.warn(
                     "Committed Serenitea Pot {} but its post-creation unload was deferred: {}",
-                    job.owner, rejected.reason()
+                    job.owner, fallback(rejected.reason())
                 );
             }
         } catch (RuntimeException error) {
@@ -347,10 +351,10 @@ public final class SereniteaPotCreationService {
             ? null
             : server.getPlayerList().getPlayer(job.requester);
         if (player != null) {
-            String message = job.kind == JobKind.MAXIMUM_TRIM
-                ? "尘歌壶最大区块半径已设为 " + job.committedMaximumRadiusChunks + "，超出边缘已删除"
-                : "尘歌壶已创建完成（代际 " + job.staging.generation() + "）";
-            player.sendSystemMessage(Component.literal(message));
+            Message completion = job.kind == JobKind.MAXIMUM_TRIM
+                ? message("creation.trim.complete", job.committedMaximumRadiusChunks)
+                : message("creation.complete", job.staging.generation());
+            player.sendSystemMessage(component(player, completion));
         }
     }
 
@@ -359,7 +363,7 @@ public final class SereniteaPotCreationService {
         SereniteaPotLifecycleService.requestClose(owner);
     }
 
-    private static void fail(MinecraftServer server, CreationJob job, String reason) {
+    private static void fail(MinecraftServer server, CreationJob job, Message reason) {
         try {
             SereniteaPotLifecycleService.deleteEvacuated(job.staging);
         } catch (RuntimeException ignored) {
@@ -369,8 +373,10 @@ public final class SereniteaPotCreationService {
             ? null
             : server.getPlayerList().getPlayer(job.requester);
         if (player != null) {
-            String operation = job.kind == JobKind.MAXIMUM_TRIM ? "裁剪" : "创建";
-            player.sendSystemMessage(Component.literal("尘歌壶" + operation + "失败：" + reason));
+            String key = job.kind == JobKind.MAXIMUM_TRIM
+                ? "creation.trim.failed"
+                : "creation.failed";
+            player.sendSystemMessage(component(player, message(key, reason)));
         }
     }
 
@@ -469,7 +475,7 @@ public final class SereniteaPotCreationService {
     public record Accepted(long chunkCount, long generation) implements RequestResult {
     }
 
-    public record Rejected(String reason) implements RequestResult, MaximumChangeResult {
+    public record Rejected(Message reason) implements RequestResult, MaximumChangeResult {
     }
 
     public sealed interface MaximumChangeResult permits MaximumUpdated, MaximumTrimStarted, Rejected {

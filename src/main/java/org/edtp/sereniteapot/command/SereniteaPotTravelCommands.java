@@ -40,7 +40,7 @@ final class SereniteaPotTravelCommands {
         SereniteaPotTravelService.Result result = SereniteaPotTravelService.enter(
                 context.getSource().getPlayerOrException(), owner);
         return result == SereniteaPotTravelService.Success.INSTANCE
-                ? success(context, "已进入尘歌壶")
+                ? success(context, "command.enter.success")
                 : failure(context, ((SereniteaPotTravelService.Rejected) result).reason());
     }
 
@@ -48,7 +48,7 @@ final class SereniteaPotTravelCommands {
         SereniteaPotTravelService.Result result = SereniteaPotTravelService.leave(
                 context.getSource().getPlayerOrException());
         return result == SereniteaPotTravelService.Success.INSTANCE
-                ? success(context, "已离开尘歌壶")
+                ? success(context, "command.leave.success")
                 : failure(context, ((SereniteaPotTravelService.Rejected) result).reason());
     }
 }

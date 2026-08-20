@@ -3,10 +3,10 @@ package org.edtp.sereniteapot.level;
 import net.casual.arcade.dimensions.level.CustomLevel;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.edtp.sereniteapot.SereniteaPotMod;
+import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -16,6 +16,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.fallback;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
 
 /**
  * The only gateway for taking an active Serenitea Pot out of service.
@@ -66,14 +70,14 @@ public final class SereniteaPotLifecycleService {
     public static Result beginMaintenance(MinecraftServer server, UUID owner) {
         requireServerThread(server);
         if (!maintenance.add(owner)) {
-            return new Rejected("该尘歌壶已有维护任务");
+            return new Rejected(message("lifecycle.maintenance_exists"));
         }
         pendingCloses.remove(owner);
         List<ServerPlayer> remaining = evacuate(server, owner);
         if (!remaining.isEmpty()) {
             maintenance.remove(owner);
             pendingCloses.add(owner);
-            return new Rejected("无法安全送出 " + remaining.size() + " 名尘歌壶成员");
+            return new Rejected(message("lifecycle.evacuation_failed", remaining.size()));
         }
         return Success.INSTANCE;
     }
@@ -87,20 +91,18 @@ public final class SereniteaPotLifecycleService {
         requireServerThread(server);
         pendingCloses.add(owner);
         if (!closing.add(owner)) {
-            return new Rejected("该尘歌壶正在关闭");
+            return new Rejected(message("lifecycle.closing"));
         }
         try {
             List<ServerPlayer> remaining = evacuate(server, owner);
             if (!remaining.isEmpty()) {
                 for (ServerPlayer player : remaining) {
-                    player.connection.disconnect(Component.literal("尘歌壶正在安全卸载，请重新连接"));
+                    player.connection.disconnect(component(player, message("lifecycle.disconnect_for_unload")));
                 }
-                return new Rejected(
-                    "仍有 " + remaining.size() + " 名玩家未完成离场，已断开连接并将在下一 tick 重试"
-                );
+                return new Rejected(message("lifecycle.disconnect_retry", remaining.size()));
             }
             if (!SereniteaPotManager.unloadEvacuated(owner)) {
-                return new Rejected("至少一个维度尚未完成卸载，将在下一 tick 重试");
+                return new Rejected(message("lifecycle.unload_retry"));
             }
             pendingCloses.remove(owner);
             return Success.INSTANCE;
@@ -159,7 +161,9 @@ public final class SereniteaPotLifecycleService {
         for (UUID owner : List.copyOf(pendingCloses)) {
             Result result = closeNow(server, owner);
             if (result instanceof Rejected rejected) {
-                SereniteaPotMod.LOGGER.warn("Serenitea Pot {} close was deferred: {}", owner, rejected.reason());
+                SereniteaPotMod.LOGGER.warn(
+                    "Serenitea Pot {} close was deferred: {}", owner, fallback(rejected.reason())
+                );
             }
         }
         processPendingDeletes(false);
@@ -188,7 +192,7 @@ public final class SereniteaPotLifecycleService {
             Result result = closeNow(server, owner);
             if (result instanceof Rejected rejected) {
                 SereniteaPotMod.LOGGER.error(
-                    "Could not fully close Serenitea Pot {} during shutdown: {}", owner, rejected.reason()
+                    "Could not fully close Serenitea Pot {} during shutdown: {}", owner, fallback(rejected.reason())
                 );
             }
         }
@@ -227,6 +231,6 @@ public final class SereniteaPotLifecycleService {
         INSTANCE
     }
 
-    public record Rejected(String reason) implements Result {
+    public record Rejected(Message reason) implements Result {
     }
 }

@@ -7,9 +7,9 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.GameProfileArgument;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
@@ -23,6 +23,8 @@ import java.util.UUID;
 
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.deletePot;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.profile;
@@ -97,10 +99,10 @@ final class SereniteaPotAdminCommands {
             SereniteaPotLifecycleService.requestClose(owner);
         }
         SereniteaPotManager.saveCatalog();
-        String suffix = enabled && record.isFrozen()
-                ? "；tick 仍处于自动冻结，主人可执行 /sereniteapot unfreeze"
-                : "";
-        return success(context, "已" + (enabled ? "启用" : "禁用") + " " + owner + " 的尘歌壶功能" + suffix);
+        if (!enabled) return success(context, "command.admin.disable.success", owner);
+        return success(context,
+                record.isFrozen() ? "command.admin.enable.frozen" : "command.admin.enable.success",
+                owner);
     }
 
     private static int setMaximumRadius(CommandContext<CommandSourceStack> context)
@@ -112,14 +114,12 @@ final class SereniteaPotAdminCommands {
                 context.getSource().getServer(), owner, radius,
                 requester == null ? null : requester.getUUID());
         if (result == SereniteaPotCreationService.MaximumUpdated.INSTANCE) {
-            return success(context, owner + " 的最大区块半径已设为 " + radius
-                    + "（每边 " + ((long) radius * 2L + 1L) + " 个区块）");
+            return success(context, "command.admin.max_radius.success",
+                    owner, radius, (long) radius * 2L + 1L);
         }
         if (result instanceof SereniteaPotCreationService.MaximumTrimStarted started) {
-            return success(context,
-                    "已开始将 " + owner + " 的 " + started.dimensionCount() + " 个维度裁剪到最大区块半径 "
-                            + radius + "（保留 " + started.retainedChunks() + " 个区块，代际 "
-                            + started.generation() + "）");
+            return success(context, "command.admin.max_radius.trim_started",
+                    owner, started.dimensionCount(), radius, started.retainedChunks(), started.generation());
         }
         return failure(context, ((SereniteaPotCreationService.Rejected) result).reason());
     }
@@ -130,14 +130,14 @@ final class SereniteaPotAdminCommands {
         double budget = DoubleArgumentType.getDouble(context, BUDGET_ARGUMENT);
         SereniteaPotManager.getOrCreateRecord(owner).setBudgetMillisPerSecond(budget);
         SereniteaPotManager.saveCatalog();
-        return success(context, owner + " 的三维度共享预算已设为 " + budget + " ms/s");
+        return success(context, "command.admin.budget.success", owner, budget);
     }
 
     private static int setGlobalBudget(CommandContext<CommandSourceStack> context) {
         double budget = DoubleArgumentType.getDouble(context, BUDGET_ARGUMENT);
         SereniteaPotManager.catalog().setGlobalBudgetMillisPerSecond(budget);
         SereniteaPotManager.saveCatalog();
-        return success(context, "全部尘歌壶的全局预算已设为 " + budget + " ms/s");
+        return success(context, "command.admin.global_budget.success", budget);
     }
 
     private static int showStatus(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -149,38 +149,51 @@ final class SereniteaPotAdminCommands {
         UUID owner = profile(context, PLAYER_ARGUMENT);
         SereniteaPotPerformanceSnapshot snapshot = SereniteaPotScheduler.snapshot(owner);
         return snapshot == null
-                ? failure(context, "没有该玩家的尘歌壶配置")
-                : success(context, formatPerformance(snapshot));
+                ? failure(context, "error.target.no_config")
+                : sendPerformance(context, snapshot);
     }
 
     private static int showPerformanceList(CommandContext<CommandSourceStack> context) {
         List<SereniteaPotPerformanceSnapshot> all = SereniteaPotScheduler.allSnapshots();
         List<SereniteaPotPerformanceSnapshot> snapshots = all.subList(0, Math.min(10, all.size()));
-        if (snapshots.isEmpty()) return success(context, "暂无尘歌壶性能数据");
-        context.getSource().sendSuccess(() -> Component.literal("尘歌壶性能排行（最近完整 1 秒窗口）："), false);
+        if (snapshots.isEmpty()) return success(context, "command.admin.perf.empty");
+        Message heading = message("command.admin.perf.heading");
+        context.getSource().sendSuccess(() -> component(context.getSource(), heading), false);
         for (SereniteaPotPerformanceSnapshot snapshot : snapshots) {
-            context.getSource().sendSuccess(() -> Component.literal(formatPerformance(snapshot)), false);
+            Message row = performance(snapshot);
+            context.getSource().sendSuccess(() -> component(context.getSource(), row), false);
         }
         return snapshots.size();
     }
 
-    private static String formatPerformance(SereniteaPotPerformanceSnapshot snapshot) {
+    private static int sendPerformance(
+            CommandContext<CommandSourceStack> context,
+            SereniteaPotPerformanceSnapshot snapshot) {
+        Message row = performance(snapshot);
+        context.getSource().sendSuccess(() -> component(context.getSource(), row), false);
+        return 1;
+    }
+
+    private static Message performance(SereniteaPotPerformanceSnapshot snapshot) {
         SereniteaPotRecord record = SereniteaPotManager.record(snapshot.owner());
-        String state;
-        if (record != null && !record.isEnabled()) state = "DISABLED";
-        else if (record != null && record.isFrozen()) state = "FROZEN";
-        else if (SereniteaPotCreationService.isBusy(snapshot.owner())) state = "COPYING";
-        else if (snapshot.skippedTicks() > 0) state = "THROTTLED";
-        else if (SereniteaPotManager.loaded(snapshot.owner()) != null) state = "RUNNING";
-        else state = "UNLOADED";
-        return snapshot.owner() + ": state=" + state
-                + ", cost=" + format("%.2f", snapshot.consumedMillisLastSecond()) + "/"
-                + format("%.2f", snapshot.budgetMillisPerSecond()) + "ms/s"
-                + ", copy=" + format("%.2f", snapshot.creationMillisLastSecond()) + "ms/s"
-                + ", avg=" + format("%.3f", snapshot.averageTickMillis()) + "ms"
-                + ", max=" + format("%.3f", snapshot.maximumTickMillis()) + "ms"
-                + ", effectiveTPS=" + format("%.2f", snapshot.effectiveTps())
-                + ", run=" + snapshot.executedTicks() + ", skip=" + snapshot.skippedTicks();
+        Message state;
+        if (record != null && !record.isEnabled()) state = message("performance.state.disabled");
+        else if (record != null && record.isFrozen()) state = message("performance.state.frozen");
+        else if (SereniteaPotCreationService.isBusy(snapshot.owner())) state = message("performance.state.copying");
+        else if (snapshot.skippedTicks() > 0) state = message("performance.state.throttled");
+        else if (SereniteaPotManager.loaded(snapshot.owner()) != null) state = message("performance.state.running");
+        else state = message("performance.state.unloaded");
+        return message("command.admin.perf.row",
+                snapshot.owner(),
+                state,
+                format("%.2f", snapshot.consumedMillisLastSecond()),
+                format("%.2f", snapshot.budgetMillisPerSecond()),
+                format("%.2f", snapshot.creationMillisLastSecond()),
+                format("%.3f", snapshot.averageTickMillis()),
+                format("%.3f", snapshot.maximumTickMillis()),
+                format("%.2f", snapshot.effectiveTps()),
+                snapshot.executedTicks(),
+                snapshot.skippedTicks());
     }
 
     private static int deleteTarget(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

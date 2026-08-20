@@ -32,13 +32,13 @@ final class SereniteaPotOwnerCommands {
     private static int unfreeze(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         UUID owner = context.getSource().getPlayerOrException().getUUID();
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
-        if (record == null || !record.exists()) return failure(context, "你还没有尘歌壶");
+        if (record == null || !record.exists()) return failure(context, "error.self.no_pot");
         if (!record.isFrozen()) {
-            return success(context, "你的尘歌壶 tick 当前没有冻结");
+            return success(context, "command.unfreeze.not_frozen");
         }
         record.setFrozen(false);
         SereniteaPotManager.saveCatalog();
-        return success(context, "已解除尘歌壶的自动冻结；预算债务仍会继续限制 tick 频率");
+        return success(context, "command.unfreeze.success");
     }
 
     private static int delete(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -51,16 +51,19 @@ final class SereniteaPotOwnerCommands {
 
     static int status(CommandContext<CommandSourceStack> context, UUID owner) {
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
-        if (record == null) return failure(context, "没有该玩家的尘歌壶配置");
+        if (record == null) return failure(context, "error.target.no_config");
         Double progress = SereniteaPotCreationService.progress(owner);
-        String creation = progress == null
-                ? ""
-                : ", 创建进度=" + String.format(Locale.ROOT, "%.1f", progress * 100.0) + "%";
-        return success(context,
-                "owner=" + owner + ", 存在=" + record.exists()
-                        + ", 已加载=" + (SereniteaPotManager.loaded(owner) != null)
-                        + ", enabled=" + record.isEnabled() + ", frozen=" + record.isFrozen()
-                        + ", maxRadiusChunks=" + record.getMaxRadiusChunks()
-                        + ", budget=" + record.getBudgetMillisPerSecond() + "ms/s" + creation);
+        String progressValue = progress == null
+                ? "-"
+                : String.format(Locale.ROOT, "%.1f%%", progress * 100.0);
+        return success(context, "command.status",
+                owner,
+                record.exists(),
+                SereniteaPotManager.loaded(owner) != null,
+                record.isEnabled(),
+                record.isFrozen(),
+                record.getMaxRadiusChunks(),
+                record.getBudgetMillisPerSecond(),
+                progressValue);
     }
 }

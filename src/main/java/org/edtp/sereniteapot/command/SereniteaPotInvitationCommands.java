@@ -54,7 +54,7 @@ final class SereniteaPotInvitationCommands {
         SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.request(
                 context.getSource().getPlayerOrException(), profile(context, OWNER_ARGUMENT));
         return result == SereniteaPotInvitationService.Accepted.INSTANCE
-                ? success(context, "申请已发送，60 秒后过期")
+                ? success(context, "command.request.sent")
                 : failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
     }
 
@@ -62,9 +62,9 @@ final class SereniteaPotInvitationCommands {
         ServerPlayer player = context.getSource().getPlayerOrException();
         Set<UUID> requests = SereniteaPotInvitationService.pending(player.getUUID());
         return requests.isEmpty()
-                ? success(context, "当前没有待处理申请")
-                : success(context,
-                        "待处理申请：" + requests.stream().map(UUID::toString).collect(Collectors.joining(", ")));
+                ? success(context, "command.requests.empty")
+                : success(context, "command.requests.list",
+                        requests.stream().map(UUID::toString).collect(Collectors.joining(", ")));
     }
 
     private static int approve(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -80,7 +80,7 @@ final class SereniteaPotInvitationCommands {
         SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.approve(
                 context.getSource().getPlayerOrException(), profile(context, PLAYER_ARGUMENT), requestId);
         if (result instanceof SereniteaPotInvitationService.Approved) {
-            return success(context, "已批准申请并将玩家送入尘歌壶");
+            return success(context, "command.approve.success");
         }
         return failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
     }
@@ -98,7 +98,7 @@ final class SereniteaPotInvitationCommands {
         SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.deny(
                 context.getSource().getPlayerOrException(), profile(context, PLAYER_ARGUMENT), requestId);
         return result == SereniteaPotInvitationService.Accepted.INSTANCE
-                ? success(context, "已拒绝申请")
+                ? success(context, "command.deny.success")
                 : failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
     }
 }

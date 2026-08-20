@@ -6,6 +6,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 
 import java.util.LinkedHashMap;
@@ -13,6 +14,9 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
 
 /**
  * 保存仅存在于本次服务器进程中的临时访问申请。
@@ -40,18 +44,18 @@ public final class SereniteaPotInvitationService {
 
     public static Result request(ServerPlayer requester, UUID owner) {
         if (requester.getUUID().equals(owner)) {
-            return new Rejected("不能申请加入自己的尘歌壶");
+            return new Rejected(message("invitation.self"));
         }
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
-        if (record == null) return new Rejected("该玩家还没有尘歌壶");
+        if (record == null) return new Rejected(message("invitation.target_no_pot"));
         if (!record.exists() || !record.isEnabled()) {
-            return new Rejected("该尘歌壶当前不可申请");
+            return new Rejected(message("invitation.unavailable"));
         }
         if (SereniteaPotLifecycleService.isUnavailable(owner)) {
-            return new Rejected("该尘歌壶当前正在关闭或维护");
+            return new Rejected(message("invitation.maintenance"));
         }
         if (!SereniteaPotAccessPolicy.isRealOwnerInside(requester.level().getServer(), owner)) {
-            return new Rejected("只有主人本人正在尘歌壶内时才能提交申请");
+            return new Rejected(message("invitation.owner_required"));
         }
 
         long now = System.currentTimeMillis();
@@ -60,13 +64,13 @@ public final class SereniteaPotInvitationService {
         );
         PendingRequest existing = requests.get(requester.getUUID());
         if (existing != null && existing.expiresAt() > now) {
-            return new Rejected("你的申请已经在等待处理");
+            return new Rejected(message("invitation.already_pending"));
         }
         UUID requestId = UUID.randomUUID();
         requests.put(requester.getUUID(), new PendingRequest(now + REQUEST_TTL_MILLIS, requestId));
         ServerPlayer ownerPlayer = requester.level().getServer().getPlayerList().getPlayer(owner);
         if (ownerPlayer != null) {
-            ownerPlayer.sendSystemMessage(requestMessage(requester.getScoreboardName(), requestId));
+            ownerPlayer.sendSystemMessage(requestMessage(ownerPlayer, requester.getScoreboardName(), requestId));
         }
         return Accepted.INSTANCE;
     }
@@ -77,18 +81,18 @@ public final class SereniteaPotInvitationService {
 
     public static Result approve(ServerPlayer owner, UUID visitor, UUID requestId) {
         SereniteaPotRecord record = SereniteaPotManager.record(owner.getUUID());
-        if (record == null) return new Rejected("你还没有尘歌壶");
+        if (record == null) return new Rejected(message("error.self.no_pot"));
         LinkedHashMap<UUID, PendingRequest> requests = pending.get(owner.getUUID());
         PendingRequest request = requests == null ? null : requests.get(visitor);
         if (request == null || request.expiresAt() <= System.currentTimeMillis()) {
-            return new Rejected("没有找到该玩家的待处理申请");
+            return new Rejected(message("invitation.request_missing"));
         }
         if (requestId != null && !request.id().equals(requestId)) {
-            return new Rejected("该按钮对应的申请已经失效");
+            return new Rejected(message("invitation.button_expired"));
         }
         ServerPlayer visitorPlayer = owner.level().getServer().getPlayerList().getPlayer(visitor);
         if (visitorPlayer == null) {
-            return new Rejected("申请者已离线，申请会保留到过期");
+            return new Rejected(message("invitation.visitor_offline"));
         }
 
         // AccessPolicy 会在 teleport HEAD 消费许可；失败时撤销许可并保留原申请供重试。
@@ -101,7 +105,10 @@ public final class SereniteaPotInvitationService {
             return new Approved(visitor);
         }
         entryGrants.remove(key);
-        return new Rejected("批准后传送失败，申请仍有效：" + ((SereniteaPotTravelService.Rejected) travel).reason());
+        return new Rejected(message(
+            "invitation.teleport_failed",
+            ((SereniteaPotTravelService.Rejected) travel).reason()
+        ));
     }
 
     public static Result deny(ServerPlayer owner, UUID visitor) {
@@ -112,17 +119,18 @@ public final class SereniteaPotInvitationService {
         LinkedHashMap<UUID, PendingRequest> requests = pending.get(owner.getUUID());
         PendingRequest request = requests == null ? null : requests.get(visitor);
         if (request == null || request.expiresAt() <= System.currentTimeMillis()) {
-            return new Rejected("没有找到该玩家的待处理申请");
+            return new Rejected(message("invitation.request_missing"));
         }
         if (requestId != null && !request.id().equals(requestId)) {
-            return new Rejected("该按钮对应的申请已经失效");
+            return new Rejected(message("invitation.button_expired"));
         }
         requests.remove(visitor);
         if (requests.isEmpty()) pending.remove(owner.getUUID());
         ServerPlayer visitorPlayer = owner.level().getServer().getPlayerList().getPlayer(visitor);
         if (visitorPlayer != null) {
-            visitorPlayer.sendSystemMessage(Component.literal(
-                owner.getScoreboardName() + " 拒绝了你的尘歌壶访问申请"
+            visitorPlayer.sendSystemMessage(component(
+                visitorPlayer,
+                message("invitation.denied_notice", owner.getScoreboardName())
             ));
         }
         return Accepted.INSTANCE;
@@ -160,16 +168,16 @@ public final class SereniteaPotInvitationService {
     private record PendingRequest(long expiresAt, UUID id) {
     }
 
-    private static Component requestMessage(String requesterName, UUID requestId) {
+    private static Component requestMessage(ServerPlayer owner, String requesterName, UUID requestId) {
         String approve = "sereniteapot approve " + requesterName + " " + requestId;
         String deny = "sereniteapot deny " + requesterName + " " + requestId;
-        return Component.literal(requesterName + " 申请进入你的尘歌壶（60 秒内有效）")
+        return component(owner, message("invitation.request_notice", requesterName))
             .append("\n")
-            .append(Component.literal("[接受]")
+            .append(component(owner, message("invitation.accept_button"))
                 .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
                 .withStyle(style -> style.withClickEvent(new ClickEvent.RunCommand(approve))))
             .append(" ")
-            .append(Component.literal("[拒绝]")
+            .append(component(owner, message("invitation.deny_button"))
                 .withStyle(ChatFormatting.RED, ChatFormatting.BOLD)
                 .withStyle(style -> style.withClickEvent(new ClickEvent.RunCommand(deny))));
     }
@@ -184,6 +192,6 @@ public final class SereniteaPotInvitationService {
     public record Approved(UUID visitor) implements Result {
     }
 
-    public record Rejected(String reason) implements Result {
+    public record Rejected(Message reason) implements Result {
     }
 }
