@@ -165,6 +165,14 @@ All project business code is Java 25. The final JAR still depends on Fabric Lang
   <img src="docs/images/overworld.png" width="100%" alt="Players in the public Overworld">
 </p>
 
+### Entering and leaving a pot
+
+<p align="center">
+  <img src="docs/images/enter.png" width="32%" alt="Entering a Serenitea Pot from the public world">
+  <img src="docs/images/entered.png" width="32%" alt="The extracted region inside a Serenitea Pot's local world border">
+  <img src="docs/images/leave.png" width="32%" alt="Leaving a Serenitea Pot">
+</p>
+
 ## Development and verification
 
 Open the repository root directly in IntelliJ IDEA as a Gradle project, or run:
