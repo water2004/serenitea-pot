@@ -73,7 +73,7 @@ public final class SereniteaPotInvitationService {
         if (ownerPlayer != null) {
             ownerPlayer.sendSystemMessage(requestMessage(ownerPlayer, requester.getScoreboardName(), requestId));
         }
-        return Accepted.INSTANCE;
+        return Success.INSTANCE;
     }
 
     public static Result approve(ServerPlayer owner, UUID visitor, UUID requestId) {
@@ -101,7 +101,7 @@ public final class SereniteaPotInvitationService {
         if (travel == SereniteaPotTravelService.Success.INSTANCE) {
             requests.remove(visitor);
             if (requests.isEmpty()) pending.remove(owner.getUUID());
-            return new Approved(visitor);
+            return Success.INSTANCE;
         }
         ownerGrants.remove(visitor);
         if (ownerGrants.isEmpty()) entryGrants.remove(owner.getUUID());
@@ -129,7 +129,7 @@ public final class SereniteaPotInvitationService {
                 message(MessageKey.INVITATION_DENIED_NOTICE, owner.getScoreboardName())
             ));
         }
-        return Accepted.INSTANCE;
+        return Success.INSTANCE;
     }
 
     public static Set<UUID> pending(UUID owner) {
@@ -181,14 +181,11 @@ public final class SereniteaPotInvitationService {
                 .withStyle(style -> style.withClickEvent(new ClickEvent.RunCommand(deny))));
     }
 
-    public sealed interface Result permits Accepted, Approved, Rejected {
+    public sealed interface Result permits Success, Rejected {
     }
 
-    public enum Accepted implements Result {
+    public enum Success implements Result {
         INSTANCE
-    }
-
-    public record Approved(UUID visitor) implements Result {
     }
 
     public record Rejected(Message reason) implements Result {

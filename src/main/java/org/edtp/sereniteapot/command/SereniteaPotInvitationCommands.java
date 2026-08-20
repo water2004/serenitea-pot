@@ -54,7 +54,7 @@ final class SereniteaPotInvitationCommands {
     private static int request(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.request(
                 context.getSource().getPlayerOrException(), profile(context, OWNER_ARGUMENT));
-        return result == SereniteaPotInvitationService.Accepted.INSTANCE
+        return result == SereniteaPotInvitationService.Success.INSTANCE
                 ? success(context, MessageKey.COMMAND_REQUEST_SENT)
                 : failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
     }
@@ -80,7 +80,7 @@ final class SereniteaPotInvitationCommands {
             throws CommandSyntaxException {
         SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.approve(
                 context.getSource().getPlayerOrException(), profile(context, PLAYER_ARGUMENT), requestId);
-        if (result instanceof SereniteaPotInvitationService.Approved) {
+        if (result == SereniteaPotInvitationService.Success.INSTANCE) {
             return success(context, MessageKey.COMMAND_APPROVE_SUCCESS);
         }
         return failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
@@ -98,7 +98,7 @@ final class SereniteaPotInvitationCommands {
             throws CommandSyntaxException {
         SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.deny(
                 context.getSource().getPlayerOrException(), profile(context, PLAYER_ARGUMENT), requestId);
-        return result == SereniteaPotInvitationService.Accepted.INSTANCE
+        return result == SereniteaPotInvitationService.Success.INSTANCE
                 ? success(context, MessageKey.COMMAND_DENY_SUCCESS)
                 : failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
     }

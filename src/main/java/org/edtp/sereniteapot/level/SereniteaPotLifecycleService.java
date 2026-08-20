@@ -35,7 +35,7 @@ public final class SereniteaPotLifecycleService {
     private static final Set<UUID> pendingCloses = new LinkedHashSet<>();
     private static final Set<UUID> maintenance = new LinkedHashSet<>();
     private static final Set<UUID> closing = new LinkedHashSet<>();
-    private static final Map<GenerationKey, PendingDelete> pendingDeletes = new LinkedHashMap<>();
+    private static final Map<UUID, Map<Long, PendingDelete>> pendingDeletes = new LinkedHashMap<>();
 
     private SereniteaPotLifecycleService() {
     }
@@ -111,7 +111,7 @@ public final class SereniteaPotLifecycleService {
         pendingCloses.remove(owner);
         maintenance.remove(owner);
         closing.remove(owner);
-        pendingDeletes.keySet().removeIf(key -> key.owner().equals(owner));
+        pendingDeletes.remove(owner);
     }
 
     public static void deleteEvacuated(SereniteaPotBundle bundle) {
@@ -121,9 +121,8 @@ public final class SereniteaPotLifecycleService {
                 "Cannot delete occupied replacement generation " + bundle.generation()
             );
         }
-        pendingDeletes.put(
-            new GenerationKey(bundle.owner(), bundle.generation()),
-            new PendingDelete(new ArrayList<>(bundle.levels().values()))
+        pendingDeletes.computeIfAbsent(bundle.owner(), ignored -> new LinkedHashMap<>()).put(
+            bundle.generation(), new PendingDelete(new ArrayList<>(bundle.levels().values()))
         );
         processPendingDeletes(false);
     }
@@ -167,18 +166,21 @@ public final class SereniteaPotLifecycleService {
 
     private static void processPendingDeletes(boolean force) {
         long now = System.currentTimeMillis();
-        Iterator<Map.Entry<GenerationKey, PendingDelete>> iterator = pendingDeletes.entrySet().iterator();
-        while (iterator.hasNext()) {
-            PendingDelete pending = iterator.next().getValue();
-            if (!force && now < pending.nextAttemptMillis) {
-                continue;
+        Iterator<Map<Long, PendingDelete>> owners = pendingDeletes.values().iterator();
+        while (owners.hasNext()) {
+            Map<Long, PendingDelete> ownerDeletes = owners.next();
+            Iterator<PendingDelete> deletes = ownerDeletes.values().iterator();
+            while (deletes.hasNext()) {
+                PendingDelete pending = deletes.next();
+                if (!force && now < pending.nextAttemptMillis) continue;
+                pending.levels.removeIf(SereniteaPotManager::deleteEvacuatedLevel);
+                if (pending.levels.isEmpty()) {
+                    deletes.remove();
+                } else {
+                    pending.nextAttemptMillis = now + DELETE_RETRY_MILLIS;
+                }
             }
-            pending.levels.removeIf(SereniteaPotManager::deleteEvacuatedLevel);
-            if (pending.levels.isEmpty()) {
-                iterator.remove();
-            } else {
-                pending.nextAttemptMillis = now + DELETE_RETRY_MILLIS;
-            }
+            if (ownerDeletes.isEmpty()) owners.remove();
         }
     }
 
@@ -206,9 +208,6 @@ public final class SereniteaPotLifecycleService {
         if (!server.isSameThread()) {
             throw new IllegalStateException("Serenitea Pot lifecycle mutation must run on the server thread");
         }
-    }
-
-    private record GenerationKey(UUID owner, long generation) {
     }
 
     private static final class PendingDelete {
