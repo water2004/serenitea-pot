@@ -141,13 +141,13 @@ public final class SereniteaPotManager {
                 DimensionUtilsKt.addCustomLevel(server, level);
                 levels.put(dimension, level);
             }
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             var added = new ArrayList<>(levels.values());
             Collections.reverse(added);
             for (CustomLevel level : added) {
                 try {
                     DimensionUtilsKt.removeCustomLevel(server, level);
-                } catch (Throwable ignored) {
+                } catch (RuntimeException ignored) {
                 }
             }
             throw error;
@@ -188,7 +188,7 @@ public final class SereniteaPotManager {
         try {
             applyBorders(bundle, record);
             saveCatalog();
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             record.setActiveGeneration(oldGeneration);
             record.setMaxRadiusChunks(oldMaximumRadiusChunks);
             record.getSlots().clear();
@@ -217,13 +217,13 @@ public final class SereniteaPotManager {
                 }
                 levels.put(dimension, level);
             }
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             var added = new ArrayList<>(levels.values());
             Collections.reverse(added);
             for (CustomLevel level : added) {
                 try {
                     DimensionUtilsKt.removeCustomLevel(server, level);
-                } catch (Throwable ignored) {
+                } catch (RuntimeException ignored) {
                 }
             }
             throw error;
@@ -262,7 +262,7 @@ public final class SereniteaPotManager {
         }
         try {
             DimensionUtilsKt.deleteCustomLevel(server, level);
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             SereniteaPotMod.LOGGER.warn("Failed to delete Serenitea Pot level {}", level.dimension().identifier(), error);
         }
         boolean detached = server.getLevel(level.dimension()) != level;
@@ -279,7 +279,7 @@ public final class SereniteaPotManager {
             if (server.getLevel(level.dimension()) != level) continue;
             try {
                 DimensionUtilsKt.removeCustomLevel(server, level);
-            } catch (Throwable error) {
+            } catch (RuntimeException error) {
                 SereniteaPotMod.LOGGER.warn("Failed to unload Serenitea Pot level {}", level.dimension().identifier(), error);
             }
             if (server.getLevel(level.dimension()) == level) complete = false;

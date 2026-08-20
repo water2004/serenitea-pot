@@ -71,7 +71,7 @@ public final class SereniteaPotCreationService {
             if (previous == null) {
                 try {
                     previous = SereniteaPotManager.load(owner);
-                } catch (Throwable error) {
+                } catch (RuntimeException error) {
                     abortMaintenance(owner);
                     return new Rejected("原尘歌壶无法加载：" + error.getMessage());
                 }
@@ -81,7 +81,7 @@ public final class SereniteaPotCreationService {
         SereniteaPotBundle staging;
         try {
             staging = SereniteaPotManager.createStaging(owner, generation, source.getSeed());
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             abortMaintenance(owner);
             return new Rejected("无法创建暂存维度：" + error.getMessage());
         }
@@ -165,7 +165,7 @@ public final class SereniteaPotCreationService {
         if (previous == null) {
             try {
                 previous = SereniteaPotManager.load(owner);
-            } catch (Throwable error) {
+            } catch (RuntimeException error) {
                 abortMaintenance(owner);
                 return new Rejected("原尘歌壶无法加载：" + errorMessage(error));
             }
@@ -179,7 +179,7 @@ public final class SereniteaPotCreationService {
                 generation,
                 previous.get(SereniteaPotDimension.OVERWORLD).getSeed()
             );
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             abortMaintenance(owner);
             return new Rejected("无法创建裁剪暂存维度：" + errorMessage(error));
         }
@@ -209,7 +209,7 @@ public final class SereniteaPotCreationService {
                 long diameter = retainedRadius * 2L + 1L;
                 retainedChunks = Math.addExact(retainedChunks, Math.multiplyExact(diameter, diameter));
             }
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             SereniteaPotLifecycleService.deleteEvacuated(staging);
             abortMaintenance(owner);
             return new Rejected("无法准备边缘裁剪：" + errorMessage(error));
@@ -268,7 +268,7 @@ public final class SereniteaPotCreationService {
             long started = System.nanoTime();
             try {
                 job.step(started + (long) reservation.reservedNanos());
-            } catch (Throwable error) {
+            } catch (RuntimeException error) {
                 SereniteaPotScheduler.completeCreationSlice(reservation, System.nanoTime() - started);
                 SereniteaPotMod.LOGGER.error("Serenitea Pot creation failed for {}", job.owner, error);
                 fail(server, job, errorMessage(error));
@@ -290,7 +290,7 @@ public final class SereniteaPotCreationService {
                         job.replacementSlots,
                         job.committedMaximumRadiusChunks
                     );
-                } catch (Throwable error) {
+                } catch (RuntimeException error) {
                     SereniteaPotMod.LOGGER.error("Serenitea Pot creation commit failed for {}", job.owner, error);
                     fail(server, job, errorMessage(error));
                     jobs.remove(owner);
@@ -309,7 +309,7 @@ public final class SereniteaPotCreationService {
         for (CreationJob job : jobs.values()) {
             try {
                 SereniteaPotLifecycleService.deleteEvacuated(job.staging);
-            } catch (Throwable error) {
+            } catch (RuntimeException error) {
                 SereniteaPotMod.LOGGER.error(
                     "Failed to discard staging Serenitea Pot for {} during shutdown", job.owner, error
                 );
@@ -330,7 +330,7 @@ public final class SereniteaPotCreationService {
                     job.owner, rejected.reason()
                 );
             }
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             SereniteaPotMod.LOGGER.error("Committed Serenitea Pot {} but failed to close it", job.owner, error);
             SereniteaPotLifecycleService.requestClose(job.owner);
         }
@@ -353,7 +353,7 @@ public final class SereniteaPotCreationService {
     private static void fail(MinecraftServer server, CreationJob job, String reason) {
         try {
             SereniteaPotLifecycleService.deleteEvacuated(job.staging);
-        } catch (Throwable ignored) {
+        } catch (RuntimeException ignored) {
         }
         abortMaintenance(job.owner);
         ServerPlayer player = job.requester == null

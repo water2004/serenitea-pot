@@ -184,6 +184,9 @@ public final class RegionCopyTask {
         }
 
         targetChunk.clearAllBlockEntities();
+        // Mojang's ProtoChunk -> LevelChunk constructor can transfer section objects because
+        // the ProtoChunk is discarded. Our public source chunk stays alive, so every section
+        // must be cloned just like SerializableChunkData.copyOf does for persistence.
         for (int index = 0; index < sourceSections.length; index++) {
             targetSections[index] = sourceSections[index].copy();
         }
@@ -254,6 +257,9 @@ public final class RegionCopyTask {
     }
 
     private void copyAttachments() {
+        // Fabric's in-memory transfer aliases attachment values and is only safe when the
+        // source object is discarded. A codec round trip gives two live chunks independent
+        // persistent values without serializing the rest of the chunk.
         var output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, source.registryAccess());
         ((AttachmentTargetImpl) sourceChunk).fabric_writeAttachmentsToNbt(output);
         ((AttachmentTargetImpl) targetChunk).fabric_readAttachmentsFromNbt(

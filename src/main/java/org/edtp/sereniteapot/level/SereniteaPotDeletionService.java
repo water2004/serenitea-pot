@@ -45,7 +45,7 @@ public final class SereniteaPotDeletionService {
         record.setFrozen(false);
         try {
             SereniteaPotManager.saveCatalog();
-        } catch (Throwable error) {
+        } catch (RuntimeException error) {
             record.setStateId(oldStateId);
             record.setActiveGeneration(oldGeneration);
             record.getSlots().putAll(oldSlots);

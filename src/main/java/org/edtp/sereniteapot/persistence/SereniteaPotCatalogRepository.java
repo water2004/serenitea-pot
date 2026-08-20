@@ -40,7 +40,10 @@ public class SereniteaPotCatalogRepository {
 
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             return decode(JsonParser.parseReader(reader).getAsJsonObject());
-        } catch (Exception error) {
+        } catch (IOException error) {
+            SereniteaPotMod.LOGGER.error("Failed to read Serenitea Pot catalog at {}", file, error);
+            throw error;
+        } catch (RuntimeException error) {
             SereniteaPotMod.LOGGER.error("Failed to read Serenitea Pot catalog at {}", file, error);
             throw new IllegalStateException("Serenitea Pot catalog is unreadable: " + file, error);
         }
