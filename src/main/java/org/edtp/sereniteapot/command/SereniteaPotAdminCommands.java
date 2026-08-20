@@ -9,6 +9,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
@@ -99,9 +100,11 @@ final class SereniteaPotAdminCommands {
             SereniteaPotLifecycleService.requestClose(owner);
         }
         SereniteaPotManager.saveCatalog();
-        if (!enabled) return success(context, "command.admin.disable.success", owner);
+        if (!enabled) return success(context, MessageKey.COMMAND_ADMIN_DISABLE_SUCCESS, owner);
         return success(context,
-                record.isFrozen() ? "command.admin.enable.frozen" : "command.admin.enable.success",
+                record.isFrozen()
+                        ? MessageKey.COMMAND_ADMIN_ENABLE_FROZEN
+                        : MessageKey.COMMAND_ADMIN_ENABLE_SUCCESS,
                 owner);
     }
 
@@ -114,11 +117,11 @@ final class SereniteaPotAdminCommands {
                 context.getSource().getServer(), owner, radius,
                 requester == null ? null : requester.getUUID());
         if (result == SereniteaPotCreationService.MaximumUpdated.INSTANCE) {
-            return success(context, "command.admin.max_radius.success",
+            return success(context, MessageKey.COMMAND_ADMIN_MAX_RADIUS_SUCCESS,
                     owner, radius, (long) radius * 2L + 1L);
         }
         if (result instanceof SereniteaPotCreationService.MaximumTrimStarted started) {
-            return success(context, "command.admin.max_radius.trim_started",
+            return success(context, MessageKey.COMMAND_ADMIN_MAX_RADIUS_TRIM_STARTED,
                     owner, started.dimensionCount(), radius, started.retainedChunks(), started.generation());
         }
         return failure(context, ((SereniteaPotCreationService.Rejected) result).reason());
@@ -130,14 +133,14 @@ final class SereniteaPotAdminCommands {
         double budget = DoubleArgumentType.getDouble(context, BUDGET_ARGUMENT);
         SereniteaPotManager.getOrCreateRecord(owner).setBudgetMillisPerSecond(budget);
         SereniteaPotManager.saveCatalog();
-        return success(context, "command.admin.budget.success", owner, budget);
+        return success(context, MessageKey.COMMAND_ADMIN_BUDGET_SUCCESS, owner, budget);
     }
 
     private static int setGlobalBudget(CommandContext<CommandSourceStack> context) {
         double budget = DoubleArgumentType.getDouble(context, BUDGET_ARGUMENT);
         SereniteaPotManager.catalog().setGlobalBudgetMillisPerSecond(budget);
         SereniteaPotManager.saveCatalog();
-        return success(context, "command.admin.global_budget.success", budget);
+        return success(context, MessageKey.COMMAND_ADMIN_GLOBAL_BUDGET_SUCCESS, budget);
     }
 
     private static int showStatus(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -149,15 +152,15 @@ final class SereniteaPotAdminCommands {
         UUID owner = profile(context, PLAYER_ARGUMENT);
         SereniteaPotPerformanceSnapshot snapshot = SereniteaPotScheduler.snapshot(owner);
         return snapshot == null
-                ? failure(context, "error.target.no_config")
+                ? failure(context, MessageKey.ERROR_TARGET_NO_CONFIG)
                 : sendPerformance(context, snapshot);
     }
 
     private static int showPerformanceList(CommandContext<CommandSourceStack> context) {
         List<SereniteaPotPerformanceSnapshot> all = SereniteaPotScheduler.allSnapshots();
         List<SereniteaPotPerformanceSnapshot> snapshots = all.subList(0, Math.min(10, all.size()));
-        if (snapshots.isEmpty()) return success(context, "command.admin.perf.empty");
-        Message heading = message("command.admin.perf.heading");
+        if (snapshots.isEmpty()) return success(context, MessageKey.COMMAND_ADMIN_PERF_EMPTY);
+        Message heading = message(MessageKey.COMMAND_ADMIN_PERF_HEADING);
         context.getSource().sendSuccess(() -> component(context.getSource(), heading), false);
         for (SereniteaPotPerformanceSnapshot snapshot : snapshots) {
             Message row = performance(snapshot);
@@ -177,13 +180,15 @@ final class SereniteaPotAdminCommands {
     private static Message performance(SereniteaPotPerformanceSnapshot snapshot) {
         SereniteaPotRecord record = SereniteaPotManager.record(snapshot.owner());
         Message state;
-        if (record != null && !record.isEnabled()) state = message("performance.state.disabled");
-        else if (record != null && record.isFrozen()) state = message("performance.state.frozen");
-        else if (SereniteaPotCreationService.isBusy(snapshot.owner())) state = message("performance.state.copying");
-        else if (snapshot.skippedTicks() > 0) state = message("performance.state.throttled");
-        else if (SereniteaPotManager.loaded(snapshot.owner()) != null) state = message("performance.state.running");
-        else state = message("performance.state.unloaded");
-        return message("command.admin.perf.row",
+        if (record != null && !record.isEnabled()) state = message(MessageKey.PERFORMANCE_STATE_DISABLED);
+        else if (record != null && record.isFrozen()) state = message(MessageKey.PERFORMANCE_STATE_FROZEN);
+        else if (SereniteaPotCreationService.isBusy(snapshot.owner())) {
+            state = message(MessageKey.PERFORMANCE_STATE_COPYING);
+        } else if (snapshot.skippedTicks() > 0) state = message(MessageKey.PERFORMANCE_STATE_THROTTLED);
+        else if (SereniteaPotManager.loaded(snapshot.owner()) != null) {
+            state = message(MessageKey.PERFORMANCE_STATE_RUNNING);
+        } else state = message(MessageKey.PERFORMANCE_STATE_UNLOADED);
+        return message(MessageKey.COMMAND_ADMIN_PERF_ROW,
                 snapshot.owner(),
                 state,
                 format("%.2f", snapshot.consumedMillisLastSecond()),

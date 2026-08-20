@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
@@ -36,38 +37,38 @@ public final class SereniteaPotTravelService {
         Double creationProgress = SereniteaPotCreationService.progress(owner);
         if (creationProgress != null && (record == null || !record.exists())) {
             return new Rejected(message(
-                "travel.creating",
+                MessageKey.TRAVEL_CREATING,
                 String.format(Locale.ROOT, "%.1f", creationProgress * 100.0)
             ));
         }
         if (record == null || !record.exists()) {
-            return new Rejected(message("travel.target_no_pot"));
+            return new Rejected(message(MessageKey.TRAVEL_TARGET_NO_POT));
         }
-        if (!record.isEnabled()) return new Rejected(message("travel.disabled"));
+        if (!record.isEnabled()) return new Rejected(message(MessageKey.TRAVEL_DISABLED));
         if (SereniteaPotLifecycleService.isUnavailable(owner)) {
-            return new Rejected(message("travel.unavailable"));
+            return new Rejected(message(MessageKey.TRAVEL_UNAVAILABLE));
         }
 
         SereniteaPotBundle bundle;
         if (player.getUUID().equals(owner)) {
             if (!HumanPlayerDetector.isHuman(player)) {
-                return new Rejected(message("travel.fake_player"));
+                return new Rejected(message(MessageKey.TRAVEL_FAKE_PLAYER));
             }
             bundle = SereniteaPotManager.loaded(owner);
             if (bundle == null) {
                 try {
                     bundle = SereniteaPotManager.load(owner);
                 } catch (RuntimeException error) {
-                    return new Rejected(message("travel.load_failed", error.getMessage()));
+                    return new Rejected(message(MessageKey.TRAVEL_LOAD_FAILED, error.getMessage()));
                 }
             }
         } else {
             if (!SereniteaPotAccessPolicy.isRealOwnerInside(player.level().getServer(), owner)) {
-                return new Rejected(message("travel.owner_required"));
+                return new Rejected(message(MessageKey.TRAVEL_OWNER_REQUIRED));
             }
             bundle = SereniteaPotManager.loaded(owner);
             if (bundle == null) {
-                return new Rejected(message("travel.not_loaded"));
+                return new Rejected(message(MessageKey.TRAVEL_NOT_LOADED));
             }
         }
 
@@ -83,7 +84,7 @@ public final class SereniteaPotTravelService {
             }
         }
         if (destinationDimension == null) {
-            return new Rejected(message("travel.no_dimension"));
+            return new Rejected(message(MessageKey.TRAVEL_NO_DIMENSION));
         }
         Destination destination = savedSereniteaPotDestination(player, owner, record, bundle);
         if (destination == null) {
@@ -105,12 +106,14 @@ public final class SereniteaPotTravelService {
             destination.pitch(),
             true
         );
-        return success ? Success.INSTANCE : new Rejected(message("travel.denied"));
+        return success ? Success.INSTANCE : new Rejected(message(MessageKey.TRAVEL_DENIED));
     }
 
     public static Result leave(ServerPlayer player) {
         SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(player.level().dimension());
-        return identity == null ? new Rejected(message("travel.not_inside")) : evict(player, identity.owner());
+        return identity == null
+            ? new Rejected(message(MessageKey.TRAVEL_NOT_INSIDE))
+            : evict(player, identity.owner());
     }
 
     /** Used only by the lifecycle close transaction. */
@@ -120,7 +123,7 @@ public final class SereniteaPotTravelService {
             return Success.INSTANCE;
         }
         if (!identity.owner().equals(owner)) {
-            return new Rejected(message("travel.other_pot"));
+            return new Rejected(message(MessageKey.TRAVEL_OTHER_POT));
         }
 
         var server = player.level().getServer();
@@ -137,7 +140,7 @@ public final class SereniteaPotTravelService {
                 savedPublic.pitch(),
                 true
             );
-            return success ? Success.INSTANCE : new Rejected(message("travel.leave_failed"));
+            return success ? Success.INSTANCE : new Rejected(message(MessageKey.TRAVEL_LEAVE_FAILED));
         }
 
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
@@ -163,7 +166,7 @@ public final class SereniteaPotTravelService {
         boolean success = player.teleportTo(
             target, position.x, position.y, position.z, Set.of(), player.getYRot(), player.getXRot(), true
         );
-        return success ? Success.INSTANCE : new Rejected(message("travel.leave_failed"));
+        return success ? Success.INSTANCE : new Rejected(message(MessageKey.TRAVEL_LEAVE_FAILED));
     }
 
     private static Destination savedSereniteaPotDestination(

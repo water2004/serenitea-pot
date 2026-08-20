@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.level.ServerPlayer;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 
 import static net.minecraft.commands.Commands.argument;
@@ -33,7 +34,7 @@ final class SereniteaPotCreateCommand {
                 player, IntegerArgumentType.getInteger(context, RADIUS_ARGUMENT));
         if (result instanceof SereniteaPotCreationService.Accepted accepted) {
             return success(context,
-                    "command.create.accepted", accepted.chunkCount(), accepted.generation());
+                    MessageKey.COMMAND_CREATE_ACCEPTED, accepted.chunkCount(), accepted.generation());
         }
         return failure(context, ((SereniteaPotCreationService.Rejected) result).reason());
     }

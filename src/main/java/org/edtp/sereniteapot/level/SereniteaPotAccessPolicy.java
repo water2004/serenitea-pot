@@ -5,6 +5,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 import org.edtp.sereniteapot.player.HumanPlayerDetector;
 
@@ -30,16 +31,16 @@ public final class SereniteaPotAccessPolicy {
         }
         SereniteaPotRecord record = SereniteaPotManager.record(identity.owner());
         if (record == null) {
-            return component(player, message("access.target_missing"));
+            return component(player, message(MessageKey.ACCESS_TARGET_MISSING));
         }
         if (identity.generation() != record.getActiveGeneration()) {
-            return component(player, message("access.inactive_generation"));
+            return component(player, message(MessageKey.ACCESS_INACTIVE_GENERATION));
         }
         if (SereniteaPotLifecycleService.isUnavailable(identity.owner())) {
-            return component(player, message("access.unavailable"));
+            return component(player, message(MessageKey.ACCESS_UNAVAILABLE));
         }
         if (!record.isEnabled()) {
-            return component(player, message("access.disabled"));
+            return component(player, message(MessageKey.ACCESS_DISABLED));
         }
         SereniteaPotLevelKeys.Identity current = SereniteaPotLevelKeys.identify(player.level().dimension());
         if (current != null && current.owner().equals(identity.owner())) {
@@ -48,17 +49,17 @@ public final class SereniteaPotAccessPolicy {
         if (player.getUUID().equals(identity.owner())) {
             return HumanPlayerDetector.isHuman(player)
                 ? null
-                : component(player, message("access.fake_player"));
+                : component(player, message(MessageKey.ACCESS_FAKE_PLAYER));
         }
         if (!player.permissions().hasPermission(Permissions.COMMANDS_OWNER)) {
             // 临时许可只消费一次，批准申请不会变成永久访客名单。
             return SereniteaPotInvitationService.consumeEntryGrant(identity.owner(), player.getUUID())
                 ? null
-                : component(player, message("access.request_required"));
+                : component(player, message(MessageKey.ACCESS_REQUEST_REQUIRED));
         }
         return isRealOwnerInside(player.level().getServer(), identity.owner())
             ? null
-            : component(player, message("access.owner_required_for_admin"));
+            : component(player, message(MessageKey.ACCESS_OWNER_REQUIRED_FOR_ADMIN));
     }
 
     public static boolean isRealOwnerInside(MinecraftServer server, UUID owner) {

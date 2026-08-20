@@ -5,6 +5,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.GameProfileArgument;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotTravelService;
 
 import java.util.UUID;
@@ -40,7 +41,7 @@ final class SereniteaPotTravelCommands {
         SereniteaPotTravelService.Result result = SereniteaPotTravelService.enter(
                 context.getSource().getPlayerOrException(), owner);
         return result == SereniteaPotTravelService.Success.INSTANCE
-                ? success(context, "command.enter.success")
+                ? success(context, MessageKey.COMMAND_ENTER_SUCCESS)
                 : failure(context, ((SereniteaPotTravelService.Rejected) result).reason());
     }
 
@@ -48,7 +49,7 @@ final class SereniteaPotTravelCommands {
         SereniteaPotTravelService.Result result = SereniteaPotTravelService.leave(
                 context.getSource().getPlayerOrException());
         return result == SereniteaPotTravelService.Success.INSTANCE
-                ? success(context, "command.leave.success")
+                ? success(context, MessageKey.COMMAND_LEAVE_SUCCESS)
                 : failure(context, ((SereniteaPotTravelService.Rejected) result).reason());
     }
 }

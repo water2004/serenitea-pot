@@ -4,6 +4,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 import org.edtp.sereniteapot.region.SereniteaPotCreationService;
@@ -32,13 +33,13 @@ final class SereniteaPotOwnerCommands {
     private static int unfreeze(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         UUID owner = context.getSource().getPlayerOrException().getUUID();
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
-        if (record == null || !record.exists()) return failure(context, "error.self.no_pot");
+        if (record == null || !record.exists()) return failure(context, MessageKey.ERROR_SELF_NO_POT);
         if (!record.isFrozen()) {
-            return success(context, "command.unfreeze.not_frozen");
+            return success(context, MessageKey.COMMAND_UNFREEZE_NOT_FROZEN);
         }
         record.setFrozen(false);
         SereniteaPotManager.saveCatalog();
-        return success(context, "command.unfreeze.success");
+        return success(context, MessageKey.COMMAND_UNFREEZE_SUCCESS);
     }
 
     private static int delete(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -51,12 +52,12 @@ final class SereniteaPotOwnerCommands {
 
     static int status(CommandContext<CommandSourceStack> context, UUID owner) {
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
-        if (record == null) return failure(context, "error.target.no_config");
+        if (record == null) return failure(context, MessageKey.ERROR_TARGET_NO_CONFIG);
         Double progress = SereniteaPotCreationService.progress(owner);
         String progressValue = progress == null
                 ? "-"
                 : String.format(Locale.ROOT, "%.1f%%", progress * 100.0);
-        return success(context, "command.status",
+        return success(context, MessageKey.COMMAND_STATUS,
                 owner,
                 record.exists(),
                 SereniteaPotManager.loaded(owner) != null,

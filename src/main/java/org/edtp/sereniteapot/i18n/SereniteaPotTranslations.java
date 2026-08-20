@@ -9,12 +9,14 @@ import org.edtp.sereniteapot.SereniteaPotMod;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.IllegalFormatException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 服务端-only 本地化：根据客户端上报的语言生成最终 literal 文本。
@@ -30,7 +32,9 @@ public final class SereniteaPotTranslations {
     );
 
     static {
-        Set<String> requiredKeys = LANGUAGES.get(DEFAULT_LANGUAGE).keySet();
+        Set<String> requiredKeys = Arrays.stream(MessageKey.values())
+            .map(MessageKey::id)
+            .collect(Collectors.toUnmodifiableSet());
         for (Map.Entry<String, Map<String, String>> language : LANGUAGES.entrySet()) {
             if (!language.getValue().keySet().equals(requiredKeys)) {
                 throw new IllegalStateException(
@@ -43,10 +47,7 @@ public final class SereniteaPotTranslations {
     private SereniteaPotTranslations() {
     }
 
-    public static Message message(String key, Object... arguments) {
-        if (!LANGUAGES.get(DEFAULT_LANGUAGE).containsKey(key)) {
-            throw new IllegalArgumentException("Unknown Serenitea Pot translation key " + key);
-        }
+    public static Message message(MessageKey key, Object... arguments) {
         return new Message(key, arguments);
     }
 
@@ -70,9 +71,9 @@ public final class SereniteaPotTranslations {
     public static String translate(String requestedLanguage, Message message) {
         String language = requestedLanguage.toLowerCase(Locale.ROOT);
         Map<String, String> translations = LANGUAGES.getOrDefault(language, LANGUAGES.get(DEFAULT_LANGUAGE));
-        String pattern = translations.get(message.key());
+        String pattern = translations.get(message.key().id());
         if (pattern == null) {
-            pattern = LANGUAGES.get(DEFAULT_LANGUAGE).getOrDefault(message.key(), message.key());
+            pattern = LANGUAGES.get(DEFAULT_LANGUAGE).getOrDefault(message.key().id(), message.key().id());
         }
         Object[] arguments = message.arguments().clone();
         for (int index = 0; index < arguments.length; index++) {
@@ -83,7 +84,7 @@ public final class SereniteaPotTranslations {
         try {
             return String.format(Locale.ROOT, pattern, arguments);
         } catch (IllegalFormatException error) {
-            SereniteaPotMod.LOGGER.error("Invalid translation format for {}", message.key(), error);
+            SereniteaPotMod.LOGGER.error("Invalid translation format for {}", message.key().id(), error);
             return pattern;
         }
     }
@@ -102,7 +103,7 @@ public final class SereniteaPotTranslations {
         }
     }
 
-    public record Message(String key, Object... arguments) {
+    public record Message(MessageKey key, Object... arguments) {
         public Message {
             Objects.requireNonNull(key, "key");
             arguments = arguments.clone();

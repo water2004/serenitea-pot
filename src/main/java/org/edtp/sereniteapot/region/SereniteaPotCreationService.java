@@ -6,6 +6,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.edtp.sereniteapot.SereniteaPotMod;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.level.SereniteaPotBundle;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
@@ -53,13 +54,13 @@ public final class SereniteaPotCreationService {
         UUID owner = player.getUUID();
         ServerLevel source = player.level();
         SereniteaPotDimension dimension = SereniteaPotDimension.fromVanillaLevel(source.dimension());
-        if (dimension == null) return new Rejected(message("creation.public_dimension_only"));
+        if (dimension == null) return new Rejected(message(MessageKey.CREATION_PUBLIC_DIMENSION_ONLY));
 
         SereniteaPotRecord record = SereniteaPotManager.getOrCreateRecord(owner);
-        if (!record.isEnabled()) return new Rejected(message("creation.disabled"));
-        if (jobs.containsKey(owner)) return new Rejected(message("creation.job_exists"));
+        if (!record.isEnabled()) return new Rejected(message(MessageKey.CREATION_DISABLED));
+        if (jobs.containsKey(owner)) return new Rejected(message(MessageKey.CREATION_JOB_EXISTS));
         if (radiusChunks < 0 || radiusChunks > record.getMaxRadiusChunks()) {
-            return new Rejected(message("creation.radius_range", record.getMaxRadiusChunks()));
+            return new Rejected(message(MessageKey.CREATION_RADIUS_RANGE, record.getMaxRadiusChunks()));
         }
 
         BlockRegion region;
@@ -68,7 +69,7 @@ public final class SereniteaPotCreationService {
                 player.blockPosition(), radiusChunks, source.getMinY(), source.getMaxY()
             );
         } catch (ArithmeticException | IllegalArgumentException error) {
-            return new Rejected(message("creation.coordinates_out_of_range"));
+            return new Rejected(message(MessageKey.CREATION_COORDINATES_OUT_OF_RANGE));
         }
 
         SereniteaPotLifecycleService.Result maintenance = SereniteaPotLifecycleService.beginMaintenance(server, owner);
@@ -84,7 +85,7 @@ public final class SereniteaPotCreationService {
                     previous = SereniteaPotManager.load(owner);
                 } catch (RuntimeException error) {
                     abortMaintenance(owner);
-                    return new Rejected(message("creation.previous_load_failed", error.getMessage()));
+                    return new Rejected(message(MessageKey.CREATION_PREVIOUS_LOAD_FAILED, error.getMessage()));
                 }
             }
         }
@@ -94,7 +95,7 @@ public final class SereniteaPotCreationService {
             staging = SereniteaPotManager.createStaging(owner, generation, source.getSeed());
         } catch (RuntimeException error) {
             abortMaintenance(owner);
-            return new Rejected(message("creation.staging_failed", error.getMessage()));
+            return new Rejected(message(MessageKey.CREATION_STAGING_FAILED, error.getMessage()));
         }
 
         ArrayDeque<RegionCopyTask> tasks = new ArrayDeque<>();
@@ -152,10 +153,13 @@ public final class SereniteaPotCreationService {
             throw new IllegalStateException("Maximum change must run on the server thread");
         }
         if (maximumRadiusChunks < 0 || maximumRadiusChunks > SereniteaPotRecord.MAX_RADIUS_CHUNKS) {
-            return new Rejected(message("creation.radius_range", SereniteaPotRecord.MAX_RADIUS_CHUNKS));
+            return new Rejected(message(
+                MessageKey.CREATION_RADIUS_RANGE,
+                SereniteaPotRecord.MAX_RADIUS_CHUNKS
+            ));
         }
         if (jobs.containsKey(owner)) {
-            return new Rejected(message("creation.target_job_exists"));
+            return new Rejected(message(MessageKey.CREATION_TARGET_JOB_EXISTS));
         }
 
         SereniteaPotRecord record = SereniteaPotManager.getOrCreateRecord(owner);
@@ -178,7 +182,7 @@ public final class SereniteaPotCreationService {
                 previous = SereniteaPotManager.load(owner);
             } catch (RuntimeException error) {
                 abortMaintenance(owner);
-                return new Rejected(message("creation.previous_load_failed", errorMessage(error)));
+                return new Rejected(message(MessageKey.CREATION_PREVIOUS_LOAD_FAILED, errorMessage(error)));
             }
         }
 
@@ -192,7 +196,7 @@ public final class SereniteaPotCreationService {
             );
         } catch (RuntimeException error) {
             abortMaintenance(owner);
-            return new Rejected(message("creation.trim_staging_failed", errorMessage(error)));
+            return new Rejected(message(MessageKey.CREATION_TRIM_STAGING_FAILED, errorMessage(error)));
         }
 
         ArrayDeque<RegionCopyTask> tasks = new ArrayDeque<>();
@@ -223,7 +227,7 @@ public final class SereniteaPotCreationService {
         } catch (RuntimeException error) {
             SereniteaPotLifecycleService.deleteEvacuated(staging);
             abortMaintenance(owner);
-            return new Rejected(message("creation.trim_prepare_failed", errorMessage(error)));
+            return new Rejected(message(MessageKey.CREATION_TRIM_PREPARE_FAILED, errorMessage(error)));
         }
 
         jobs.put(owner, new CreationJob(
@@ -270,7 +274,7 @@ public final class SereniteaPotCreationService {
             if (job == null) continue;
             SereniteaPotRecord record = SereniteaPotManager.record(owner);
             if (!job.canContinue(record)) {
-                fail(server, job, message("creation.stopped_by_admin_change"));
+                fail(server, job, message(MessageKey.CREATION_STOPPED_BY_ADMIN_CHANGE));
                 jobs.remove(owner);
                 continue;
             }
@@ -283,14 +287,14 @@ public final class SereniteaPotCreationService {
             } catch (RuntimeException error) {
                 SereniteaPotScheduler.completeCreationSlice(reservation, System.nanoTime() - started);
                 SereniteaPotMod.LOGGER.error("Serenitea Pot creation failed for {}", job.owner, error);
-                fail(server, job, message("creation.internal_error", errorMessage(error)));
+                fail(server, job, message(MessageKey.CREATION_INTERNAL_ERROR, errorMessage(error)));
                 jobs.remove(owner);
                 continue;
             }
             SereniteaPotScheduler.completeCreationSlice(reservation, System.nanoTime() - started);
             SereniteaPotRecord updated = SereniteaPotManager.record(owner);
             if (!job.canContinue(updated)) {
-                fail(server, job, message("creation.disabled_during_job"));
+                fail(server, job, message(MessageKey.CREATION_DISABLED_DURING_JOB));
                 jobs.remove(owner);
                 continue;
             }
@@ -305,7 +309,7 @@ public final class SereniteaPotCreationService {
                     );
                 } catch (RuntimeException error) {
                     SereniteaPotMod.LOGGER.error("Serenitea Pot creation commit failed for {}", job.owner, error);
-                    fail(server, job, message("creation.internal_error", errorMessage(error)));
+                    fail(server, job, message(MessageKey.CREATION_INTERNAL_ERROR, errorMessage(error)));
                     jobs.remove(owner);
                     continue;
                 }
@@ -352,8 +356,8 @@ public final class SereniteaPotCreationService {
             : server.getPlayerList().getPlayer(job.requester);
         if (player != null) {
             Message completion = job.kind == JobKind.MAXIMUM_TRIM
-                ? message("creation.trim.complete", job.committedMaximumRadiusChunks)
-                : message("creation.complete", job.staging.generation());
+                ? message(MessageKey.CREATION_TRIM_COMPLETE, job.committedMaximumRadiusChunks)
+                : message(MessageKey.CREATION_COMPLETE, job.staging.generation());
             player.sendSystemMessage(component(player, completion));
         }
     }
@@ -373,9 +377,9 @@ public final class SereniteaPotCreationService {
             ? null
             : server.getPlayerList().getPlayer(job.requester);
         if (player != null) {
-            String key = job.kind == JobKind.MAXIMUM_TRIM
-                ? "creation.trim.failed"
-                : "creation.failed";
+            MessageKey key = job.kind == JobKind.MAXIMUM_TRIM
+                ? MessageKey.CREATION_TRIM_FAILED
+                : MessageKey.CREATION_FAILED;
             player.sendSystemMessage(component(player, message(key, reason)));
         }
     }

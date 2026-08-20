@@ -6,6 +6,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.permissions.Permissions;
 import org.edtp.sereniteapot.SereniteaPotMod;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotLevelKeys;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
@@ -230,7 +231,7 @@ public final class SereniteaPotScheduler {
                 || player.permissions().hasPermission(Permissions.COMMANDS_OWNER)) {
                 player.sendSystemMessage(component(
                     player,
-                    message("performance.auto_freeze", owner, formattedMillis)
+                    message(MessageKey.PERFORMANCE_AUTO_FREEZE, owner, formattedMillis)
                 ));
             }
         }

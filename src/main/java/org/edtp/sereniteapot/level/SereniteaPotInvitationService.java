@@ -6,6 +6,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 
@@ -44,18 +45,18 @@ public final class SereniteaPotInvitationService {
 
     public static Result request(ServerPlayer requester, UUID owner) {
         if (requester.getUUID().equals(owner)) {
-            return new Rejected(message("invitation.self"));
+            return new Rejected(message(MessageKey.INVITATION_SELF));
         }
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
-        if (record == null) return new Rejected(message("invitation.target_no_pot"));
+        if (record == null) return new Rejected(message(MessageKey.INVITATION_TARGET_NO_POT));
         if (!record.exists() || !record.isEnabled()) {
-            return new Rejected(message("invitation.unavailable"));
+            return new Rejected(message(MessageKey.INVITATION_UNAVAILABLE));
         }
         if (SereniteaPotLifecycleService.isUnavailable(owner)) {
-            return new Rejected(message("invitation.maintenance"));
+            return new Rejected(message(MessageKey.INVITATION_MAINTENANCE));
         }
         if (!SereniteaPotAccessPolicy.isRealOwnerInside(requester.level().getServer(), owner)) {
-            return new Rejected(message("invitation.owner_required"));
+            return new Rejected(message(MessageKey.INVITATION_OWNER_REQUIRED));
         }
 
         long now = System.currentTimeMillis();
@@ -64,7 +65,7 @@ public final class SereniteaPotInvitationService {
         );
         PendingRequest existing = requests.get(requester.getUUID());
         if (existing != null && existing.expiresAt() > now) {
-            return new Rejected(message("invitation.already_pending"));
+            return new Rejected(message(MessageKey.INVITATION_ALREADY_PENDING));
         }
         UUID requestId = UUID.randomUUID();
         requests.put(requester.getUUID(), new PendingRequest(now + REQUEST_TTL_MILLIS, requestId));
@@ -81,18 +82,18 @@ public final class SereniteaPotInvitationService {
 
     public static Result approve(ServerPlayer owner, UUID visitor, UUID requestId) {
         SereniteaPotRecord record = SereniteaPotManager.record(owner.getUUID());
-        if (record == null) return new Rejected(message("error.self.no_pot"));
+        if (record == null) return new Rejected(message(MessageKey.ERROR_SELF_NO_POT));
         LinkedHashMap<UUID, PendingRequest> requests = pending.get(owner.getUUID());
         PendingRequest request = requests == null ? null : requests.get(visitor);
         if (request == null || request.expiresAt() <= System.currentTimeMillis()) {
-            return new Rejected(message("invitation.request_missing"));
+            return new Rejected(message(MessageKey.INVITATION_REQUEST_MISSING));
         }
         if (requestId != null && !request.id().equals(requestId)) {
-            return new Rejected(message("invitation.button_expired"));
+            return new Rejected(message(MessageKey.INVITATION_BUTTON_EXPIRED));
         }
         ServerPlayer visitorPlayer = owner.level().getServer().getPlayerList().getPlayer(visitor);
         if (visitorPlayer == null) {
-            return new Rejected(message("invitation.visitor_offline"));
+            return new Rejected(message(MessageKey.INVITATION_VISITOR_OFFLINE));
         }
 
         // AccessPolicy 会在 teleport HEAD 消费许可；失败时撤销许可并保留原申请供重试。
@@ -106,7 +107,7 @@ public final class SereniteaPotInvitationService {
         }
         entryGrants.remove(key);
         return new Rejected(message(
-            "invitation.teleport_failed",
+            MessageKey.INVITATION_TELEPORT_FAILED,
             ((SereniteaPotTravelService.Rejected) travel).reason()
         ));
     }
@@ -119,10 +120,10 @@ public final class SereniteaPotInvitationService {
         LinkedHashMap<UUID, PendingRequest> requests = pending.get(owner.getUUID());
         PendingRequest request = requests == null ? null : requests.get(visitor);
         if (request == null || request.expiresAt() <= System.currentTimeMillis()) {
-            return new Rejected(message("invitation.request_missing"));
+            return new Rejected(message(MessageKey.INVITATION_REQUEST_MISSING));
         }
         if (requestId != null && !request.id().equals(requestId)) {
-            return new Rejected(message("invitation.button_expired"));
+            return new Rejected(message(MessageKey.INVITATION_BUTTON_EXPIRED));
         }
         requests.remove(visitor);
         if (requests.isEmpty()) pending.remove(owner.getUUID());
@@ -130,7 +131,7 @@ public final class SereniteaPotInvitationService {
         if (visitorPlayer != null) {
             visitorPlayer.sendSystemMessage(component(
                 visitorPlayer,
-                message("invitation.denied_notice", owner.getScoreboardName())
+                message(MessageKey.INVITATION_DENIED_NOTICE, owner.getScoreboardName())
             ));
         }
         return Accepted.INSTANCE;
@@ -171,13 +172,13 @@ public final class SereniteaPotInvitationService {
     private static Component requestMessage(ServerPlayer owner, String requesterName, UUID requestId) {
         String approve = "sereniteapot approve " + requesterName + " " + requestId;
         String deny = "sereniteapot deny " + requesterName + " " + requestId;
-        return component(owner, message("invitation.request_notice", requesterName))
+        return component(owner, message(MessageKey.INVITATION_REQUEST_NOTICE, requesterName))
             .append("\n")
-            .append(component(owner, message("invitation.accept_button"))
+            .append(component(owner, message(MessageKey.INVITATION_ACCEPT_BUTTON))
                 .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
                 .withStyle(style -> style.withClickEvent(new ClickEvent.RunCommand(approve))))
             .append(" ")
-            .append(component(owner, message("invitation.deny_button"))
+            .append(component(owner, message(MessageKey.INVITATION_DENY_BUTTON))
                 .withStyle(ChatFormatting.RED, ChatFormatting.BOLD)
                 .withStyle(style -> style.withClickEvent(new ClickEvent.RunCommand(deny))));
     }

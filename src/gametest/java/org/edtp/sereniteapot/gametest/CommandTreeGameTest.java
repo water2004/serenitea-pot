@@ -4,6 +4,7 @@ import com.mojang.brigadier.tree.CommandNode;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.gametest.framework.GameTestHelper;
+import org.edtp.sereniteapot.i18n.MessageKey;
 
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -32,7 +33,9 @@ public final class CommandTreeGameTest {
 
     @GameTest
     public void translatesOnTheServerAndFallsBackToEnglish(GameTestHelper helper) {
-        var message = message("invitation.teleport_failed", message("travel.denied"));
+        var message = message(
+                MessageKey.INVITATION_TELEPORT_FAILED,
+                message(MessageKey.TRAVEL_DENIED));
         helper.assertValueEqual(
                 "批准后传送失败，申请仍有效：传送被访问策略拒绝",
                 translate("zh_cn", message),

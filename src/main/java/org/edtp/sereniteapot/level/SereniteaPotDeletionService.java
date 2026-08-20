@@ -4,6 +4,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.apache.commons.io.file.PathUtils;
 import org.edtp.sereniteapot.SereniteaPotMod;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
@@ -26,7 +27,7 @@ public final class SereniteaPotDeletionService {
     public static Result deleteAndReset(MinecraftServer server, UUID owner) {
         if (!server.isSameThread()) throw new IllegalStateException("Deletion must run on the server thread");
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
-        if (record == null) return new Rejected(message("deletion.no_config"));
+        if (record == null) return new Rejected(message(MessageKey.DELETION_NO_CONFIG));
 
         SereniteaPotCreationService.cancel(owner);
         SereniteaPotLifecycleService.Result close = SereniteaPotLifecycleService.closeNow(server, owner);
@@ -53,7 +54,7 @@ public final class SereniteaPotDeletionService {
             record.setActiveGeneration(oldGeneration);
             record.getSlots().putAll(oldSlots);
             record.setFrozen(oldFrozen);
-            return new Rejected(message("deletion.commit_failed", error.getMessage()));
+            return new Rejected(message(MessageKey.DELETION_COMMIT_FAILED, error.getMessage()));
         }
         SereniteaPotScheduler.reset(owner);
         SereniteaPotLifecycleService.forget(owner);
@@ -62,13 +63,13 @@ public final class SereniteaPotDeletionService {
             .resolve("dimensions").resolve(SereniteaPotMod.MOD_ID).resolve("pot").toAbsolutePath().normalize();
         Path resolved = expectedRoot.resolve(owner.toString()).normalize();
         if (!expectedRoot.equals(resolved.getParent()) || !owner.toString().equals(resolved.getFileName().toString())) {
-            return new Rejected(message("deletion.unsafe_path", resolved));
+            return new Rejected(message(MessageKey.DELETION_UNSAFE_PATH, resolved));
         }
         if (Files.isDirectory(resolved)) {
             try {
                 PathUtils.deleteDirectory(resolved);
             } catch (Exception error) {
-                return new Rejected(message("deletion.directory_failed", error.getMessage()));
+                return new Rejected(message(MessageKey.DELETION_DIRECTORY_FAILED, error.getMessage()));
             }
         }
         return Success.INSTANCE;

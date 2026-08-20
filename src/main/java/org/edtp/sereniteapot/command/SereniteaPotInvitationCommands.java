@@ -7,6 +7,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.server.level.ServerPlayer;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotInvitationService;
 
 import java.util.Set;
@@ -54,7 +55,7 @@ final class SereniteaPotInvitationCommands {
         SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.request(
                 context.getSource().getPlayerOrException(), profile(context, OWNER_ARGUMENT));
         return result == SereniteaPotInvitationService.Accepted.INSTANCE
-                ? success(context, "command.request.sent")
+                ? success(context, MessageKey.COMMAND_REQUEST_SENT)
                 : failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
     }
 
@@ -62,8 +63,8 @@ final class SereniteaPotInvitationCommands {
         ServerPlayer player = context.getSource().getPlayerOrException();
         Set<UUID> requests = SereniteaPotInvitationService.pending(player.getUUID());
         return requests.isEmpty()
-                ? success(context, "command.requests.empty")
-                : success(context, "command.requests.list",
+                ? success(context, MessageKey.COMMAND_REQUESTS_EMPTY)
+                : success(context, MessageKey.COMMAND_REQUESTS_LIST,
                         requests.stream().map(UUID::toString).collect(Collectors.joining(", ")));
     }
 
@@ -80,7 +81,7 @@ final class SereniteaPotInvitationCommands {
         SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.approve(
                 context.getSource().getPlayerOrException(), profile(context, PLAYER_ARGUMENT), requestId);
         if (result instanceof SereniteaPotInvitationService.Approved) {
-            return success(context, "command.approve.success");
+            return success(context, MessageKey.COMMAND_APPROVE_SUCCESS);
         }
         return failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
     }
@@ -98,7 +99,7 @@ final class SereniteaPotInvitationCommands {
         SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.deny(
                 context.getSource().getPlayerOrException(), profile(context, PLAYER_ARGUMENT), requestId);
         return result == SereniteaPotInvitationService.Accepted.INSTANCE
-                ? success(context, "command.deny.success")
+                ? success(context, MessageKey.COMMAND_DENY_SUCCESS)
                 : failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
     }
 }

@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.edtp.sereniteapot.SereniteaPotMod;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 
 import java.util.ArrayList;
@@ -70,14 +71,14 @@ public final class SereniteaPotLifecycleService {
     public static Result beginMaintenance(MinecraftServer server, UUID owner) {
         requireServerThread(server);
         if (!maintenance.add(owner)) {
-            return new Rejected(message("lifecycle.maintenance_exists"));
+            return new Rejected(message(MessageKey.LIFECYCLE_MAINTENANCE_EXISTS));
         }
         pendingCloses.remove(owner);
         List<ServerPlayer> remaining = evacuate(server, owner);
         if (!remaining.isEmpty()) {
             maintenance.remove(owner);
             pendingCloses.add(owner);
-            return new Rejected(message("lifecycle.evacuation_failed", remaining.size()));
+            return new Rejected(message(MessageKey.LIFECYCLE_EVACUATION_FAILED, remaining.size()));
         }
         return Success.INSTANCE;
     }
@@ -91,18 +92,21 @@ public final class SereniteaPotLifecycleService {
         requireServerThread(server);
         pendingCloses.add(owner);
         if (!closing.add(owner)) {
-            return new Rejected(message("lifecycle.closing"));
+            return new Rejected(message(MessageKey.LIFECYCLE_CLOSING));
         }
         try {
             List<ServerPlayer> remaining = evacuate(server, owner);
             if (!remaining.isEmpty()) {
                 for (ServerPlayer player : remaining) {
-                    player.connection.disconnect(component(player, message("lifecycle.disconnect_for_unload")));
+                    player.connection.disconnect(component(
+                        player,
+                        message(MessageKey.LIFECYCLE_DISCONNECT_FOR_UNLOAD)
+                    ));
                 }
-                return new Rejected(message("lifecycle.disconnect_retry", remaining.size()));
+                return new Rejected(message(MessageKey.LIFECYCLE_DISCONNECT_RETRY, remaining.size()));
             }
             if (!SereniteaPotManager.unloadEvacuated(owner)) {
-                return new Rejected(message("lifecycle.unload_retry"));
+                return new Rejected(message(MessageKey.LIFECYCLE_UNLOAD_RETRY));
             }
             pendingCloses.remove(owner);
             return Success.INSTANCE;

@@ -5,6 +5,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.GameProfileArgument;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotDeletionService;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 
@@ -63,17 +64,17 @@ final class SereniteaPotCommandSupport {
         SereniteaPotDeletionService.Result result = SereniteaPotDeletionService.deleteAndReset(
                 context.getSource().getServer(), owner);
         return result == SereniteaPotDeletionService.Success.INSTANCE
-                ? success(context, "command.delete.success")
+                ? success(context, MessageKey.COMMAND_DELETE_SUCCESS)
                 : failure(context, ((SereniteaPotDeletionService.Rejected) result).reason());
     }
 
-    static int success(CommandContext<CommandSourceStack> context, String key, Object... arguments) {
+    static int success(CommandContext<CommandSourceStack> context, MessageKey key, Object... arguments) {
         Message message = message(key, arguments);
         context.getSource().sendSuccess(() -> component(context.getSource(), message), false);
         return 1;
     }
 
-    static int failure(CommandContext<CommandSourceStack> context, String key, Object... arguments) {
+    static int failure(CommandContext<CommandSourceStack> context, MessageKey key, Object... arguments) {
         return failure(context, message(key, arguments));
     }
 
