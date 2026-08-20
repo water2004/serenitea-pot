@@ -22,11 +22,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
-import static org.edtp.sereniteapot.command.SereniteaPotCommands.delete;
-import static org.edtp.sereniteapot.command.SereniteaPotCommands.failure;
-import static org.edtp.sereniteapot.command.SereniteaPotCommands.profile;
-import static org.edtp.sereniteapot.command.SereniteaPotCommands.status;
-import static org.edtp.sereniteapot.command.SereniteaPotCommands.success;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.deletePot;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.profile;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
+import static org.edtp.sereniteapot.command.SereniteaPotOwnerCommands.status;
 
 final class SereniteaPotAdminCommands {
     private static final String PLAYER_ARGUMENT = "player";
@@ -38,7 +38,7 @@ final class SereniteaPotAdminCommands {
     private SereniteaPotAdminCommands() {
     }
 
-    static LiteralArgumentBuilder<CommandSourceStack> build() {
+    static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
         LiteralArgumentBuilder<CommandSourceStack> admin = Commands.literal("admin")
                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_OWNER));
         admin.then(toggleCommand("enable", true));
@@ -67,8 +67,8 @@ final class SereniteaPotAdminCommands {
         admin.then(Commands.literal("delete")
                 .then(Commands.argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
                         .then(Commands.literal("confirm")
-                                .executes(SereniteaPotAdminCommands::deletePot))));
-        return admin;
+                                .executes(SereniteaPotAdminCommands::deleteTarget))));
+        root.then(admin);
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> toggleCommand(String literal, boolean enabled) {
@@ -176,8 +176,8 @@ final class SereniteaPotAdminCommands {
                 + ", run=" + snapshot.executedTicks() + ", skip=" + snapshot.skippedTicks();
     }
 
-    private static int deletePot(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        return delete(context, profile(context, PLAYER_ARGUMENT));
+    private static int deleteTarget(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        return deletePot(context, profile(context, PLAYER_ARGUMENT));
     }
 
     private static String format(String pattern, double value) {
