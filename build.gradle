@@ -35,10 +35,12 @@ java {
     withSourcesJar()
 }
 
+def expandedModVersion = version.toString()
+
 tasks.named('processResources', ProcessResources) {
-    inputs.property('version', project.version)
+    inputs.property('version', expandedModVersion)
     filesMatching('fabric.mod.json') {
-        expand(version: project.version)
+        expand(version: expandedModVersion)
     }
 }
 

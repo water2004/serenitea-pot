@@ -20,7 +20,7 @@ public final class SereniteaPotDeletionService {
     private SereniteaPotDeletionService() {
     }
 
-    public static Result archiveAndReset(MinecraftServer server, UUID owner) {
+    public static Result deleteAndReset(MinecraftServer server, UUID owner) {
         if (!server.isSameThread()) throw new IllegalStateException("Deletion must run on the server thread");
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
         if (record == null) return new Rejected("该玩家没有尘歌壶配置");
@@ -65,7 +65,7 @@ public final class SereniteaPotDeletionService {
             try {
                 PathUtils.deleteDirectory(resolved);
             } catch (Exception error) {
-                return new Rejected("尘歌壶已注销，但磁盘清理失败；下次启动会重试：" + error.getMessage());
+                return new Rejected("尘歌壶已注销，但磁盘目录删除失败：" + error.getMessage());
             }
         }
         return Success.INSTANCE;

@@ -234,7 +234,7 @@ public final class SereniteaPotCommands {
     }
 
     private static int delete(CommandContext<CommandSourceStack> context, UUID owner) {
-        SereniteaPotDeletionService.Result result = SereniteaPotDeletionService.archiveAndReset(context.getSource().getServer(), owner);
+        SereniteaPotDeletionService.Result result = SereniteaPotDeletionService.deleteAndReset(context.getSource().getServer(), owner);
         return result == SereniteaPotDeletionService.Success.INSTANCE
             ? success(context, "尘歌壶已卸载并永久删除")
             : failure(context, ((SereniteaPotDeletionService.Rejected) result).reason());
