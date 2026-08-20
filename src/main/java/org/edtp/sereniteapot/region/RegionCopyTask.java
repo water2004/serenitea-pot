@@ -112,10 +112,6 @@ public final class RegionCopyTask {
         this.blockOffset = new BlockPos(blockOffsetX, 0, blockOffsetZ);
     }
 
-    public BlockRegion getRegion() {
-        return sourceRegion;
-    }
-
     public boolean getComplete() {
         return phase == Phase.DONE;
     }

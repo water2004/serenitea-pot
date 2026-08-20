@@ -20,11 +20,6 @@ public class SereniteaPotRecord {
     private boolean frozen;
     private final Map<SereniteaPotDimension, SereniteaPotSlotRecord> slots;
 
-    public SereniteaPotRecord(UUID owner) {
-        this(owner, UUID.randomUUID(), 0, DEFAULT_MAX_RADIUS_CHUNKS, DEFAULT_BUDGET_MILLIS_PER_SECOND,
-                true, false, new EnumMap<>(SereniteaPotDimension.class));
-    }
-
     public SereniteaPotRecord(UUID owner, UUID stateId, long activeGeneration, int maxRadiusChunks,
                           double budgetMillisPerSecond, boolean enabled, boolean frozen) {
         this(owner, stateId, activeGeneration, maxRadiusChunks, budgetMillisPerSecond, enabled, frozen,

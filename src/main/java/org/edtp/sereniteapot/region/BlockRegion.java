@@ -2,7 +2,6 @@ package org.edtp.sereniteapot.region;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 import java.util.Objects;
 
@@ -17,7 +16,6 @@ public final class BlockRegion {
     private final int sizeX;
     private final int sizeY;
     private final int sizeZ;
-    private final long volume;
 
     public BlockRegion(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         if (minX > maxX || minY > maxY || minZ > maxZ) {
@@ -32,7 +30,6 @@ public final class BlockRegion {
         this.sizeX = Math.addExact(Math.subtractExact(maxX, minX), 1);
         this.sizeY = Math.addExact(Math.subtractExact(maxY, minY), 1);
         this.sizeZ = Math.addExact(Math.subtractExact(maxZ, minZ), 1);
-        this.volume = Math.multiplyExact(Math.multiplyExact((long) sizeX, (long) sizeY), (long) sizeZ);
     }
 
     public int getMinX() { return minX; }
@@ -44,23 +41,6 @@ public final class BlockRegion {
     public int getSizeX() { return sizeX; }
     public int getSizeY() { return sizeY; }
     public int getSizeZ() { return sizeZ; }
-    public long getVolume() { return volume; }
-
-    public BoundingBox getBoundingBox() {
-        return new BoundingBox(minX, minY, minZ, maxX, maxY, maxZ);
-    }
-
-    public BlockPos.MutableBlockPos position(long index, BlockPos.MutableBlockPos mutable) {
-        if (index < 0 || index >= volume) {
-            throw new IllegalArgumentException("Failed requirement.");
-        }
-        int x = (int) (index % sizeX);
-        long yz = index / sizeX;
-        int z = (int) (yz % sizeZ);
-        int y = (int) (yz / sizeZ);
-        return mutable.set(minX + x, minY + y, minZ + z);
-    }
-
     /**
      * Creates a region covering whole chunk columns around the block's chunk.
      * The vertical interval is half-open: {@code [minY, maxYExclusive)}.

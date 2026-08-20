@@ -121,7 +121,7 @@ public final class SereniteaPotCreationService {
             player.getUUID(),
             record.getMaxRadiusChunks(),
             JobKind.EXTRACTION,
-            null
+            true
         ));
         long diameterChunks = Math.addExact(Math.multiplyExact((long) radiusChunks, 2L), 1L);
         return new Accepted(Math.multiplyExact(diameterChunks, diameterChunks), generation);
@@ -223,7 +223,7 @@ public final class SereniteaPotCreationService {
             requester,
             maximumRadiusChunks,
             JobKind.MAXIMUM_TRIM,
-            AdministrativeState.capture(record)
+            record.isEnabled()
         ));
         return new MaximumTrimStarted(generation, replacementSlots.size(), retainedChunks);
     }
@@ -395,7 +395,7 @@ public final class SereniteaPotCreationService {
         private final UUID requester;
         private final int committedMaximumRadiusChunks;
         private final JobKind kind;
-        private final AdministrativeState administrativeState;
+        private final boolean expectedEnabled;
         private final int totalTasks;
         private int completedTasks;
 
@@ -407,7 +407,7 @@ public final class SereniteaPotCreationService {
             UUID requester,
             int committedMaximumRadiusChunks,
             JobKind kind,
-            AdministrativeState administrativeState
+            boolean expectedEnabled
         ) {
             this.owner = owner;
             this.staging = staging;
@@ -416,14 +416,14 @@ public final class SereniteaPotCreationService {
             this.requester = requester;
             this.committedMaximumRadiusChunks = committedMaximumRadiusChunks;
             this.kind = kind;
-            this.administrativeState = administrativeState;
+            this.expectedEnabled = expectedEnabled;
             this.totalTasks = tasks.size();
         }
 
         private boolean canContinue(SereniteaPotRecord record) {
             if (record == null) return false;
             if (kind == JobKind.MAXIMUM_TRIM) {
-                return administrativeState.equals(AdministrativeState.capture(record));
+                return record.isEnabled() == expectedEnabled;
             }
             return record.isEnabled();
         }
@@ -452,12 +452,6 @@ public final class SereniteaPotCreationService {
     private enum JobKind {
         EXTRACTION,
         MAXIMUM_TRIM
-    }
-
-    private record AdministrativeState(boolean enabled) {
-        private static AdministrativeState capture(SereniteaPotRecord record) {
-            return new AdministrativeState(record.isEnabled());
-        }
     }
 
     public sealed interface RequestResult permits Accepted, Rejected {

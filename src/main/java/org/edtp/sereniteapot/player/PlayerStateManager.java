@@ -49,7 +49,7 @@ public final class PlayerStateManager {
             return;
         }
         if (store != null) {
-            store.flushAndClear();
+            store.clear();
         }
         store = null;
         PlayerStateManager.server = null;

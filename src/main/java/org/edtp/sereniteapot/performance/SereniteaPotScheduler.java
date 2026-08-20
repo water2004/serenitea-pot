@@ -54,7 +54,6 @@ public final class SereniteaPotScheduler {
             ignored -> new OwnerBudget(record.getBudgetMillisPerSecond()));
         budget.calls++;
         SereniteaPotDimension dimension = identity.dimension();
-        budget.dimension(dimension).calls++;
         if (!record.isEnabled() || record.isFrozen()
             || SereniteaPotCreationService.isBusy(owner)) {
             budget.recordSkip(dimension);
@@ -348,7 +347,6 @@ public final class SereniteaPotScheduler {
     }
 
     private static final class DimensionBudget {
-        private long calls;
         private long runs;
         private long skips;
         private long consumed;
@@ -369,7 +367,6 @@ public final class SereniteaPotScheduler {
             lastSkips = skips;
             lastConsumed = consumed;
             lastMaximum = maximum;
-            calls = 0L;
             runs = 0L;
             skips = 0L;
             consumed = 0L;

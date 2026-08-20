@@ -34,8 +34,7 @@ public final class PlayerStateStore {
         savePlayer(player, states);
     }
 
-    public void flushAndClear() {
-        cache.forEach(this::savePlayer);
+    public void clear() {
         cache.clear();
     }
 

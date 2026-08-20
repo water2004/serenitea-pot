@@ -8,15 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class BlockRegionTest {
     @Test
-    void linearCursorVisitsFirstAndLastBlock() {
-        var region = new BlockRegion(-1, -1, -1, 1, 1, 1);
-        var cursor = new BlockPos.MutableBlockPos();
-
-        assertEquals(new BlockPos(-1, -1, -1), region.position(0, cursor).immutable());
-        assertEquals(new BlockPos(1, 1, 1), region.position(region.getVolume() - 1, cursor).immutable());
-    }
-
-    @Test
     void zeroChunkRadiusCoversOneAlignedChunkAndFullHeight() {
         var region = BlockRegion.chunkColumns(new BlockPos(15, 0, -1), 0, -64, 320);
 
