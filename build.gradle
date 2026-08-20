@@ -3,7 +3,12 @@ plugins {
     id 'maven-publish'
 }
 
-version = project.property('mod_version')
+def baseModVersion = project.property('mod_version')
+def minecraftVersion = project.property('minecraft_version')
+
+// Keep the reusable mod and Minecraft versions in gradle.properties. This build
+// script owns the release channel and sequence that join those two stable parts.
+version = "${baseModVersion}-snapshot.1-${minecraftVersion}"
 group = project.property('maven_group')
 
 base {
@@ -16,7 +21,7 @@ repositories {
 }
 
 dependencies {
-    minecraft(libs.minecraft)
+    minecraft("com.mojang:minecraft:${minecraftVersion}")
     implementation(libs.fabric.loader)
     implementation(libs.fabric.api)
     implementation(libs.fabric.kotlin)
@@ -49,8 +54,9 @@ def expandedModVersion = version.toString()
 
 tasks.named('processResources', ProcessResources) {
     inputs.property('version', expandedModVersion)
+    inputs.property('minecraft_version', minecraftVersion)
     filesMatching('fabric.mod.json') {
-        expand(version: expandedModVersion)
+        expand(version: expandedModVersion, minecraft_version: minecraftVersion)
     }
 }
 
