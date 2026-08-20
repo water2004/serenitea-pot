@@ -1,0 +1,208 @@
+package org.edtp.sereniteapot.level;
+
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import org.edtp.sereniteapot.model.SereniteaPotDimension;
+import org.edtp.sereniteapot.model.SereniteaPotRecord;
+import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
+import org.edtp.sereniteapot.player.HumanPlayerDetector;
+import org.edtp.sereniteapot.player.PlayerStateManager;
+import org.edtp.sereniteapot.region.SereniteaPotCreationService;
+
+import java.util.Set;
+import java.util.UUID;
+
+public final class SereniteaPotTravelService {
+    private SereniteaPotTravelService() {
+    }
+
+    public static Result enter(ServerPlayer player, UUID owner) {
+        SereniteaPotRecord record = SereniteaPotManager.record(owner);
+        Double creationProgress = SereniteaPotCreationService.progress(owner);
+        if (creationProgress != null && (record == null || !record.exists())) {
+            return new Rejected("目标尘歌壶正在创建（%.1f%%），完成后才能进入"
+                    .formatted(creationProgress * 100.0));
+        }
+        if (record == null || !record.exists()) {
+            return new Rejected("目标玩家还没有创建尘歌壶");
+        }
+        if (!record.isEnabled()) return new Rejected("目标尘歌壶已被禁用");
+        if (SereniteaPotLifecycleService.isUnavailable(owner)) return new Rejected("目标尘歌壶正在关闭或维护");
+
+        SereniteaPotBundle bundle;
+        if (player.getUUID().equals(owner)) {
+            if (!HumanPlayerDetector.isHuman(player)) {
+                return new Rejected("假玩家不能加载尘歌壶");
+            }
+            bundle = SereniteaPotManager.loaded(owner);
+            if (bundle == null) {
+                try {
+                    bundle = SereniteaPotManager.load(owner);
+                } catch (RuntimeException error) {
+                    return new Rejected("尘歌壶加载失败：" + error.getMessage());
+                }
+            }
+        } else {
+            if (!SereniteaPotAccessPolicy.isRealOwnerInside(player.level().getServer(), owner)) {
+                return new Rejected("只有主人本人在尘歌壶内时才能进入");
+            }
+            bundle = SereniteaPotManager.loaded(owner);
+            if (bundle == null) {
+                return new Rejected("目标尘歌壶尚未加载");
+            }
+        }
+
+        SereniteaPotDimension destinationDimension = SereniteaPotDimension.fromVanillaLevel(player.level().dimension());
+        if (destinationDimension == null || !record.getSlots().containsKey(destinationDimension)) {
+            destinationDimension = null;
+            for (SereniteaPotDimension candidate : SereniteaPotDimension.values()) {
+                if (record.getSlots().containsKey(candidate)) {
+                    destinationDimension = candidate;
+                    break;
+                }
+            }
+        }
+        if (destinationDimension == null) {
+            return new Rejected("目标尘歌壶还没有可进入的维度");
+        }
+        Destination destination = savedSereniteaPotDestination(player, owner, record, bundle);
+        if (destination == null) {
+            SereniteaPotSlotRecord slot = record.getSlots().get(destinationDimension);
+            destination = new Destination(
+                bundle.get(destinationDimension),
+                new Vec3(slot.localEntryX() + 0.5, slot.localEntryY(), slot.localEntryZ() + 0.5),
+                player.getYRot(),
+                player.getXRot()
+            );
+        }
+        boolean success = player.teleportTo(
+            destination.level(),
+            destination.position().x,
+            destination.position().y,
+            destination.position().z,
+            Set.of(),
+            destination.yaw(),
+            destination.pitch(),
+            true
+        );
+        return success ? Success.INSTANCE : new Rejected("传送被访问策略拒绝");
+    }
+
+    public static Result leave(ServerPlayer player) {
+        SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(player.level().dimension());
+        return identity == null ? new Rejected("你当前不在尘歌壶内") : evict(player, identity.owner());
+    }
+
+    /** Used only by the lifecycle close transaction. */
+    static Result evict(ServerPlayer player, UUID owner) {
+        SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(player.level().dimension());
+        if (identity == null) {
+            return Success.INSTANCE;
+        }
+        if (!identity.owner().equals(owner)) {
+            return new Rejected("玩家位于另一个尘歌壶");
+        }
+
+        var server = player.level().getServer();
+        Destination savedPublic = savedPublicDestination(player);
+        if (savedPublic != null) {
+            boolean success = player.teleportTo(
+                savedPublic.level(),
+                savedPublic.position().x,
+                savedPublic.position().y,
+                savedPublic.position().z,
+                Set.of(),
+                savedPublic.yaw(),
+                savedPublic.pitch(),
+                true
+            );
+            return success ? Success.INSTANCE : new Rejected("无法离开尘歌壶");
+        }
+
+        SereniteaPotRecord record = SereniteaPotManager.record(owner);
+        SereniteaPotSlotRecord slot = record == null ? null : record.getSlots().get(identity.dimension());
+        ServerLevel candidate = null;
+        if (slot != null && slot.sourceDimension() != null) {
+            try {
+                candidate = server.getLevel(ResourceKey.create(
+                    Registries.DIMENSION,
+                    Identifier.parse(slot.sourceDimension())
+                ));
+            } catch (RuntimeException ignored) {
+                candidate = null;
+            }
+        }
+        ServerLevel target = publicTarget(server.overworld(), candidate);
+        Vec3 position;
+        if (slot != null && target.dimension().identifier().toString().equals(slot.sourceDimension())) {
+            position = new Vec3(slot.entryX() + 0.5, slot.entryY(), slot.entryZ() + 0.5);
+        } else {
+            position = Vec3.atBottomCenterOf(target.getRespawnData().pos());
+        }
+        boolean success = player.teleportTo(
+            target, position.x, position.y, position.z, Set.of(), player.getYRot(), player.getXRot(), true
+        );
+        return success ? Success.INSTANCE : new Rejected("无法离开尘歌壶");
+    }
+
+    private static Destination savedSereniteaPotDestination(
+        ServerPlayer player,
+        UUID owner,
+        SereniteaPotRecord record,
+        SereniteaPotBundle bundle
+    ) {
+        PlayerStateManager.SavedLocation saved = PlayerStateManager.savedLocation(player, owner);
+        if (saved == null) return null;
+        SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(saved.dimension());
+        if (identity == null || !identity.owner().equals(owner)
+            || !record.getSlots().containsKey(identity.dimension())) {
+            return null;
+        }
+        // A saved position belongs to the logical owner/dimension, not to its physical
+        // generation. Unchanged dimensions are copied forward; the active border rejects
+        // positions removed by a trim or a non-overlapping replacement.
+        ServerLevel level = bundle.get(identity.dimension());
+        return usable(level, saved)
+            ? new Destination(level, new Vec3(saved.x(), saved.y(), saved.z()), saved.yaw(), saved.pitch())
+            : null;
+    }
+
+    private static Destination savedPublicDestination(ServerPlayer player) {
+        PlayerStateManager.SavedLocation saved = PlayerStateManager.savedLocation(player, null);
+        if (saved == null || SereniteaPotLevelKeys.identify(saved.dimension()) != null) return null;
+        ServerLevel level = player.level().getServer().getLevel(saved.dimension());
+        return level != null && usable(level, saved)
+            ? new Destination(level, new Vec3(saved.x(), saved.y(), saved.z()), saved.yaw(), saved.pitch())
+            : null;
+    }
+
+    private static boolean usable(ServerLevel level, PlayerStateManager.SavedLocation saved) {
+        return saved.y() >= level.getMinY()
+            && saved.y() < level.getMaxY()
+            && Float.isFinite(saved.yaw())
+            && Float.isFinite(saved.pitch())
+            && level.getWorldBorder().isWithinBounds(saved.x(), saved.z());
+    }
+
+    private static ServerLevel publicTarget(ServerLevel fallback, ServerLevel candidate) {
+        return candidate != null && SereniteaPotLevelKeys.identify(candidate.dimension()) == null ? candidate : fallback;
+    }
+
+    private record Destination(ServerLevel level, Vec3 position, float yaw, float pitch) {
+    }
+
+    public sealed interface Result permits Success, Rejected {
+    }
+
+    public enum Success implements Result {
+        INSTANCE
+    }
+
+    public record Rejected(String reason) implements Result {
+    }
+}

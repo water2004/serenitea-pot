@@ -19,4 +19,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "universe-647"
+rootProject.name = "serenitea-pot"
