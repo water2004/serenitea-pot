@@ -6,6 +6,7 @@
   "environment": "server",
   "entrypoints": {
     "fabric-gametest": [
+      "org.edtp.sereniteapot.gametest.CommandTreeGameTest",
       "org.edtp.sereniteapot.gametest.RegionCopyGameTest"
     ]
   },
