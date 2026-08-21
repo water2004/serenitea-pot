@@ -8,7 +8,7 @@ def minecraftVersion = project.property('minecraft_version')
 
 // Keep the reusable mod and Minecraft versions in gradle.properties. This build
 // script owns the release channel and sequence that join those two stable parts.
-version = "${baseModVersion}-snapshot.1-${minecraftVersion}"
+version = "${baseModVersion}-snapshot.2-${minecraftVersion}"
 group = project.property('maven_group')
 
 base {
