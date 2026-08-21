@@ -24,6 +24,7 @@ import org.edtp.sereniteapot.SereniteaPotMod;
 import org.edtp.sereniteapot.level.SereniteaPotLevelKeys;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
+import org.edtp.sereniteapot.mixin.accessor.PlayerListAccessor;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 
 import java.util.UUID;
@@ -74,6 +75,13 @@ public final class PlayerStateManager {
         // 先关闭容器，避免跨 realm 时仍有公共世界容器菜单引用或未提交的物品操作。
         player.closeContainer();
         capture(player, sourceRealm);
+        if (sourceRealm == null) {
+            // Public playerdata becomes the durable return point before the player
+            // crosses into a realm whose autosaves are intentionally isolated.
+            ((PlayerListAccessor) player.level().getServer().getPlayerList())
+                .sereniteapot$getPlayerDataStorage()
+                .save(player);
+        }
         return new StateSwitchPlan(sourceRealm, destinationRealm);
     }
 
@@ -94,20 +102,25 @@ public final class PlayerStateManager {
         if (server == null) {
             return;
         }
-        requireServerThread(player.level().getServer());
+        requireAttached(player.level().getServer());
         UUID realmOwner = realm(player.level());
-        capture(player, realmOwner);
-        if (realmOwner != null && store != null) {
-            // 正常断线已由 PlayerListMixin 先传送至公共世界。若其他模组阻止了该次
-            // 传送，这里仍恢复公共状态，至少避免壶内创造物品写入公共 playerdata。
-            CompoundTag publicState = store.get(player.getUUID(), stateKey(null));
-            if (publicState != null) {
-                apply(player, publicState, false);
-            }
-        }
         if (player.getUUID().equals(realmOwner)) {
-            SereniteaPotLifecycleService.requestClose(player.getUUID());
+            requestCloseOnServerThread(player);
         }
+    }
+
+    /** Saves the private snapshot and tells Vanilla not to overwrite public playerdata. */
+    public static boolean saveIsolatedStateIfInsidePot(ServerPlayer player) {
+        if (server == null) {
+            return false;
+        }
+        requireAttached(player.level().getServer());
+        UUID realmOwner = realm(player.level());
+        if (realmOwner == null) {
+            return false;
+        }
+        capture(player, realmOwner);
+        return true;
     }
 
     public static void onJoin(ServerPlayer player) {

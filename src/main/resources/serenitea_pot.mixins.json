@@ -7,9 +7,11 @@
     "BaseCommandBlockMixin",
     "MinecraftServerTickMixin",
     "PlayerListMixin",
+    "PlayerDataStorageMixin",
     "ServerCommonPacketListenerAccessor",
     "ServerPlayerTeleportMixin",
-    "accessor.CommandNodeAccessor"
+    "accessor.CommandNodeAccessor",
+    "accessor.PlayerListAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
