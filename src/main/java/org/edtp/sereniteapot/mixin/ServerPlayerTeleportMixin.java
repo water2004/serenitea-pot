@@ -4,6 +4,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.portal.TeleportTransition;
 import org.edtp.sereniteapot.player.PlayerStateManager;
 import org.edtp.sereniteapot.level.SereniteaPotAccessPolicy;
+import org.edtp.sereniteapot.permission.SereniteaPotToolPermissions;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -48,6 +49,7 @@ public abstract class ServerPlayerTeleportMixin {
             // Worldthreader may replace ServerPlayer while completing arrival on
             // the destination thread. Always mutate the instance returned by teleport.
             PlayerStateManager.afterTeleport(transferredPlayer, plan);
+            SereniteaPotToolPermissions.afterRealmChange(transferredPlayer, plan.targetOwner());
             // Command requirements depend on whether the player is currently inside their own pot.
             // Refresh only when crossing the public/pot realm boundary, not between pot dimensions.
             sereniteapot$refreshCommands(transferredPlayer);

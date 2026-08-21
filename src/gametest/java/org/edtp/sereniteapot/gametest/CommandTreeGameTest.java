@@ -6,6 +6,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.permissions.PermissionProviderCheck;
 import org.edtp.sereniteapot.i18n.MessageKey;
+import org.edtp.sereniteapot.permission.SereniteaPotToolPermissions;
 
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -65,6 +66,20 @@ public final class CommandTreeGameTest {
             helper.assertTrue(
                     child(root, command).getRequirement() instanceof PermissionProviderCheck<?>,
                     "/" + command + " must retain its vanilla permission requirement");
+        }
+        helper.succeed();
+    }
+
+    @GameTest
+    @SuppressWarnings("removal")
+    public void refreshesOptionalToolSessionThroughTheLiveConnection(GameTestHelper helper) {
+        var player = helper.makeMockServerPlayerInLevel();
+        try {
+            // This is a no-op without Axiom. With Axiom in the test runtime it sends
+            // the public redo-handshake packet through the same live connection.
+            SereniteaPotToolPermissions.afterRealmChange(player, player.getUUID());
+        } finally {
+            helper.getLevel().getServer().getPlayerList().remove(player);
         }
         helper.succeed();
     }
