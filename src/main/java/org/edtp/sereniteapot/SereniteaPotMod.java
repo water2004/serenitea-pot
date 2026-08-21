@@ -8,6 +8,7 @@ import org.edtp.sereniteapot.level.SereniteaPotInvitationService;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.performance.SereniteaPotScheduler;
+import org.edtp.sereniteapot.permission.SereniteaPotToolPermissions;
 import org.edtp.sereniteapot.player.PlayerStateManager;
 import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 import org.slf4j.Logger;
@@ -23,6 +24,7 @@ public final class SereniteaPotMod implements ModInitializer {
         SereniteaPotCommands.register();
         SereniteaPotCreationService.register();
         SereniteaPotScheduler.register();
+        SereniteaPotToolPermissions.register();
         SereniteaPotLifecycleService.register();
         SereniteaPotInvitationService.register();
         ServerLifecycleEvents.SERVER_STARTED.register(PlayerStateManager::start);
