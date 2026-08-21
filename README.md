@@ -43,6 +43,7 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 | Fabric Language Kotlin | 1.13.12+kotlin.2.4.0 or newer |
 | WorldEdit (optional) | 7.2.2 through 7.4.5 |
 | Axiom (optional) | 5.0.0 through 5.5.0 |
+| Worldthreader (optional) | 3.1.0 |
 
 Arcade Dimensions `0.13.0-beta.6+26.2`, its supporting modules, and Fabric Permissions API v0 `0.7.0` are embedded in the built mod. Do not install duplicate copies or remove the embedded modules from the JAR.
 
@@ -56,6 +57,8 @@ Current snapshot: `1.0.0-snapshot.1-26.2`
 4. Place all three JAR files in the server's `mods` directory and start the server with Java 25.
 
 Serenitea Pot has no client component and needs no separate configuration file. Limits are managed through in-game level-4 operator commands. Arcade Dimensions is already nested inside the Serenitea Pot JAR and must not be installed separately.
+
+Optionally install Worldthreader 3.1.0 on the server to tick dimensions in parallel. Removing it restores Vanilla's serial dimension ticking without changing pot data or configuration.
 
 ## How extraction works
 
@@ -126,7 +129,7 @@ The default maximum radius is 4 chunks per player. The hard maximum is 256.
 
 ## Performance model
 
-All world work remains on Minecraft's server thread. Serenitea Pot does not move thread-unsafe world or mod code to background threads.
+Without Worldthreader, all world work remains on Minecraft's server thread. With the optional Worldthreader 3.1.0 installed, each loaded dimension uses Worldthreader's worker thread while Serenitea Pot keeps catalog, lifecycle, creation, and freeze decisions on the server thread at tick barriers.
 
 Each owner's three dimensions and active region-copy task share a millisecond-per-second token bucket. All pots also share a global bucket. When a budget is exhausted, complete `ServerLevel.tick` calls are skipped or creation work is deferred. Overspending creates token debt that throttles later work.
 
@@ -139,6 +142,8 @@ A single dimension tick, synchronous chunk load, or third-party callback cannot 
 ## Mod compatibility boundaries
 
 Serenitea Pot creates real server levels that share the server's registries and game logic. Arcade Dimensions provides the `VanillaLikeLevelsBuilder`, portal mixins, and `VanillaDimensionMapper` that keep players and other entities inside the same owner's Overworld/Nether/End bundle.
+
+Worldthreader 3.1.0 is supported through an optional integration layer. It preserves per-pot budgets and frozen-level barrier participation while Worldthreader runs dimensions in parallel; the integration is inactive when Worldthreader is absent.
 
 Mods that store machine state in block entities or standard persistent Fabric chunk attachments will usually copy with the region. There is no universal and safe region meaning for the following data, so compatibility is not promised for:
 
