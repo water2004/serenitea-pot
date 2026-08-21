@@ -31,10 +31,10 @@ public final class SereniteaPotToolPermissions {
     }
 
     public static void register() {
-        // WorldEdit 7.4.5 uses Fabric's typed v1 nodes (for example worldedit:region.set).
+        // Newer WorldEdit releases use Fabric's typed v1 nodes (for example worldedit:region.set).
         PermissionEvents.ON_REQUEST.register(SereniteaPotToolPermissions::worldEditPermission);
 
-        // WorldEdit 7.4.4 and Axiom 5.5 query the legacy string API. Axiom expands
+        // WorldEdit 7.2.2-7.4.4 and Axiom 5.x query the legacy string API. Axiom expands
         // axiom.all itself, while WorldEdit asks for each worldedit.* node individually.
         PermissionCheckEvent.EVENT.register(SereniteaPotToolPermissions::legacyPermission);
     }

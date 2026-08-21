@@ -40,6 +40,8 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 | Fabric Loader | 0.19.3 or newer |
 | Fabric API | 0.158.0+26.2 |
 | Fabric Language Kotlin | 1.13.12+kotlin.2.4.0 or newer |
+| WorldEdit (optional) | 7.2.2 through 7.4.5 |
+| Axiom (optional) | 5.0.0 through 5.5.0 |
 
 Arcade Dimensions `0.13.0-beta.6+26.2`, its supporting modules, and Fabric Permissions API v0 `0.7.0` are embedded in the built mod. Do not install duplicate copies or remove the embedded modules from the JAR.
 
@@ -87,7 +89,7 @@ Carpet fake players, portal loaders, chunk tickets, and machines cannot keep a p
 
 `disable` is an operator action that closes a player's pot and prevents future admission. `freeze` only stops world ticks: the owner, approved visitors, and operators may still enter for repairs, and the owner can run `unfreeze` afterward.
 
-While physically inside their own pot, its owner receives the equivalent of `worldedit.*` through the Fabric permission API version used by the installed WorldEdit build and `axiom.all` through the legacy v0 API used by Axiom 5.5. These contextual grants disappear immediately on leaving. In every public dimension, in another player's pot, and for visitors, Serenitea Pot returns no permission decision, so the server's existing OP, LuckPerms, WorldEdit configuration, and Axiom permissions behave exactly as they normally would. Level-4 operators retain their ordinary server permissions. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
+While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions. These grants disappear immediately on leaving. Permissions in public dimensions, other players' pots, and for visitors remain unchanged. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
 
 ## Player commands
 
@@ -143,10 +145,6 @@ Mods that store machine state in block entities or standard persistent Fabric ch
 - Cross-region networks or private third-party storage
 - Custom level or player attachments
 - Private payloads containing unmarked absolute public-world coordinates
-
-WorldEdit and Axiom integration uses their public permission interfaces rather than mixins into either mod. Serenitea Pot does not rewrite a third-party mod's editing or dimension-targeting implementation; such a mod remains responsible for applying its own operations to the world it reports as current.
-
-The optional compatibility ranges declared in mod metadata are WorldEdit `>=7.4.4-beta-01 <7.5.0` and Axiom `>=5.5.0 <5.6.0`. These constraints do not require either mod to be installed. They cover every WorldEdit build published for Minecraft 26.2: 7.4.4 Beta 1 and 7.4.4 use the legacy permission API, while 7.4.5 uses Fabric Permission API v1 with the legacy API as a fallback. Axiom added Fabric server permissions in 5.0.0, but 5.5.0 is the only Axiom line published for Minecraft 26.2, so the declared range intentionally stays within the verified 5.5 series.
 
 All project business code is Java 25. The final JAR still depends on Fabric Language Kotlin because embedded Arcade Dimensions is written in Kotlin; the Serenitea Pot source itself does not contain Kotlin business code.
 
