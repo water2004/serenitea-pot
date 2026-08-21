@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.edtp.sereniteapot.mixin.compat.worldthreader",
+  "compatibilityLevel": "JAVA_25",
+  "plugin": "org.edtp.sereniteapot.mixin.compat.worldthreader.WorldThreaderMixinPlugin",
+  "mixins": [
+    "WorldThreaderServerWorldTickingMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -35,6 +35,7 @@ public final class SereniteaPotScheduler {
     private static final long AUTO_FREEZE_LEVEL_TICK_NANOS = 200_000_000L;
 
     private static final LinkedHashMap<UUID, OwnerBudget> owners = new LinkedHashMap<>();
+    private static final LinkedHashMap<UUID, Long> pendingAutomaticFreezes = new LinkedHashMap<>();
     private static double globalTokensNanos;
     private static long serverTicks;
 
@@ -42,6 +43,7 @@ public final class SereniteaPotScheduler {
 
     public static void register() {
         ServerTickEvents.START_SERVER_TICK.register(SereniteaPotScheduler::startServerTick);
+        ServerTickEvents.END_SERVER_TICK.register(SereniteaPotScheduler::endServerTick);
         ServerLifecycleEvents.SERVER_STARTED.register(server -> resetAll());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> resetAll());
     }
@@ -51,6 +53,10 @@ public final class SereniteaPotScheduler {
         if (identity == null) {
             return true;
         }
+        return reserveLevelTick(identity);
+    }
+
+    private static synchronized boolean reserveLevelTick(SereniteaPotLevelKeys.Identity identity) {
         UUID owner = identity.owner();
         var record = SereniteaPotManager.record(owner);
         if (record == null) {
@@ -88,6 +94,13 @@ public final class SereniteaPotScheduler {
         if (identity == null) {
             return;
         }
+        completeLevelTick(identity, elapsedNanos);
+    }
+
+    private static synchronized void completeLevelTick(
+        SereniteaPotLevelKeys.Identity identity,
+        long elapsedNanos
+    ) {
         UUID owner = identity.owner();
         OwnerBudget budget = owners.get(owner);
         if (budget == null) {
@@ -101,21 +114,18 @@ public final class SereniteaPotScheduler {
         globalTokensNanos -= correction;
         budget.recordRun(dimension, elapsedNanos);
 
-        // 自动冻结只停止后续 tick，不禁用或删除尘歌壶，主人仍可进入并手动修复。
+        // Worker threads only report the violation. The server thread applies the
+        // catalog mutation after Worldthreader's end-of-tick barrier.
         if (elapsedNanos >= AUTO_FREEZE_LEVEL_TICK_NANOS) {
-            var record = SereniteaPotManager.record(owner);
-            if (record == null) {
-                return;
-            }
-            if (!record.isFrozen()) {
-                record.setFrozen(true);
-                SereniteaPotManager.saveCatalog();
-                notifyAutomaticFreeze(level.getServer(), owner, elapsedNanos);
-            }
+            pendingAutomaticFreezes.merge(owner, elapsedNanos, Math::max);
         }
     }
 
-    public static SereniteaPotPerformanceSnapshot snapshot(UUID owner) {
+    public static synchronized SereniteaPotPerformanceSnapshot snapshot(UUID owner) {
+        return snapshotLocked(owner);
+    }
+
+    private static SereniteaPotPerformanceSnapshot snapshotLocked(UUID owner) {
         var record = SereniteaPotManager.record(owner);
         if (record == null) {
             return null;
@@ -138,10 +148,10 @@ public final class SereniteaPotScheduler {
         return budget.snapshot(owner, record.getBudgetMillisPerSecond());
     }
 
-    public static List<SereniteaPotPerformanceSnapshot> allSnapshots() {
+    public static synchronized List<SereniteaPotPerformanceSnapshot> allSnapshots() {
         List<SereniteaPotPerformanceSnapshot> snapshots = new ArrayList<>();
         for (UUID owner : SereniteaPotManager.catalog().getPlayers().keySet()) {
-            SereniteaPotPerformanceSnapshot snapshot = snapshot(owner);
+            SereniteaPotPerformanceSnapshot snapshot = snapshotLocked(owner);
             if (snapshot != null) {
                 snapshots.add(snapshot);
             }
@@ -151,12 +161,14 @@ public final class SereniteaPotScheduler {
         return snapshots;
     }
 
-    public static void reset(UUID owner) {
+    public static synchronized void reset(UUID owner) {
         owners.remove(owner);
+        pendingAutomaticFreezes.remove(owner);
     }
 
-    private static void resetAll() {
+    private static synchronized void resetAll() {
         owners.clear();
+        pendingAutomaticFreezes.clear();
         globalTokensNanos = 0.0;
         serverTicks = 0L;
     }
@@ -167,7 +179,7 @@ public final class SereniteaPotScheduler {
      * by {@link #completeCreationSlice(CreationReservation, long)},
      * so a slow chunk load creates budget debt.
      */
-    public static CreationReservation reserveCreationSlice(UUID owner, long maximumNanos) {
+    public static synchronized CreationReservation reserveCreationSlice(UUID owner, long maximumNanos) {
         var record = SereniteaPotManager.record(owner);
         if (record == null) {
             return null;
@@ -184,7 +196,7 @@ public final class SereniteaPotScheduler {
         return new CreationReservation(owner, reserved);
     }
 
-    public static void completeCreationSlice(CreationReservation reservation, long elapsedNanos) {
+    public static synchronized void completeCreationSlice(CreationReservation reservation, long elapsedNanos) {
         if (reservation.completed) {
             SereniteaPotMod.LOGGER.warn(
                 "Ignored duplicate completion for Serenitea Pot {} creation reservation", reservation.owner);
@@ -201,7 +213,7 @@ public final class SereniteaPotScheduler {
         budget.recordCreation(elapsedNanos);
     }
 
-    private static void startServerTick(MinecraftServer server) {
+    private static synchronized void startServerTick(MinecraftServer server) {
         serverTicks++;
         double globalLimit = SereniteaPotManager.catalog().getGlobalBudgetMillisPerSecond() * 1_000_000.0;
         globalTokensNanos = Math.min(globalLimit, globalTokensNanos + globalLimit / TICKS_PER_SECOND);
@@ -216,6 +228,36 @@ public final class SereniteaPotScheduler {
                 budget.rollWindow();
             }
         }
+    }
+
+    private static void endServerTick(MinecraftServer server) {
+        Map<UUID, Long> freezes = drainAutomaticFreezes();
+        List<Map.Entry<UUID, Long>> applied = new ArrayList<>();
+        for (var entry : freezes.entrySet()) {
+            UUID owner = entry.getKey();
+            var record = SereniteaPotManager.record(owner);
+            if (record == null || record.isFrozen()) {
+                continue;
+            }
+            record.setFrozen(true);
+            applied.add(entry);
+        }
+        if (!applied.isEmpty()) {
+            SereniteaPotManager.saveCatalog();
+        }
+        for (var entry : applied) {
+            UUID owner = entry.getKey();
+            notifyAutomaticFreeze(server, owner, entry.getValue());
+        }
+    }
+
+    private static synchronized Map<UUID, Long> drainAutomaticFreezes() {
+        if (pendingAutomaticFreezes.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Long> freezes = Map.copyOf(pendingAutomaticFreezes);
+        pendingAutomaticFreezes.clear();
+        return freezes;
     }
 
     private static void notifyAutomaticFreeze(MinecraftServer server, UUID owner, long elapsedNanos) {

@@ -15,10 +15,14 @@
       }
     ]
   },
-  "mixins": ["serenitea_pot.mixins.json"],
+  "mixins": [
+    "serenitea_pot.mixins.json",
+    "serenitea_pot.worldthreader.mixins.json"
+  ],
   "suggests": {
     "worldedit": ">=7.2.2 <=7.4.5",
-    "axiom": ">=5.0.0 <=5.5.0"
+    "axiom": ">=5.0.0 <=5.5.0",
+    "worldthreader": "=3.1.0"
   },
   "depends": {
     "minecraft": "~${minecraft_version}",

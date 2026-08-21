@@ -17,6 +17,10 @@ base {
 
 repositories {
     maven { url = uri('https://maven.supersanta.me/snapshots') }
+    maven {
+        url = uri('https://api.modrinth.com/maven')
+        content { includeGroup('maven.modrinth') }
+    }
     mavenCentral()
 }
 
@@ -30,6 +34,9 @@ dependencies {
 
     implementation(libs.bundles.arcade)
     include(libs.bundles.arcade)
+
+    // Optional integration target. Worldthreader is never bundled or required at runtime.
+    compileOnly(libs.worldthreader)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
