@@ -44,16 +44,37 @@ public abstract class ServerPlayerTeleportMixin {
         PlayerStateManager.StateSwitchPlan plan = this.sereniteapot$pendingStateSwitch;
         this.sereniteapot$pendingStateSwitch = null;
         // 原版以 null 表示传送失败，失败时保留当前玩家状态不变。
-        ServerPlayer transferredPlayer = cir.getReturnValue();
-        if (plan != null && transferredPlayer != null) {
-            // Worldthreader may replace ServerPlayer while completing arrival on
-            // the destination thread. Always mutate the instance returned by teleport.
+        ServerPlayer returnedPlayer = cir.getReturnValue();
+        if (plan != null && returnedPlayer != null) {
+            ServerPlayer transferredPlayer = sereniteapot$resolveTransferredPlayer(
+                (ServerPlayer) (Object) this,
+                returnedPlayer,
+                transition
+            );
             PlayerStateManager.afterTeleport(transferredPlayer, plan);
             SereniteaPotToolPermissions.afterRealmChange(transferredPlayer, plan.targetOwner());
             // Command requirements depend on whether the player is currently inside their own pot.
             // Refresh only when crossing the public/pot realm boundary, not between pot dimensions.
             sereniteapot$refreshCommands(transferredPlayer);
         }
+    }
+
+    @Unique
+    private static ServerPlayer sereniteapot$resolveTransferredPlayer(
+        ServerPlayer sourcePlayer,
+        ServerPlayer returnedPlayer,
+        TeleportTransition transition
+    ) {
+        // Worldthreader completes a cross-thread arrival by replacing ServerPlayer.
+        // Depending on Mixin return-hook ordering, teleport's current return value may
+        // still be the discarded instance. PlayerList already contains the authoritative
+        // replacement at this point, so prefer it only when it reached this destination.
+        ServerPlayer current = sourcePlayer.level().getServer()
+            .getPlayerList()
+            .getPlayer(sourcePlayer.getUUID());
+        return current != null && current.level() == transition.newLevel()
+            ? current
+            : returnedPlayer;
     }
 
     @Unique

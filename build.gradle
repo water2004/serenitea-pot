@@ -37,6 +37,9 @@ dependencies {
 
     // Optional integration target. Worldthreader is never bundled or required at runtime.
     compileOnly(libs.worldthreader)
+    if (project.hasProperty('testWorldthreader')) {
+        runtimeOnly(libs.worldthreader)
+    }
     // Optional public protocol used to restart Axiom's permission handshake after re-entering a pot.
     compileOnly(libs.axiom)
 
