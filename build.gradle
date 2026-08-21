@@ -6,9 +6,11 @@ plugins {
 def baseModVersion = project.property('mod_version')
 def minecraftVersion = project.property('minecraft_version')
 
-// Keep the reusable mod and Minecraft versions in gradle.properties. This build
-// script owns the release channel and sequence that join those two stable parts.
-version = "${baseModVersion}-snapshot.2-${minecraftVersion}"
+// Local builds use the current snapshot. Tagged CI builds pass release_version
+// after validating the tag, so the JAR version is derived from that exact tag.
+def developmentModVersion = "${baseModVersion}-snapshot.2"
+def selectedModVersion = providers.gradleProperty('release_version').getOrElse(developmentModVersion)
+version = "${selectedModVersion}-${minecraftVersion}"
 group = project.property('maven_group')
 
 base {

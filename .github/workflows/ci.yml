@@ -1,0 +1,139 @@
+name: CI and Release
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "[0-9]*"
+      - "v[0-9]*"
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.version.outputs.release_version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+
+      - name: Resolve build version
+        id: version
+        shell: bash
+        run: |
+          echo "gradle_args=" >> "$GITHUB_OUTPUT"
+          echo "release_version=" >> "$GITHUB_OUTPUT"
+          echo "prerelease=false" >> "$GITHUB_OUTPUT"
+
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            exit 0
+          fi
+
+          tag="${GITHUB_REF_NAME#v}"
+          mod_version="$(sed -n 's/^mod_version=//p' gradle.properties)"
+          minecraft_version="$(sed -n 's/^minecraft_version=//p' gradle.properties)"
+          suffix="-${minecraft_version}"
+
+          if [[ "$tag" != *"$suffix" ]]; then
+            echo "Tag '$GITHUB_REF_NAME' must end with Minecraft version '$suffix'." >&2
+            exit 1
+          fi
+
+          release_version="${tag%"$suffix"}"
+          semver_pattern='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          if [[ ! "$release_version" =~ $semver_pattern ]]; then
+            echo "Tag '$GITHUB_REF_NAME' does not contain a valid release version." >&2
+            exit 1
+          fi
+
+          if [[ "${release_version%%-*}" != "$mod_version" ]]; then
+            echo "Tag version '$release_version' does not match mod_version '$mod_version'." >&2
+            exit 1
+          fi
+
+          prerelease=false
+          if [[ "$release_version" == *-* ]]; then
+            prerelease=true
+          fi
+
+          echo "gradle_args=-Prelease_version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "asset_path=build/libs/serenitea-pot-${release_version}-${minecraft_version}.jar" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        run: bash ./gradlew build --no-daemon ${{ steps.version.outputs.gradle_args }}
+
+      - name: Test with Worldthreader
+        run: bash ./gradlew runGameTest --no-daemon -PtestWorldthreader ${{ steps.version.outputs.gradle_args }}
+
+      - name: Upload release artifact
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: serenitea-pot-release
+          path: ${{ steps.version.outputs.asset_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out release notes
+        uses: actions/checkout@v6
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: serenitea-pot-release
+          path: release-assets
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+        run: |
+          assets=(release-assets/*.jar)
+          if [[ ${#assets[@]} -ne 1 || ! -f "${assets[0]}" ]]; then
+            echo "Expected exactly one release JAR." >&2
+            exit 1
+          fi
+
+          args=(
+            release create "$GITHUB_REF_NAME" "${assets[0]}"
+            --verify-tag
+            --title "Serenitea Pot ${RELEASE_VERSION}"
+            --notes-file release.md
+          )
+
+          if [[ "$PRERELEASE" == "true" ]]; then
+            args+=(--prerelease --latest=false)
+          else
+            args+=(--latest)
+          fi
+
+          gh "${args[@]}"
