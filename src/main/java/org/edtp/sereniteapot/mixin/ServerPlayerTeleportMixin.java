@@ -43,12 +43,32 @@ public abstract class ServerPlayerTeleportMixin {
         PlayerStateManager.StateSwitchPlan plan = this.sereniteapot$pendingStateSwitch;
         this.sereniteapot$pendingStateSwitch = null;
         // 原版以 null 表示传送失败，失败时保留当前玩家状态不变。
-        if (plan != null && cir.getReturnValue() != null) {
-            ServerPlayer player = (ServerPlayer) (Object) this;
-            PlayerStateManager.afterTeleport(player, plan);
+        ServerPlayer transferredPlayer = cir.getReturnValue();
+        if (plan != null && transferredPlayer != null) {
+            // Worldthreader may replace ServerPlayer while completing arrival on
+            // the destination thread. Always mutate the instance returned by teleport.
+            PlayerStateManager.afterTeleport(transferredPlayer, plan);
             // Command requirements depend on whether the player is currently inside their own pot.
             // Refresh only when crossing the public/pot realm boundary, not between pot dimensions.
-            player.level().getServer().getCommands().sendCommands(player);
+            sereniteapot$refreshCommands(transferredPlayer);
+        }
+    }
+
+    @Unique
+    private static void sereniteapot$refreshCommands(ServerPlayer player) {
+        var server = player.level().getServer();
+        Runnable refresh = () -> {
+            // A second transfer may have replaced the instance before a
+            // Worldthreader world thread hands this task back to the server.
+            ServerPlayer current = server.getPlayerList().getPlayer(player.getUUID());
+            if (current != null) {
+                server.getCommands().sendCommands(current);
+            }
+        };
+        if (server.isSameThread()) {
+            refresh.run();
+        } else {
+            server.execute(refresh);
         }
     }
 }

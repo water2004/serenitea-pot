@@ -10,32 +10,42 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class PlayerStateStore {
     private static final int SCHEMA_VERSION = 1;
 
     private final Path root;
-    private final Map<UUID, CompoundTag> cache = new HashMap<>();
+    private final Map<UUID, CompoundTag> cache = new ConcurrentHashMap<>();
+    private final Map<UUID, Object> playerLocks = new ConcurrentHashMap<>();
 
     public PlayerStateStore(Path root) {
         this.root = root;
     }
 
     public CompoundTag get(UUID player, String stateKey) {
-        return loadPlayer(player).getCompound(stateKey).map(CompoundTag::copy).orElse(null);
+        synchronized (lock(player)) {
+            return loadPlayer(player).getCompound(stateKey).map(CompoundTag::copy).orElse(null);
+        }
     }
 
     public void put(UUID player, String stateKey, CompoundTag snapshot) {
-        CompoundTag states = loadPlayer(player);
-        states.put(stateKey, snapshot.copy());
-        savePlayer(player, states);
+        synchronized (lock(player)) {
+            CompoundTag states = loadPlayer(player);
+            states.put(stateKey, snapshot.copy());
+            savePlayer(player, states);
+        }
     }
 
     public void clear() {
         cache.clear();
+        playerLocks.clear();
+    }
+
+    private Object lock(UUID player) {
+        return playerLocks.computeIfAbsent(player, ignored -> new Object());
     }
 
     private CompoundTag loadPlayer(UUID player) {

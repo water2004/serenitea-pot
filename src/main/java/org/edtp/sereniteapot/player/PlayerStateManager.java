@@ -64,7 +64,7 @@ public final class PlayerStateManager {
     }
 
     public static StateSwitchPlan beforeTeleport(ServerPlayer player, ServerLevel destination) {
-        requireServerThread(player.level().getServer());
+        requireAttached(player.level().getServer());
         UUID sourceRealm = realm(player.level());
         UUID destinationRealm = realm(destination);
         if (java.util.Objects.equals(sourceRealm, destinationRealm)) {
@@ -78,7 +78,7 @@ public final class PlayerStateManager {
     }
 
     public static void afterTeleport(ServerPlayer player, StateSwitchPlan plan) {
-        requireServerThread(player.level().getServer());
+        requireAttached(player.level().getServer());
         UUID targetOwner = plan.targetOwner();
         CompoundTag snapshot = store == null ? null : store.get(player.getUUID(), stateKey(targetOwner));
         if (snapshot == null) {
@@ -86,7 +86,7 @@ public final class PlayerStateManager {
         }
         apply(player, snapshot, targetOwner != null);
         if (player.getUUID().equals(plan.sourceOwner()) && !player.getUUID().equals(targetOwner)) {
-            SereniteaPotLifecycleService.requestClose(player.getUUID());
+            requestCloseOnServerThread(player);
         }
     }
 
@@ -269,11 +269,27 @@ public final class PlayerStateManager {
     }
 
     private static void requireServerThread(MinecraftServer currentServer) {
+        requireAttached(currentServer);
+        if (!currentServer.isSameThread()) {
+            throw new IllegalStateException("Player state mutation must run on the server thread");
+        }
+    }
+
+    private static void requireAttached(MinecraftServer currentServer) {
         if (server != currentServer) {
             throw new IllegalStateException("PlayerStateManager is attached to another server");
         }
-        if (!currentServer.isSameThread()) {
-            throw new IllegalStateException("Player state mutation must run on the server thread");
+    }
+
+    private static void requestCloseOnServerThread(ServerPlayer player) {
+        MinecraftServer currentServer = player.level().getServer();
+        UUID owner = player.getUUID();
+        if (currentServer.isSameThread()) {
+            SereniteaPotLifecycleService.requestClose(owner);
+        } else {
+            // Worldthreader completes the destination-world transfer before the
+            // server thread processes this lifecycle request after its tick barrier.
+            currentServer.execute(() -> SereniteaPotLifecycleService.requestClose(owner));
         }
     }
 
