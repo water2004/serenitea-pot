@@ -80,7 +80,7 @@ Creation uses a staged generation. The active generation changes only after the 
 
 Crossing between the public realm and a pot first captures the source state, then applies the destination state. Leaving returns the player to the exact public dimension, position, and rotation from which they entered. Entering again returns them to their last valid position inside that pot.
 
-Disconnecting inside a pot follows the same leave transaction before Vanilla saves player data. The pot position remains in the pot snapshot, while the public dimension and position are written to normal playerdata for the next login.
+Immediately before entering a pot, Vanilla saves the exact public playerdata. While the player is inside a pot, ordinary playerdata writes are suppressed and only the existing isolated pot snapshot is updated. Normal playerdata therefore remains at the last public dimension, position, and game mode without moving the live in-pot player.
 
 Only a real owner standing inside their own pot can keep the bundle loaded. When the owner leaves or disconnects, the lifecycle transaction:
 
@@ -93,7 +93,7 @@ Carpet fake players, portal loaders, chunk tickets, and machines cannot keep a p
 
 `disable` is an operator action that closes a player's pot and prevents future admission. `freeze` only stops world ticks: the owner, approved visitors, and operators may still enter for repairs, and the owner can run `unfreeze` afterward.
 
-While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions. These grants disappear immediately on leaving. Permissions in public dimensions, other players' pots, and for visitors remain unchanged. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
+While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions. These grants disappear immediately on leaving. Pot entry restarts Axiom's client handshake so repeated leave/enter cycles receive the current grant; WorldEdit checks the current player on every command. Permissions in public dimensions, other players' pots, and for visitors remain unchanged. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
 
 ## Player commands
 
