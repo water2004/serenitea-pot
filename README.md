@@ -27,6 +27,8 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 - Temporary 60-second visit requests with clickable accept and deny actions. Level-4 operators bypass approval, but the owner must still be present.
 - Per-owner and global performance budgets shared by dimension ticks and region-copy work.
 - Automatic freezing after a dangerous tick instead of deleting or disabling the pot, allowing the owner to enter and repair it.
+- Scoped building-tool access: a pot owner receives full WorldEdit and Axiom permissions only while inside their own pot; public-world authorization is untouched.
+- Command blocks and command-block minecarts never execute inside pot dimensions.
 - Level-4 operator controls for enable/disable, maximum radius, performance budgets, status, diagnostics, trimming, and permanent deletion.
 
 ## Requirements
@@ -39,7 +41,7 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 | Fabric API | 0.158.0+26.2 |
 | Fabric Language Kotlin | 1.13.12+kotlin.2.4.0 or newer |
 
-Arcade Dimensions `0.13.0-beta.6+26.2` and its supporting modules are embedded in the built mod. Do not install a second copy or remove the embedded Arcade modules from the JAR.
+Arcade Dimensions `0.13.0-beta.6+26.2`, its supporting modules, and Fabric Permissions API v0 `0.7.0` are embedded in the built mod. Do not install duplicate copies or remove the embedded modules from the JAR.
 
 Current snapshot: `1.0.0-snapshot.1-26.2`
 
@@ -84,6 +86,8 @@ Only a real owner standing inside their own pot can keep the bundle loaded. When
 Carpet fake players, portal loaders, chunk tickets, and machines cannot keep a pot loaded. Visit grants are temporary and never become a permanent guest list.
 
 `disable` is an operator action that closes a player's pot and prevents future admission. `freeze` only stops world ticks: the owner, approved visitors, and operators may still enter for repairs, and the owner can run `unfreeze` afterward.
+
+While physically inside their own pot, its owner receives the equivalent of `worldedit.*` through the Fabric permission API version used by the installed WorldEdit build and `axiom.all` through the legacy v0 API used by Axiom 5.5. These contextual grants disappear immediately on leaving. In every public dimension, in another player's pot, and for visitors, Serenitea Pot returns no permission decision, so the server's existing OP, LuckPerms, WorldEdit configuration, and Axiom permissions behave exactly as they normally would. Level-4 operators retain their ordinary server permissions. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
 
 ## Player commands
 
@@ -139,6 +143,10 @@ Mods that store machine state in block entities or standard persistent Fabric ch
 - Cross-region networks or private third-party storage
 - Custom level or player attachments
 - Private payloads containing unmarked absolute public-world coordinates
+
+WorldEdit and Axiom integration uses their public permission interfaces rather than mixins into either mod. Serenitea Pot does not rewrite a third-party mod's editing or dimension-targeting implementation; such a mod remains responsible for applying its own operations to the world it reports as current.
+
+The optional compatibility ranges declared in mod metadata are WorldEdit `>=7.4.4-beta-01 <7.5.0` and Axiom `>=5.5.0 <5.6.0`. These constraints do not require either mod to be installed. They cover every WorldEdit build published for Minecraft 26.2: 7.4.4 Beta 1 and 7.4.4 use the legacy permission API, while 7.4.5 uses Fabric Permission API v1 with the legacy API as a fallback. Axiom added Fabric server permissions in 5.0.0, but 5.5.0 is the only Axiom line published for Minecraft 26.2, so the declared range intentionally stays within the verified 5.5 series.
 
 All project business code is Java 25. The final JAR still depends on Fabric Language Kotlin because embedded Arcade Dimensions is written in Kotlin; the Serenitea Pot source itself does not contain Kotlin business code.
 
