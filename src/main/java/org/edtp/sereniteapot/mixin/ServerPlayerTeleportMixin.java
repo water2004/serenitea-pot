@@ -44,7 +44,11 @@ public abstract class ServerPlayerTeleportMixin {
         this.sereniteapot$pendingStateSwitch = null;
         // 原版以 null 表示传送失败，失败时保留当前玩家状态不变。
         if (plan != null && cir.getReturnValue() != null) {
-            PlayerStateManager.afterTeleport((ServerPlayer) (Object) this, plan);
+            ServerPlayer player = (ServerPlayer) (Object) this;
+            PlayerStateManager.afterTeleport(player, plan);
+            // Command requirements depend on whether the player is currently inside their own pot.
+            // Refresh only when crossing the public/pot realm boundary, not between pot dimensions.
+            player.level().getServer().getCommands().sendCommands(player);
         }
     }
 }

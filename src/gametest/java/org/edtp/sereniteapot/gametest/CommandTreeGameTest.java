@@ -4,6 +4,7 @@ import com.mojang.brigadier.tree.CommandNode;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.permissions.PermissionProviderCheck;
 import org.edtp.sereniteapot.i18n.MessageKey;
 
 import java.util.Set;
@@ -48,6 +49,23 @@ public final class CommandTreeGameTest {
                 translate("en_us", message),
                 translate("unsupported_language", message),
                 "Unknown client languages must fall back to English");
+        helper.succeed();
+    }
+
+    @GameTest
+    public void extendsOnlyWorldLocalVanillaCommandRequirements(GameTestHelper helper) {
+        CommandNode<CommandSourceStack> root = helper.getLevel().getServer().getCommands()
+                .getDispatcher().getRoot();
+        for (String command : Set.of("fill", "fillbiome", "place", "setblock", "summon")) {
+            helper.assertTrue(
+                    !(child(root, command).getRequirement() instanceof PermissionProviderCheck<?>),
+                    "/" + command + " requirement was not extended");
+        }
+        for (String command : Set.of("clone", "execute", "forceload", "weather", "worldborder")) {
+            helper.assertTrue(
+                    child(root, command).getRequirement() instanceof PermissionProviderCheck<?>,
+                    "/" + command + " must retain its vanilla permission requirement");
+        }
         helper.succeed();
     }
 

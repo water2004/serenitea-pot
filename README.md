@@ -30,6 +30,7 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 - Scoped building-tool access: a pot owner receives full WorldEdit and Axiom permissions only while inside their own pot; public-world authorization is untouched.
 - Command blocks and command-block minecarts never execute inside pot dimensions.
 - Level-4 operator controls for enable/disable, maximum radius, performance budgets, status, diagnostics, trimming, and permanent deletion.
+- Pot owners can use `/fill`, `/fillbiome`, `/place`, `/setblock`, and `/summon` inside their own pot without receiving OP outside it.
 
 ## Requirements
 
