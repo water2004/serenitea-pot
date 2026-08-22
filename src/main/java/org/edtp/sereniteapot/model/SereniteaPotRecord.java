@@ -9,22 +9,22 @@ import java.util.UUID;
 public class SereniteaPotRecord {
     public static final int DEFAULT_MAX_RADIUS_CHUNKS = 4;
     public static final int MAX_RADIUS_CHUNKS = 256;
-    public static final double DEFAULT_BUDGET_MILLIS_PER_SECOND = 25.0;
+    public static final double DEFAULT_BUDGET_MILLIS_PER_TICK = 2.0;
 
     private UUID stateId;
     private long activeGeneration;
     private int maxRadiusChunks;
-    private double budgetMillisPerSecond;
+    private double budgetMillisPerTick;
     private boolean enabled;
     private boolean frozen;
     private final Map<SereniteaPotDimension, SereniteaPotSlotRecord> slots;
 
     public SereniteaPotRecord(UUID stateId, long activeGeneration, int maxRadiusChunks,
-                          double budgetMillisPerSecond, boolean enabled, boolean frozen) {
+                          double budgetMillisPerTick, boolean enabled, boolean frozen) {
         this.stateId = Objects.requireNonNull(stateId, "stateId");
         this.activeGeneration = activeGeneration;
         this.maxRadiusChunks = requireValidRadiusChunks(maxRadiusChunks);
-        this.budgetMillisPerSecond = budgetMillisPerSecond;
+        this.budgetMillisPerTick = requireValidBudgetMillisPerTick(budgetMillisPerTick);
         this.enabled = enabled;
         this.frozen = frozen;
         this.slots = new EnumMap<>(SereniteaPotDimension.class);
@@ -54,12 +54,12 @@ public class SereniteaPotRecord {
         this.maxRadiusChunks = requireValidRadiusChunks(maxRadiusChunks);
     }
 
-    public double getBudgetMillisPerSecond() {
-        return budgetMillisPerSecond;
+    public double getBudgetMillisPerTick() {
+        return budgetMillisPerTick;
     }
 
-    public void setBudgetMillisPerSecond(double budgetMillisPerSecond) {
-        this.budgetMillisPerSecond = budgetMillisPerSecond;
+    public void setBudgetMillisPerTick(double budgetMillisPerTick) {
+        this.budgetMillisPerTick = requireValidBudgetMillisPerTick(budgetMillisPerTick);
     }
 
     public boolean isEnabled() {
@@ -93,6 +93,13 @@ public class SereniteaPotRecord {
             );
         }
         return radiusChunks;
+    }
+
+    public static double requireValidBudgetMillisPerTick(double value) {
+        if (!Double.isFinite(value) || value < 0.0) {
+            throw new IllegalArgumentException("Tick budget must be a finite non-negative number");
+        }
+        return value;
     }
 
 }

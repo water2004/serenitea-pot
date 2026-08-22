@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public class SereniteaPotCatalogRepository {
-    private static final int FORMAT_VERSION = 2;
+    private static final int FORMAT_VERSION = 3;
 
     private final Path root;
     private final com.google.gson.Gson gson = new GsonBuilder().setPrettyPrinting().create();
@@ -66,8 +66,8 @@ public class SereniteaPotCatalogRepository {
         JsonObject result = new JsonObject();
         result.addProperty("version", FORMAT_VERSION);
         result.addProperty("defaultMaxRadiusChunks", catalog.getDefaultMaxRadiusChunks());
-        result.addProperty("defaultBudgetMillisPerSecond", catalog.getDefaultBudgetMillisPerSecond());
-        result.addProperty("globalBudgetMillisPerSecond", catalog.getGlobalBudgetMillisPerSecond());
+        result.addProperty("defaultBudgetMillisPerTick", catalog.getDefaultBudgetMillisPerTick());
+        result.addProperty("globalBudgetMillisPerTick", catalog.getGlobalBudgetMillisPerTick());
 
         JsonObject players = new JsonObject();
         for (Map.Entry<UUID, SereniteaPotRecord> entry : catalog.getPlayers().entrySet()) {
@@ -82,7 +82,7 @@ public class SereniteaPotCatalogRepository {
         result.addProperty("stateId", record.getStateId().toString());
         result.addProperty("activeGeneration", record.getActiveGeneration());
         result.addProperty("maxRadiusChunks", record.getMaxRadiusChunks());
-        result.addProperty("budgetMillisPerSecond", record.getBudgetMillisPerSecond());
+        result.addProperty("budgetMillisPerTick", record.getBudgetMillisPerTick());
         result.addProperty("enabled", record.isEnabled());
         result.addProperty("frozen", record.isFrozen());
 
@@ -111,8 +111,8 @@ public class SereniteaPotCatalogRepository {
 
         SereniteaPotCatalog catalog = new SereniteaPotCatalog(
                 intValue(root, "defaultMaxRadiusChunks", SereniteaPotRecord.DEFAULT_MAX_RADIUS_CHUNKS),
-                doubleValue(root, "defaultBudgetMillisPerSecond", SereniteaPotRecord.DEFAULT_BUDGET_MILLIS_PER_SECOND),
-                doubleValue(root, "globalBudgetMillisPerSecond", 100.0));
+                doubleValue(root, "defaultBudgetMillisPerTick", SereniteaPotRecord.DEFAULT_BUDGET_MILLIS_PER_TICK),
+                doubleValue(root, "globalBudgetMillisPerTick", SereniteaPotCatalog.DEFAULT_GLOBAL_BUDGET_MILLIS_PER_TICK));
         JsonObject players = objectValue(root, "players");
         for (Map.Entry<String, JsonElement> entry : players.entrySet()) {
             JsonObject recordObject = entry.getValue().getAsJsonObject();
@@ -121,7 +121,7 @@ public class SereniteaPotCatalogRepository {
                     UUID.fromString(stringValue(recordObject, "stateId", UUID.randomUUID().toString())),
                     activeGeneration == null ? 0 : activeGeneration.getAsLong(),
                     intValue(recordObject, "maxRadiusChunks", catalog.getDefaultMaxRadiusChunks()),
-                    doubleValue(recordObject, "budgetMillisPerSecond", catalog.getDefaultBudgetMillisPerSecond()),
+                    doubleValue(recordObject, "budgetMillisPerTick", catalog.getDefaultBudgetMillisPerTick()),
                     booleanValue(recordObject, "enabled", true),
                     booleanValue(recordObject, "frozen", false));
 

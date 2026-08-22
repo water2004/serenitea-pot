@@ -34,9 +34,7 @@ import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
 final class SereniteaPotAdminCommands {
     private static final String PLAYER_ARGUMENT = "player";
     private static final String RADIUS_ARGUMENT = "radius";
-    private static final String BUDGET_ARGUMENT = "ms-per-second";
-    private static final double MAX_PLAYER_BUDGET_MILLIS_PER_SECOND = 1000.0;
-    private static final double MAX_GLOBAL_BUDGET_MILLIS_PER_SECOND = 5000.0;
+    private static final String BUDGET_ARGUMENT = "ms-per-tick";
 
     private SereniteaPotAdminCommands() {
     }
@@ -59,15 +57,23 @@ final class SereniteaPotAdminCommands {
                         0, SereniteaPotRecord.MAX_RADIUS_CHUNKS))
                         .executes(SereniteaPotAdminCommands::setMaximumRadius));
         route(admin,
+                literal("default-max-radius"),
+                argument(RADIUS_ARGUMENT, IntegerArgumentType.integer(
+                        0, SereniteaPotRecord.MAX_RADIUS_CHUNKS))
+                        .executes(SereniteaPotAdminCommands::setDefaultMaximumRadius));
+        route(admin,
                 literal("budget"),
                 argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile()),
                 argument(BUDGET_ARGUMENT, DoubleArgumentType.doubleArg(
-                        0.0, MAX_PLAYER_BUDGET_MILLIS_PER_SECOND))
+                        0.0))
                         .executes(SereniteaPotAdminCommands::setPlayerBudget));
         route(admin,
+                literal("default-budget"),
+                argument(BUDGET_ARGUMENT, DoubleArgumentType.doubleArg(0.0))
+                        .executes(SereniteaPotAdminCommands::setDefaultBudget));
+        route(admin,
                 literal("global-budget"),
-                argument(BUDGET_ARGUMENT, DoubleArgumentType.doubleArg(
-                        0.0, MAX_GLOBAL_BUDGET_MILLIS_PER_SECOND))
+                argument(BUDGET_ARGUMENT, DoubleArgumentType.doubleArg(0.0))
                         .executes(SereniteaPotAdminCommands::setGlobalBudget));
         route(admin,
                 literal("status"),
@@ -83,6 +89,14 @@ final class SereniteaPotAdminCommands {
                 argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile()),
                 literal("confirm").executes(SereniteaPotAdminCommands::deleteTarget));
         route(root, admin);
+    }
+
+    private static int setDefaultMaximumRadius(CommandContext<CommandSourceStack> context) {
+        int radius = IntegerArgumentType.getInteger(context, RADIUS_ARGUMENT);
+        SereniteaPotManager.catalog().setDefaultMaxRadiusChunks(radius);
+        SereniteaPotManager.saveCatalog();
+        return success(context, MessageKey.COMMAND_ADMIN_DEFAULT_MAX_RADIUS_SUCCESS,
+                radius, (long) radius * 2L + 1L);
     }
 
     private static int setEnabled(CommandContext<CommandSourceStack> context, boolean enabled)
@@ -129,14 +143,21 @@ final class SereniteaPotAdminCommands {
             throws CommandSyntaxException {
         UUID owner = profile(context, PLAYER_ARGUMENT);
         double budget = DoubleArgumentType.getDouble(context, BUDGET_ARGUMENT);
-        SereniteaPotManager.getOrCreateRecord(owner).setBudgetMillisPerSecond(budget);
+        SereniteaPotManager.getOrCreateRecord(owner).setBudgetMillisPerTick(budget);
         SereniteaPotManager.saveCatalog();
         return success(context, MessageKey.COMMAND_ADMIN_BUDGET_SUCCESS, owner, budget);
     }
 
+    private static int setDefaultBudget(CommandContext<CommandSourceStack> context) {
+        double budget = DoubleArgumentType.getDouble(context, BUDGET_ARGUMENT);
+        SereniteaPotManager.catalog().setDefaultBudgetMillisPerTick(budget);
+        SereniteaPotManager.saveCatalog();
+        return success(context, MessageKey.COMMAND_ADMIN_DEFAULT_BUDGET_SUCCESS, budget);
+    }
+
     private static int setGlobalBudget(CommandContext<CommandSourceStack> context) {
         double budget = DoubleArgumentType.getDouble(context, BUDGET_ARGUMENT);
-        SereniteaPotManager.catalog().setGlobalBudgetMillisPerSecond(budget);
+        SereniteaPotManager.catalog().setGlobalBudgetMillisPerTick(budget);
         SereniteaPotManager.saveCatalog();
         return success(context, MessageKey.COMMAND_ADMIN_GLOBAL_BUDGET_SUCCESS, budget);
     }
@@ -187,9 +208,9 @@ final class SereniteaPotAdminCommands {
         return message(MessageKey.COMMAND_ADMIN_PERF_ROW,
                 snapshot.owner(),
                 state,
-                format("%.2f", snapshot.consumedMillisLastSecond()),
-                format("%.2f", snapshot.budgetMillisPerSecond()),
-                format("%.2f", snapshot.creationMillisLastSecond()),
+                format("%.2f", snapshot.consumedMillisPerTick()),
+                format("%.2f", snapshot.budgetMillisPerTick()),
+                format("%.2f", snapshot.creationMillisPerTick()),
                 format("%.3f", snapshot.averageTickMillis()),
                 format("%.3f", snapshot.maximumTickMillis()),
                 format("%.2f", snapshot.effectiveTps()),

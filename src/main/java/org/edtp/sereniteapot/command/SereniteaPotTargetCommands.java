@@ -41,7 +41,7 @@ final class SereniteaPotTargetCommands {
                 record.isEnabled(),
                 record.isFrozen(),
                 record.getMaxRadiusChunks(),
-                record.getBudgetMillisPerSecond(),
+                record.getBudgetMillisPerTick(),
                 progressValue);
     }
 }

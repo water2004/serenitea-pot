@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "BaseCommandBlockMixin",
+    "MinecraftServerLevelOrderMixin",
     "MinecraftServerTickMixin",
     "PlayerListMixin",
     "PlayerDataStorageMixin",

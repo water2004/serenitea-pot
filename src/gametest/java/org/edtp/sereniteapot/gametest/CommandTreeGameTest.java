@@ -24,11 +24,13 @@ public final class CommandTreeGameTest {
                 "create", "enter", "leave", "unfreeze", "request", "requests",
                 "approve", "deny", "delete", "admin");
         assertChildren(helper, child(root, "admin"),
-                "enable", "disable", "max-radius", "budget", "global-budget",
+                "enable", "disable", "max-radius", "default-max-radius",
+                "budget", "default-budget", "global-budget",
                 "status", "perf", "delete");
         assertChildren(helper, child(root, "approve", "player"), "request-id");
         assertChildren(helper, child(root, "delete"), "confirm");
         assertChildren(helper, child(root, "admin", "max-radius", "player"), "radius");
+        assertChildren(helper, child(root, "admin", "default-max-radius"), "radius");
         assertChildren(helper, child(root, "admin", "delete", "player"), "confirm");
         helper.succeed();
     }

@@ -8,9 +8,9 @@ import java.util.UUID;
 /** A completed one-second performance window for one Serenitea Pot. */
 public record SereniteaPotPerformanceSnapshot(
     UUID owner,
-    double budgetMillisPerSecond,
-    double consumedMillisLastSecond,
-    double creationMillisLastSecond,
+    double budgetMillisPerTick,
+    double consumedMillisPerTick,
+    double creationMillisPerTick,
     double averageTickMillis,
     double maximumTickMillis,
     double effectiveTps,

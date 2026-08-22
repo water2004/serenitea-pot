@@ -6,21 +6,26 @@ import java.util.UUID;
 
 /** Mutable top-level catalog persisted to serenitea_pots.json. */
 public class SereniteaPotCatalog {
+    public static final double DEFAULT_GLOBAL_BUDGET_MILLIS_PER_TICK = 20.0;
+
     private int defaultMaxRadiusChunks;
-    private double defaultBudgetMillisPerSecond;
-    private double globalBudgetMillisPerSecond;
+    private double defaultBudgetMillisPerTick;
+    private double globalBudgetMillisPerTick;
     private final Map<UUID, SereniteaPotRecord> players;
 
     public SereniteaPotCatalog() {
-        this(SereniteaPotRecord.DEFAULT_MAX_RADIUS_CHUNKS, SereniteaPotRecord.DEFAULT_BUDGET_MILLIS_PER_SECOND,
-                100.0);
+        this(
+            SereniteaPotRecord.DEFAULT_MAX_RADIUS_CHUNKS,
+            SereniteaPotRecord.DEFAULT_BUDGET_MILLIS_PER_TICK,
+            DEFAULT_GLOBAL_BUDGET_MILLIS_PER_TICK
+        );
     }
 
-    public SereniteaPotCatalog(int defaultMaxRadiusChunks, double defaultBudgetMillisPerSecond,
-                           double globalBudgetMillisPerSecond) {
+    public SereniteaPotCatalog(int defaultMaxRadiusChunks, double defaultBudgetMillisPerTick,
+                           double globalBudgetMillisPerTick) {
         this.defaultMaxRadiusChunks = SereniteaPotRecord.requireValidRadiusChunks(defaultMaxRadiusChunks);
-        this.defaultBudgetMillisPerSecond = defaultBudgetMillisPerSecond;
-        this.globalBudgetMillisPerSecond = globalBudgetMillisPerSecond;
+        this.defaultBudgetMillisPerTick = SereniteaPotRecord.requireValidBudgetMillisPerTick(defaultBudgetMillisPerTick);
+        this.globalBudgetMillisPerTick = SereniteaPotRecord.requireValidBudgetMillisPerTick(globalBudgetMillisPerTick);
         this.players = new LinkedHashMap<>();
     }
 
@@ -28,14 +33,19 @@ public class SereniteaPotCatalog {
     public void setDefaultMaxRadiusChunks(int value) {
         defaultMaxRadiusChunks = SereniteaPotRecord.requireValidRadiusChunks(value);
     }
-    public double getDefaultBudgetMillisPerSecond() { return defaultBudgetMillisPerSecond; }
-    public double getGlobalBudgetMillisPerSecond() { return globalBudgetMillisPerSecond; }
-    public void setGlobalBudgetMillisPerSecond(double value) { globalBudgetMillisPerSecond = value; }
+    public double getDefaultBudgetMillisPerTick() { return defaultBudgetMillisPerTick; }
+    public void setDefaultBudgetMillisPerTick(double value) {
+        defaultBudgetMillisPerTick = SereniteaPotRecord.requireValidBudgetMillisPerTick(value);
+    }
+    public double getGlobalBudgetMillisPerTick() { return globalBudgetMillisPerTick; }
+    public void setGlobalBudgetMillisPerTick(double value) {
+        globalBudgetMillisPerTick = SereniteaPotRecord.requireValidBudgetMillisPerTick(value);
+    }
     public Map<UUID, SereniteaPotRecord> getPlayers() { return players; }
 
     public SereniteaPotRecord getOrCreate(UUID owner) {
         return players.computeIfAbsent(owner, ignored -> new SereniteaPotRecord(UUID.randomUUID(), 0,
-                defaultMaxRadiusChunks, defaultBudgetMillisPerSecond, true, false));
+                defaultMaxRadiusChunks, defaultBudgetMillisPerTick, true, false));
     }
 
 }

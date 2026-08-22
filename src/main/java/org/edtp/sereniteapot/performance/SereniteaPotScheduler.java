@@ -10,36 +10,42 @@ import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotLevelKeys;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
+import org.edtp.sereniteapot.model.SereniteaPotRecord;
 import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Phaser;
 
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
 
 /**
- * 在服务器主线程上为尘歌壶 tick 和创建复制共享时间预算。
+ * 为完整尘歌壶 tick 和区域复制分配每 tick 时间预算。
  *
- * <p>调度器使用玩家级与全局两层令牌桶：执行前按历史耗时预扣，执行后按真实耗时
- * 修正。它可以降低后续 tick 频率，但无法中断一个已经进入模组代码的慢 tick；单次
- * 维度 tick 超过安全阈值时会自动冻结该尘歌壶。</p>
+ * <p>每个服务器 tick 都重新随机排列已加载的壶。一个壶一旦开始执行，本 tick
+ * 内的三个维度便作为一个整体完成；实际耗时扣除后才决定是否放行下一个壶。
+ * 预算不会跨 tick 累积，也不依赖历史耗时预测。</p>
  */
 public final class SereniteaPotScheduler {
-    private static final double TICKS_PER_SECOND = 20.0;
-    private static final long MINIMUM_RESERVATION_NANOS = 50_000L;
+    private static final int METRICS_WINDOW_TICKS = 20;
+    private static final long MINIMUM_CREATION_SLICE_NANOS = 50_000L;
     private static final long AUTO_FREEZE_LEVEL_TICK_NANOS = 200_000_000L;
 
-    private static final LinkedHashMap<UUID, OwnerBudget> owners = new LinkedHashMap<>();
+    private static final LinkedHashMap<UUID, OwnerMetrics> metrics = new LinkedHashMap<>();
     private static final LinkedHashMap<UUID, Long> pendingAutomaticFreezes = new LinkedHashMap<>();
-    private static double globalTokensNanos;
+    private static volatile TickPlan currentPlan = TickPlan.empty();
     private static long serverTicks;
 
-    private SereniteaPotScheduler() {}
+    private SereniteaPotScheduler() {
+    }
 
     public static void register() {
         ServerTickEvents.START_SERVER_TICK.register(SereniteaPotScheduler::startServerTick);
@@ -48,221 +54,248 @@ public final class SereniteaPotScheduler {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> resetAll());
     }
 
+    /** Orders only the vanilla tick loop; WorldThreader uses the same plan through its compatibility mixins. */
+    public static Iterable<ServerLevel> orderLevelsForVanillaTick(Iterable<ServerLevel> original) {
+        List<ServerLevel> publicLevels = new ArrayList<>();
+        Map<UUID, EnumMap<SereniteaPotDimension, ServerLevel>> activePots = new HashMap<>();
+        List<ServerLevel> inactivePotLevels = new ArrayList<>();
+
+        for (ServerLevel level : original) {
+            SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(level.dimension());
+            if (identity == null) {
+                publicLevels.add(level);
+                continue;
+            }
+            SereniteaPotRecord record = SereniteaPotManager.record(identity.owner());
+            if (record == null || identity.generation() != record.getActiveGeneration()) {
+                inactivePotLevels.add(level);
+                continue;
+            }
+            activePots.computeIfAbsent(identity.owner(), ignored -> new EnumMap<>(SereniteaPotDimension.class))
+                .put(identity.dimension(), level);
+        }
+
+        List<ServerLevel> ordered = new ArrayList<>(publicLevels);
+        for (UUID owner : currentPlan.owners()) {
+            Map<SereniteaPotDimension, ServerLevel> levels = activePots.remove(owner);
+            if (levels == null) continue;
+            for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
+                ServerLevel level = levels.get(dimension);
+                if (level != null) ordered.add(level);
+            }
+        }
+        // A level added after START_SERVER_TICK is never admitted without a plan,
+        // but it remains in the iterable so vanilla bookkeeping stays complete.
+        activePots.values().forEach(levels -> ordered.addAll(levels.values()));
+        ordered.addAll(inactivePotLevels);
+        return ordered;
+    }
+
+    /** Random owner order shared by the three WorldThreader dimension-family lanes. */
+    public static List<UUID> tickOrder() {
+        return currentPlan.owners();
+    }
+
+    /** Returns the active level for one owner and dimension in the current plan. */
+    public static ServerLevel activeLevel(MinecraftServer server, UUID owner, SereniteaPotDimension dimension) {
+        SereniteaPotRecord record = SereniteaPotManager.record(owner);
+        if (record == null || !record.exists()) return null;
+        return server.getLevel(SereniteaPotLevelKeys.key(owner, record.getActiveGeneration(), dimension));
+    }
+
+    /** Admission hook for the ordinary single-threaded level loop. */
     public static boolean beforeLevelTick(ServerLevel level) {
         SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(level.dimension());
-        if (identity == null) {
-            return true;
-        }
-        return reserveLevelTick(identity);
+        if (identity == null) return true;
+        boolean runnable = isRunnable(identity) && currentPlan.admitSerial(identity.owner());
+        recordCall(identity.owner(), identity.dimension(), runnable);
+        return runnable;
     }
 
-    private static synchronized boolean reserveLevelTick(SereniteaPotLevelKeys.Identity identity) {
-        UUID owner = identity.owner();
-        var record = SereniteaPotManager.record(owner);
-        if (record == null) {
-            return false;
-        }
-        if (identity.generation() != record.getActiveGeneration()) {
-            return false;
-        }
-
-        OwnerBudget budget = owners.computeIfAbsent(owner,
-            ignored -> new OwnerBudget(record.getBudgetMillisPerSecond()));
-        budget.calls++;
-        SereniteaPotDimension dimension = identity.dimension();
-        if (!record.isEnabled() || record.isFrozen()
-            || SereniteaPotCreationService.isBusy(owner)) {
-            budget.recordSkip(dimension);
-            return false;
-        }
-
-        budget.updateLimit(record.getBudgetMillisPerSecond());
-        // 先按指数移动平均值预扣；真实耗时可能更高，差额会在 afterLevelTick 形成预算债务。
-        double reservation = Math.max(MINIMUM_RESERVATION_NANOS, budget.estimatedNanos);
-        if (budget.tokensNanos < reservation || globalTokensNanos < reservation) {
-            budget.recordSkip(dimension);
-            return false;
-        }
-        budget.tokensNanos -= reservation;
-        globalTokensNanos -= reservation;
-        budget.reservations.put(dimension, reservation);
-        return true;
-    }
-
+    /** Completion hook for the ordinary single-threaded level loop. */
     public static void afterLevelTick(ServerLevel level, long elapsedNanos) {
         SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(level.dimension());
-        if (identity == null) {
-            return;
-        }
-        completeLevelTick(identity, elapsedNanos);
+        if (identity == null) return;
+        recordLevelRun(identity.owner(), identity.dimension(), elapsedNanos);
+        currentPlan.recordSerialCost(identity.owner(), elapsedNanos);
     }
 
-    private static synchronized void completeLevelTick(
-        SereniteaPotLevelKeys.Identity identity,
-        long elapsedNanos
-    ) {
-        UUID owner = identity.owner();
-        OwnerBudget budget = owners.get(owner);
-        if (budget == null) {
-            return;
-        }
-        SereniteaPotDimension dimension = identity.dimension();
-        double reservation = budget.reservations.getOrDefault(dimension, 0.0);
-        budget.reservations.remove(dimension);
-        double correction = elapsedNanos - reservation;
-        budget.tokensNanos -= correction;
-        globalTokensNanos -= correction;
-        budget.recordRun(dimension, elapsedNanos);
+    /** Admission hook used by each WorldThreader dimension-family lane. */
+    public static boolean beforeThreadedLevelTick(ServerLevel level) {
+        SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(level.dimension());
+        if (identity == null) return true;
+        boolean runnable = isRunnable(identity) && currentPlan.admitThreaded(identity.owner());
+        recordCall(identity.owner(), identity.dimension(), runnable);
+        return runnable;
+    }
 
-        // Worker threads only report the violation. The server thread applies the
-        // catalog mutation after Worldthreader's end-of-tick barrier.
-        if (elapsedNanos >= AUTO_FREEZE_LEVEL_TICK_NANOS) {
-            pendingAutomaticFreezes.merge(owner, elapsedNanos, Math::max);
-        }
+    /** Records one lane, then waits until all three dimension families completed the same owner. */
+    public static boolean finishThreadedOwner(
+        UUID owner,
+        SereniteaPotDimension dimension,
+        long elapsedNanos,
+        boolean ran
+    ) {
+        if (ran) recordLevelRun(owner, dimension, elapsedNanos);
+        return currentPlan.finishThreadedOwner(owner, dimension, ran ? elapsedNanos : 0L, ran);
+    }
+
+    /** Wakes the other two family lanes if one lane aborts before reaching the owner barrier. */
+    public static void abortThreadedTick() {
+        currentPlan.abortThreadedTick();
+    }
+
+    /** Owners whose complete three-dimension world phase ran this tick. */
+    public static List<UUID> threadedExecutedOwners() {
+        return currentPlan.threadedExecutedOwners();
     }
 
     public static synchronized SereniteaPotPerformanceSnapshot snapshot(UUID owner) {
-        return snapshotLocked(owner);
-    }
-
-    private static SereniteaPotPerformanceSnapshot snapshotLocked(UUID owner) {
-        var record = SereniteaPotManager.record(owner);
-        if (record == null) {
-            return null;
-        }
-        OwnerBudget budget = owners.get(owner);
-        if (budget == null) {
-            return new SereniteaPotPerformanceSnapshot(
-                owner,
-                record.getBudgetMillisPerSecond(),
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0L,
-                0L,
-                Map.of()
-            );
-        }
-        return budget.snapshot(owner, record.getBudgetMillisPerSecond());
+        SereniteaPotRecord record = SereniteaPotManager.record(owner);
+        if (record == null) return null;
+        OwnerMetrics ownerMetrics = metrics.get(owner);
+        return ownerMetrics == null
+            ? OwnerMetrics.emptySnapshot(owner, record.getBudgetMillisPerTick())
+            : ownerMetrics.snapshot(owner, record.getBudgetMillisPerTick());
     }
 
     public static synchronized List<SereniteaPotPerformanceSnapshot> allSnapshots() {
         List<SereniteaPotPerformanceSnapshot> snapshots = new ArrayList<>();
         for (UUID owner : SereniteaPotManager.catalog().getPlayers().keySet()) {
-            SereniteaPotPerformanceSnapshot snapshot = snapshotLocked(owner);
-            if (snapshot != null) {
-                snapshots.add(snapshot);
-            }
+            SereniteaPotPerformanceSnapshot snapshot = snapshot(owner);
+            if (snapshot != null) snapshots.add(snapshot);
         }
         snapshots.sort((left, right) -> Double.compare(
-            right.consumedMillisLastSecond(), left.consumedMillisLastSecond()));
+            right.consumedMillisPerTick(), left.consumedMillisPerTick()
+        ));
         return snapshots;
     }
 
     public static synchronized void reset(UUID owner) {
-        owners.remove(owner);
+        metrics.remove(owner);
         pendingAutomaticFreezes.remove(owner);
     }
 
-    private static synchronized void resetAll() {
-        owners.clear();
-        pendingAutomaticFreezes.clear();
-        globalTokensNanos = 0.0;
-        serverTicks = 0L;
+    /** Reserves a copy slice from the current tick's remaining owner and global budgets. */
+    public static CreationReservation reserveCreationSlice(UUID owner, long maximumNanos) {
+        SereniteaPotRecord record = SereniteaPotManager.record(owner);
+        if (record == null) return null;
+        double reserved = currentPlan.reserveCreation(
+            owner,
+            maximumNanos,
+            record.getBudgetMillisPerTick() * 1_000_000.0
+        );
+        if (reserved < MINIMUM_CREATION_SLICE_NANOS) return null;
+        return new CreationReservation(currentPlan, owner, reserved);
     }
 
-    /**
-     * Reserves time for a region-copy slice from the same owner/global token
-     * buckets used by custom level ticks. The actual elapsed time is corrected
-     * by {@link #completeCreationSlice(CreationReservation, long)},
-     * so a slow chunk load creates budget debt.
-     */
-    public static synchronized CreationReservation reserveCreationSlice(UUID owner, long maximumNanos) {
-        var record = SereniteaPotManager.record(owner);
-        if (record == null) {
-            return null;
+    public static void completeCreationSlice(CreationReservation reservation, long elapsedNanos) {
+        synchronized (reservation) {
+            if (reservation.completed) {
+                SereniteaPotMod.LOGGER.warn(
+                    "Ignored duplicate completion for Serenitea Pot {} creation reservation",
+                    reservation.owner
+                );
+                return;
+            }
+            reservation.completed = true;
         }
-        OwnerBudget budget = owners.computeIfAbsent(owner,
-            ignored -> new OwnerBudget(record.getBudgetMillisPerSecond()));
-        budget.updateLimit(record.getBudgetMillisPerSecond());
-        double reserved = Math.min((double) maximumNanos, Math.min(budget.tokensNanos, globalTokensNanos));
-        if (reserved < MINIMUM_RESERVATION_NANOS) {
-            return null;
+        reservation.plan.correctCreation(reservation.owner, reservation.reservedNanos, elapsedNanos);
+        synchronized (SereniteaPotScheduler.class) {
+            metrics.computeIfAbsent(reservation.owner, ignored -> new OwnerMetrics())
+                .recordCreation(elapsedNanos);
         }
-        budget.tokensNanos -= reserved;
-        globalTokensNanos -= reserved;
-        return new CreationReservation(owner, reserved);
-    }
-
-    public static synchronized void completeCreationSlice(CreationReservation reservation, long elapsedNanos) {
-        if (reservation.completed) {
-            SereniteaPotMod.LOGGER.warn(
-                "Ignored duplicate completion for Serenitea Pot {} creation reservation", reservation.owner);
-            return;
-        }
-        reservation.completed = true;
-        OwnerBudget budget = owners.get(reservation.owner);
-        if (budget == null) {
-            return;
-        }
-        double correction = elapsedNanos - reservation.reservedNanos;
-        budget.tokensNanos -= correction;
-        globalTokensNanos -= correction;
-        budget.recordCreation(elapsedNanos);
     }
 
     private static synchronized void startServerTick(MinecraftServer server) {
+        if (serverTicks > 0L && serverTicks % METRICS_WINDOW_TICKS == 0L) {
+            metrics.values().forEach(OwnerMetrics::rollWindow);
+        }
         serverTicks++;
-        double globalLimit = SereniteaPotManager.catalog().getGlobalBudgetMillisPerSecond() * 1_000_000.0;
-        globalTokensNanos = Math.min(globalLimit, globalTokensNanos + globalLimit / TICKS_PER_SECOND);
-        for (var entry : owners.entrySet()) {
-            UUID owner = entry.getKey();
-            OwnerBudget budget = entry.getValue();
-            var record = SereniteaPotManager.record(owner);
-            double limit = record == null ? 0.0 : record.getBudgetMillisPerSecond();
-            budget.updateLimit(limit);
-            budget.refill();
-            if (serverTicks % 20L == 0L) {
-                budget.rollWindow();
+
+        LinkedHashSet<UUID> loadedOwners = new LinkedHashSet<>();
+        for (ServerLevel level : server.getAllLevels()) {
+            SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(level.dimension());
+            if (identity == null) continue;
+            SereniteaPotRecord record = SereniteaPotManager.record(identity.owner());
+            if (record != null && identity.generation() == record.getActiveGeneration()) {
+                loadedOwners.add(identity.owner());
             }
         }
+        List<UUID> order = new ArrayList<>(loadedOwners);
+        Collections.shuffle(order);
+        currentPlan = new TickPlan(
+            order,
+            SereniteaPotManager.catalog().getGlobalBudgetMillisPerTick() * 1_000_000.0
+        );
     }
 
     private static void endServerTick(MinecraftServer server) {
         Map<UUID, Long> freezes = drainAutomaticFreezes();
         List<Map.Entry<UUID, Long>> applied = new ArrayList<>();
-        for (var entry : freezes.entrySet()) {
-            UUID owner = entry.getKey();
-            var record = SereniteaPotManager.record(owner);
-            if (record == null || record.isFrozen()) {
-                continue;
-            }
+        for (Map.Entry<UUID, Long> entry : freezes.entrySet()) {
+            SereniteaPotRecord record = SereniteaPotManager.record(entry.getKey());
+            if (record == null || record.isFrozen()) continue;
             record.setFrozen(true);
             applied.add(entry);
         }
-        if (!applied.isEmpty()) {
-            SereniteaPotManager.saveCatalog();
-        }
-        for (var entry : applied) {
-            UUID owner = entry.getKey();
-            notifyAutomaticFreeze(server, owner, entry.getValue());
+        if (!applied.isEmpty()) SereniteaPotManager.saveCatalog();
+        for (Map.Entry<UUID, Long> entry : applied) {
+            notifyAutomaticFreeze(server, entry.getKey(), entry.getValue());
         }
     }
 
-    private static synchronized Map<UUID, Long> drainAutomaticFreezes() {
-        if (pendingAutomaticFreezes.isEmpty()) {
-            return Map.of();
+    private static boolean isRunnable(SereniteaPotLevelKeys.Identity identity) {
+        SereniteaPotRecord record = SereniteaPotManager.record(identity.owner());
+        return record != null
+            && identity.generation() == record.getActiveGeneration()
+            && record.isEnabled()
+            && !record.isFrozen()
+            && !SereniteaPotCreationService.isBusy(identity.owner());
+    }
+
+    private static synchronized void recordCall(
+        UUID owner,
+        SereniteaPotDimension dimension,
+        boolean ran
+    ) {
+        OwnerMetrics ownerMetrics = metrics.computeIfAbsent(owner, ignored -> new OwnerMetrics());
+        ownerMetrics.calls++;
+        if (!ran) ownerMetrics.recordSkip(dimension);
+    }
+
+    private static synchronized void recordLevelRun(
+        UUID owner,
+        SereniteaPotDimension dimension,
+        long elapsedNanos
+    ) {
+        OwnerMetrics ownerMetrics = metrics.computeIfAbsent(owner, ignored -> new OwnerMetrics());
+        ownerMetrics.recordLevelRun(dimension, elapsedNanos);
+        if (elapsedNanos >= AUTO_FREEZE_LEVEL_TICK_NANOS) {
+            pendingAutomaticFreezes.merge(owner, elapsedNanos, Math::max);
         }
+    }
+
+    private static synchronized void recordWholePotCost(UUID owner, long elapsedNanos) {
+        metrics.computeIfAbsent(owner, ignored -> new OwnerMetrics()).recordWholePotCost(elapsedNanos);
+    }
+
+    private static synchronized Map<UUID, Long> drainAutomaticFreezes() {
+        if (pendingAutomaticFreezes.isEmpty()) return Map.of();
         Map<UUID, Long> freezes = Map.copyOf(pendingAutomaticFreezes);
         pendingAutomaticFreezes.clear();
         return freezes;
     }
 
+    private static synchronized void resetAll() {
+        metrics.clear();
+        pendingAutomaticFreezes.clear();
+        currentPlan = TickPlan.empty();
+        serverTicks = 0L;
+    }
+
     private static void notifyAutomaticFreeze(MinecraftServer server, UUID owner, long elapsedNanos) {
-        double millis = elapsedNanos / 1_000_000.0;
-        String formattedMillis = "%.2f".formatted(millis);
+        String formattedMillis = "%.2f".formatted(elapsedNanos / 1_000_000.0);
         SereniteaPotMod.LOGGER.error(
             "Serenitea Pot {} produced a single {} ms level tick and was automatically frozen",
             owner,
@@ -279,43 +312,178 @@ public final class SereniteaPotScheduler {
         }
     }
 
-    private static final class OwnerBudget {
-        private double limitNanos;
-        private double tokensNanos;
-        private double estimatedNanos = MINIMUM_RESERVATION_NANOS;
-        private final EnumMap<SereniteaPotDimension, Double> reservations =
-            new EnumMap<>(SereniteaPotDimension.class);
-        private final EnumMap<SereniteaPotDimension, DimensionBudget> dimensions =
+    /** One immutable owner order plus the mutable accounting for exactly one server tick. */
+    private static final class TickPlan {
+        private static final TickPlan EMPTY = new TickPlan(List.of(), 0.0);
+
+        private final List<UUID> owners;
+        private final Map<UUID, Integer> indices;
+        private final boolean[] serialStarted;
+        private final boolean[] threadedAdmitted;
+        private final boolean[] threadedExecuted;
+        private final long[][] threadedElapsed;
+        private final Map<UUID, Double> ownerRemainingNanos = new HashMap<>();
+        private final Phaser threadedBarrier;
+        private double globalRemainingNanos;
+
+        private TickPlan(List<UUID> owners, double globalBudgetNanos) {
+            this.owners = List.copyOf(owners);
+            this.indices = new HashMap<>();
+            this.serialStarted = new boolean[owners.size()];
+            this.threadedAdmitted = new boolean[owners.size()];
+            this.threadedExecuted = new boolean[owners.size()];
+            this.threadedElapsed = new long[owners.size()][SereniteaPotDimension.values().length];
+            this.globalRemainingNanos = Math.max(0.0, globalBudgetNanos);
+            for (int index = 0; index < owners.size(); index++) {
+                UUID owner = owners.get(index);
+                indices.put(owner, index);
+                SereniteaPotRecord record = SereniteaPotManager.record(owner);
+                ownerRemainingNanos.put(
+                    owner,
+                    record == null ? 0.0 : record.getBudgetMillisPerTick() * 1_000_000.0
+                );
+            }
+            if (!owners.isEmpty()) threadedAdmitted[0] = globalRemainingNanos > 0.0;
+            this.threadedBarrier = new Phaser(3) {
+                @Override
+                protected boolean onAdvance(int phase, int registeredParties) {
+                    completeThreadedPhase(phase);
+                    return phase + 1 >= TickPlan.this.owners.size();
+                }
+            };
+        }
+
+        private static TickPlan empty() {
+            return EMPTY;
+        }
+
+        private List<UUID> owners() {
+            return owners;
+        }
+
+        private synchronized boolean admitSerial(UUID owner) {
+            Integer index = indices.get(owner);
+            if (index == null) return false;
+            if (serialStarted[index]) return true;
+            if (globalRemainingNanos <= 0.0) return false;
+            serialStarted[index] = true;
+            return true;
+        }
+
+        private synchronized void recordSerialCost(UUID owner, long elapsedNanos) {
+            globalRemainingNanos -= elapsedNanos;
+            ownerRemainingNanos.compute(owner, (ignored, remaining) ->
+                (remaining == null ? 0.0 : remaining) - elapsedNanos
+            );
+            recordWholePotCost(owner, elapsedNanos);
+        }
+
+        private boolean admitThreaded(UUID owner) {
+            Integer index = indices.get(owner);
+            return index != null && threadedAdmitted[index];
+        }
+
+        private boolean finishThreadedOwner(
+            UUID owner,
+            SereniteaPotDimension dimension,
+            long elapsedNanos,
+            boolean ran
+        ) {
+            Integer index = indices.get(owner);
+            if (index == null) return false;
+            threadedElapsed[index][dimension.ordinal()] = elapsedNanos;
+            if (ran) threadedExecuted[index] = true;
+            return threadedBarrier.arriveAndAwaitAdvance() >= 0;
+        }
+
+        private synchronized void completeThreadedPhase(int index) {
+            if (index >= owners.size()) return;
+            long cost = 0L;
+            for (long laneElapsed : threadedElapsed[index]) cost = Math.max(cost, laneElapsed);
+            long actualCost = cost;
+            UUID owner = owners.get(index);
+            globalRemainingNanos -= actualCost;
+            ownerRemainingNanos.compute(owner, (ignored, remaining) ->
+                (remaining == null ? 0.0 : remaining) - actualCost
+            );
+            if (threadedExecuted[index]) recordWholePotCost(owner, actualCost);
+            int next = index + 1;
+            if (next < owners.size()) threadedAdmitted[next] = globalRemainingNanos > 0.0;
+        }
+
+        private void abortThreadedTick() {
+            threadedBarrier.forceTermination();
+        }
+
+        private List<UUID> threadedExecutedOwners() {
+            List<UUID> executed = new ArrayList<>();
+            for (int index = 0; index < owners.size(); index++) {
+                if (threadedExecuted[index]) executed.add(owners.get(index));
+            }
+            return List.copyOf(executed);
+        }
+
+        private synchronized double reserveCreation(UUID owner, long maximumNanos, double ownerLimitNanos) {
+            double ownerRemaining = ownerRemainingNanos.computeIfAbsent(owner, ignored -> ownerLimitNanos);
+            double reserved = Math.min((double) maximumNanos, Math.min(ownerRemaining, globalRemainingNanos));
+            if (reserved < MINIMUM_CREATION_SLICE_NANOS) return 0.0;
+            ownerRemainingNanos.put(owner, ownerRemaining - reserved);
+            globalRemainingNanos -= reserved;
+            return reserved;
+        }
+
+        private synchronized void correctCreation(UUID owner, double reservedNanos, long elapsedNanos) {
+            double correction = elapsedNanos - reservedNanos;
+            ownerRemainingNanos.compute(owner, (ignored, remaining) ->
+                (remaining == null ? 0.0 : remaining) - correction
+            );
+            globalRemainingNanos -= correction;
+        }
+    }
+
+    public static final class CreationReservation {
+        private final TickPlan plan;
+        private final UUID owner;
+        private final double reservedNanos;
+        private boolean completed;
+
+        private CreationReservation(TickPlan plan, UUID owner, double reservedNanos) {
+            this.plan = plan;
+            this.owner = owner;
+            this.reservedNanos = reservedNanos;
+        }
+
+        public double reservedNanos() {
+            return reservedNanos;
+        }
+    }
+
+    private static final class OwnerMetrics {
+        private final EnumMap<SereniteaPotDimension, DimensionMetrics> dimensions =
             new EnumMap<>(SereniteaPotDimension.class);
         private long calls;
         private long runs;
         private long skips;
-        private long consumed;
+        private long wholePotConsumed;
+        private long levelConsumed;
         private long maximum;
         private long creationConsumed;
         private long lastCalls;
         private long lastRuns;
         private long lastSkips;
-        private long lastConsumed;
+        private long lastWholePotConsumed;
+        private long lastLevelConsumed;
         private long lastMaximum;
         private long lastCreationConsumed;
 
-        private OwnerBudget(double limitMillisPerSecond) {
-            limitNanos = limitMillisPerSecond * 1_000_000.0;
-            tokensNanos = limitNanos / TICKS_PER_SECOND;
+        private static SereniteaPotPerformanceSnapshot emptySnapshot(UUID owner, double budgetMillis) {
+            return new SereniteaPotPerformanceSnapshot(
+                owner, budgetMillis, 0.0, 0.0, 0.0, 0.0, 0.0, 0L, 0L, Map.of()
+            );
         }
 
-        private void updateLimit(double millisPerSecond) {
-            limitNanos = Math.max(0.0, millisPerSecond * 1_000_000.0);
-            tokensNanos = Math.min(tokensNanos, limitNanos);
-        }
-
-        private void refill() {
-            tokensNanos = Math.min(limitNanos, tokensNanos + limitNanos / TICKS_PER_SECOND);
-        }
-
-        private DimensionBudget dimension(SereniteaPotDimension dimension) {
-            return dimensions.computeIfAbsent(dimension, ignored -> new DimensionBudget());
+        private DimensionMetrics dimension(SereniteaPotDimension dimension) {
+            return dimensions.computeIfAbsent(dimension, ignored -> new DimensionMetrics());
         }
 
         private void recordSkip(SereniteaPotDimension dimension) {
@@ -323,52 +491,51 @@ public final class SereniteaPotScheduler {
             dimension(dimension).skips++;
         }
 
-        private void recordRun(SereniteaPotDimension dimension, long elapsedNanos) {
+        private void recordLevelRun(SereniteaPotDimension dimension, long elapsedNanos) {
             runs++;
-            consumed += elapsedNanos;
+            levelConsumed += elapsedNanos;
             maximum = Math.max(maximum, elapsedNanos);
-            estimatedNanos = estimatedNanos * 0.8 + elapsedNanos * 0.2;
             dimension(dimension).recordRun(elapsedNanos);
         }
 
+        private void recordWholePotCost(long elapsedNanos) {
+            wholePotConsumed += elapsedNanos;
+        }
+
         private void recordCreation(long elapsedNanos) {
-            consumed += elapsedNanos;
             creationConsumed += elapsedNanos;
-            maximum = Math.max(maximum, elapsedNanos);
         }
 
         private void rollWindow() {
             lastCalls = calls;
             lastRuns = runs;
             lastSkips = skips;
-            lastConsumed = consumed;
+            lastWholePotConsumed = wholePotConsumed;
+            lastLevelConsumed = levelConsumed;
             lastMaximum = maximum;
             lastCreationConsumed = creationConsumed;
             calls = 0L;
             runs = 0L;
             skips = 0L;
-            consumed = 0L;
+            wholePotConsumed = 0L;
+            levelConsumed = 0L;
             maximum = 0L;
             creationConsumed = 0L;
-            for (DimensionBudget dimension : dimensions.values()) {
-                dimension.rollWindow();
-            }
+            dimensions.values().forEach(DimensionMetrics::rollWindow);
         }
 
-        private SereniteaPotPerformanceSnapshot snapshot(UUID owner, double limitMillis) {
-            long levelConsumed = lastConsumed - lastCreationConsumed;
-            double average = lastRuns == 0L ? 0.0 : levelConsumed / (double) lastRuns / 1_000_000.0;
+        private SereniteaPotPerformanceSnapshot snapshot(UUID owner, double budgetMillis) {
+            double average = lastRuns == 0L ? 0.0 : lastLevelConsumed / (double) lastRuns / 1_000_000.0;
             double effectiveTps = lastCalls == 0L ? 0.0 : (double) lastRuns / lastCalls * 20.0;
             EnumMap<SereniteaPotDimension, DimensionPerformanceSnapshot> dimensionSnapshots =
                 new EnumMap<>(SereniteaPotDimension.class);
-            for (var entry : dimensions.entrySet()) {
-                dimensionSnapshots.put(entry.getKey(), entry.getValue().snapshot());
-            }
+            dimensions.forEach((dimension, value) -> dimensionSnapshots.put(dimension, value.snapshot()));
             return new SereniteaPotPerformanceSnapshot(
                 owner,
-                limitMillis,
-                lastConsumed / 1_000_000.0,
-                lastCreationConsumed / 1_000_000.0,
+                budgetMillis,
+                (lastWholePotConsumed + lastCreationConsumed)
+                    / (double) METRICS_WINDOW_TICKS / 1_000_000.0,
+                lastCreationConsumed / (double) METRICS_WINDOW_TICKS / 1_000_000.0,
                 average,
                 lastMaximum / 1_000_000.0,
                 effectiveTps,
@@ -379,23 +546,7 @@ public final class SereniteaPotScheduler {
         }
     }
 
-    public static final class CreationReservation {
-        private final UUID owner;
-        private final double reservedNanos;
-        private boolean completed;
-
-        public CreationReservation(UUID owner, double reservedNanos) {
-            this.owner = owner;
-            this.reservedNanos = reservedNanos;
-        }
-
-        public double reservedNanos() {
-            return reservedNanos;
-        }
-
-    }
-
-    private static final class DimensionBudget {
+    private static final class DimensionMetrics {
         private long runs;
         private long skips;
         private long consumed;
