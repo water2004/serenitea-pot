@@ -21,16 +21,12 @@ public final class CommandTreeGameTest {
                 .getDispatcher().getRoot().getChild("sereniteapot");
         helper.assertTrue(root != null, "Missing /sereniteapot command");
         assertChildren(helper, root,
-                "create", "enter", "leave", "unfreeze", "difficulty", "request", "requests",
+                "create", "enter", "leave", "unfreeze", "request", "requests",
                 "approve", "deny", "delete", "admin");
         assertChildren(helper, child(root, "admin"),
                 "enable", "disable", "max-radius", "default-max-radius",
                 "budget", "default-budget", "global-budget",
-                "difficulty", "status", "perf", "delete");
-        assertChildren(helper, child(root, "difficulty"),
-                "peaceful", "easy", "normal", "hard");
-        assertChildren(helper, child(root, "admin", "difficulty", "player"),
-                "peaceful", "easy", "normal", "hard");
+                "status", "perf", "delete");
         assertChildren(helper, child(root, "approve", "player"), "request-id");
         assertChildren(helper, child(root, "delete"), "confirm");
         assertChildren(helper, child(root, "admin", "max-radius", "player"), "radius");
@@ -63,7 +59,7 @@ public final class CommandTreeGameTest {
     public void extendsOnlyWorldLocalVanillaCommandRequirements(GameTestHelper helper) {
         CommandNode<CommandSourceStack> root = helper.getLevel().getServer().getCommands()
                 .getDispatcher().getRoot();
-        for (String command : Set.of("fill", "fillbiome", "place", "setblock", "summon")) {
+        for (String command : Set.of("difficulty", "fill", "fillbiome", "place", "setblock", "summon")) {
             helper.assertTrue(
                     !(child(root, command).getRequirement() instanceof PermissionProviderCheck<?>),
                     "/" + command + " requirement was not extended");

@@ -2,7 +2,6 @@ package org.edtp.sereniteapot.command;
 
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.world.Difficulty;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotDeletionService;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
@@ -45,17 +44,5 @@ final class SereniteaPotTargetCommands {
                 record.getBudgetMillisPerTick(),
                 record.getDifficulty().getSerializedName(),
                 progressValue);
-    }
-
-    static int setDifficulty(
-            CommandContext<CommandSourceStack> context,
-            UUID owner,
-            Difficulty difficulty,
-            MessageKey missingPotMessage) {
-        SereniteaPotRecord record = SereniteaPotManager.record(owner);
-        if (record == null || !record.exists()) return failure(context, missingPotMessage);
-        SereniteaPotManager.setDifficulty(owner, difficulty);
-        return success(context, MessageKey.COMMAND_DIFFICULTY_SUCCESS,
-                owner, difficulty.getSerializedName());
     }
 }

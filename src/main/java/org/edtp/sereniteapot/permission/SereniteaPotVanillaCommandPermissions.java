@@ -21,6 +21,7 @@ public final class SereniteaPotVanillaCommandPermissions {
     // This set is a security boundary: every branch of each command must operate only on
     // CommandSourceStack#getLevel and must not target players, other dimensions, or server state.
     private static final Set<String> WORLD_LOCAL_COMMANDS = Set.of(
+            "difficulty",
             "fill",
             "fillbiome",
             "place",

@@ -93,7 +93,7 @@ Carpet fake players, portal loaders, chunk tickets, and machines cannot keep a p
 
 `disable` is an operator action that closes a player's pot and prevents future admission. `freeze` only stops world ticks: the owner, approved visitors, and operators may still enter for repairs, and the owner can run `unfreeze` afterward.
 
-While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions. These grants disappear immediately on leaving. Pot entry restarts Axiom's client handshake so repeated leave/enter cycles receive the current grant; WorldEdit checks the current player on every command. Permissions in public dimensions, other players' pots, and for visitors remain unchanged. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
+While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions, plus the world-local Vanilla commands `/difficulty`, `/fill`, `/fillbiome`, `/place`, `/setblock`, and `/summon`. These grants disappear immediately on leaving. Pot entry restarts Axiom's client handshake so repeated leave/enter cycles receive the current grant; WorldEdit checks the current player on every command. Permissions in public dimensions, other players' pots, and for visitors remain unchanged. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
 
 ## Player commands
 
@@ -103,7 +103,6 @@ While physically inside their own pot, its owner receives full WorldEdit and Axi
 /sereniteapot enter                   Enter your own pot
 /sereniteapot leave                   Leave the current pot
 /sereniteapot unfreeze                Resume ticks after repairing your frozen pot
-/sereniteapot difficulty <difficulty> Set all three pot dimensions to peaceful/easy/normal/hard
 /sereniteapot request <owner>         Request temporary entry to another player's pot
 /sereniteapot requests                List pending requests received by you
 /sereniteapot approve <player>        Approve a request and teleport the requester
@@ -123,13 +122,12 @@ Level-4 operators may also use `/sereniteapot enter <owner>` to enter a currentl
 /sereniteapot admin budget <player> <ms-per-tick>
 /sereniteapot admin default-budget <ms-per-tick>
 /sereniteapot admin global-budget <ms-per-tick>
-/sereniteapot admin difficulty <player> <difficulty>
 /sereniteapot admin status <player>
 /sereniteapot admin perf [player]
 /sereniteapot admin delete <player> confirm
 ```
 
-Each pot has one persistent difficulty shared by its Overworld, Nether, and End; it defaults to `normal` and never changes public-world difficulty. The default maximum radius is 4 chunks per player and the hard maximum is 256. The default per-pot budget is 2 ms/tick; the global default is 20 ms/tick. Default commands affect player records created afterward, while `max-radius` and `budget` target one existing player.
+Each pot has one persistent difficulty shared by its Overworld, Nether, and End; it defaults to `normal`. Inside a pot, Vanilla's `/difficulty` queries and changes that pot only. In public dimensions it retains its original global behavior and authorization. The default maximum radius is 4 chunks per player and the hard maximum is 256. The default per-pot budget is 2 ms/tick; the global default is 20 ms/tick. Default commands affect player records created afterward, while `max-radius` and `budget` target one existing player.
 
 ## Performance model
 

@@ -36,7 +36,12 @@ public final class PotDifficultyGameTest {
                     0
                 );
 
-                SereniteaPotManager.setDifficulty(owner, Difficulty.PEACEFUL);
+                server.getCommands().performPrefixedCommand(
+                    server.createCommandSourceStack().withLevel(
+                        bundle.get(SereniteaPotDimension.OVERWORLD)
+                    ),
+                    "difficulty peaceful"
+                );
                 for (var level : bundle.levels().values()) {
                     if (level.getDifficulty() != Difficulty.PEACEFUL) {
                         throw new AssertionError(level.dimension().identifier() + " did not become peaceful");
