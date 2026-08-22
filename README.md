@@ -58,7 +58,7 @@ Current snapshot: `1.0.0-snapshot.2-26.2`
 
 Serenitea Pot has no client component and needs no separate configuration file. Limits are managed through in-game level-4 operator commands. Arcade Dimensions is already nested inside the Serenitea Pot JAR and must not be installed separately.
 
-Optionally install Worldthreader 3.1.0 on the server to tick dimensions in parallel. Removing it restores Vanilla's serial dimension ticking without changing pot data or configuration.
+Optionally install exactly WorldThreader 3.1.0 on the server. Other installed WorldThreader versions are rejected by Fabric Loader because this integration targets its internal threading protocol. Removing it restores Vanilla's serial dimension ticking without changing pot data or configuration.
 
 ## How extraction works
 
@@ -118,20 +118,22 @@ Level-4 operators may also use `/sereniteapot enter <owner>` to enter a currentl
 /sereniteapot admin enable <player>
 /sereniteapot admin disable <player>
 /sereniteapot admin max-radius <player> <chunk-radius>
-/sereniteapot admin budget <player> <ms-per-second>
-/sereniteapot admin global-budget <ms-per-second>
+/sereniteapot admin default-max-radius <chunk-radius>
+/sereniteapot admin budget <player> <ms-per-tick>
+/sereniteapot admin default-budget <ms-per-tick>
+/sereniteapot admin global-budget <ms-per-tick>
 /sereniteapot admin status <player>
 /sereniteapot admin perf [player]
 /sereniteapot admin delete <player> confirm
 ```
 
-The default maximum radius is 4 chunks per player. The hard maximum is 256.
+The default maximum radius is 4 chunks per player and the hard maximum is 256. The default per-pot budget is 2 ms/tick; the global default is 20 ms/tick. Default commands affect player records created afterward, while `max-radius` and `budget` target one existing player.
 
 ## Performance model
 
-Without Worldthreader, all world work remains on Minecraft's server thread. With the optional Worldthreader 3.1.0 installed, each loaded dimension uses Worldthreader's worker thread while Serenitea Pot keeps catalog, lifecycle, creation, and freeze decisions on the server thread at tick barriers.
+Without WorldThreader, all world work remains on Minecraft's server thread. With optional WorldThreader 3.1.0 installed, pots do not create more worker threads: every pot Overworld joins the public Overworld lane, every pot Nether joins the public Nether lane, and every pot End joins the public End lane. The three lanes run in parallel, while different pots remain sequential within a lane.
 
-Each owner's three dimensions and active region-copy task share a millisecond-per-second token bucket. All pots also share a global bucket. When a budget is exhausted, complete `ServerLevel.tick` calls are skipped or creation work is deferred. Overspending creates token debt that throttles later work.
+Budgets reset every server tick and never accumulate debt. Loaded pots are shuffled, then whole pots run in that order until their measured current-tick cost exhausts the global budget. With WorldThreader the cost of one pot is the slowest of its three parallel dimension lanes; without it the three serial dimension costs are added. Region-copy work uses the remaining per-pot and global time in the same tick.
 
 Extraction advances chunk by chunk. It clones chunk section palettes and separately copies block entities, block and fluid scheduled ticks, non-player entities and passenger trees, POI data, structures, lighting, and persistent Fabric chunk attachments. A slow chunk reduces later throughput rather than failing the creation plan.
 
@@ -143,7 +145,7 @@ A single dimension tick, synchronous chunk load, or third-party callback cannot 
 
 Serenitea Pot creates real server levels that share the server's registries and game logic. Arcade Dimensions provides the `VanillaLikeLevelsBuilder`, portal mixins, and `VanillaDimensionMapper` that keep players and other entities inside the same owner's Overworld/Nether/End bundle.
 
-Worldthreader 3.1.0 is supported through an optional integration layer. It preserves per-pot budgets and frozen-level barrier participation while Worldthreader runs dimensions in parallel; the integration is inactive when Worldthreader is absent.
+WorldThreader 3.1.0 is supported through an optional, version-locked Mixin integration. It attaches pot work to the three vanilla dimension-family threads and preserves WorldThreader's world-tick, teleport-receive, post-teleport, and recovery barriers. The integration is inactive when WorldThreader is absent.
 
 Mods that store machine state in block entities or standard persistent Fabric chunk attachments will usually copy with the region. There is no universal and safe region meaning for the following data, so compatibility is not promised for:
 

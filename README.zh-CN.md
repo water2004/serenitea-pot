@@ -36,7 +36,7 @@ Arcade Dimensions `0.13.0-beta.6+26.2`、其相关模块以及 Fabric Permission
 
 尘歌壶没有客户端组件，也不需要单独的配置文件；所有限制通过游戏内 OP4 管理命令设置。Arcade Dimensions 已嵌入尘歌壶 JAR，不能重复安装。
 
-服务端可选安装 Worldthreader 3.1.0，使已加载维度并行 tick。移除它后会自动恢复原版的串行维度 tick，不需要迁移尘歌壶存档或配置。
+服务端可选安装且只能安装 WorldThreader 3.1.0。适配层依赖该版本的内部线程协议，其他已安装版本会由 Fabric Loader 拒绝启动。移除它后自动恢复原版串行维度 tick，不需要迁移尘歌壶数据。
 
 ## 核心规则
 
@@ -80,8 +80,10 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 ```text
 /sereniteapot admin enable|disable <player>
 /sereniteapot admin max-radius <player> <chunk-radius>
-/sereniteapot admin budget <player> <ms-per-second>
-/sereniteapot admin global-budget <ms-per-second>
+/sereniteapot admin default-max-radius <chunk-radius>
+/sereniteapot admin budget <player> <ms-per-tick>
+/sereniteapot admin default-budget <ms-per-tick>
+/sereniteapot admin global-budget <ms-per-tick>
 /sereniteapot admin status <player>
 /sereniteapot admin perf [player]
 /sereniteapot admin delete <player> confirm
@@ -95,11 +97,11 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 
 ## 性能模型
 
-未安装 Worldthreader 时，全部世界逻辑仍在 Minecraft 服务端主线程运行。可选安装 Worldthreader 3.1.0 后，每个已加载维度由 Worldthreader 的工作线程 tick；尘歌壶的目录、生命周期、创建和冻结决策仍在刻边界后的服务器主线程处理。
+未安装 WorldThreader 时，全部世界逻辑仍在 Minecraft 服务端主线程运行。安装 WorldThreader 3.1.0 后不会按壶增加线程：全部壶主世界加入公共主世界线程，全部壶下界加入公共下界线程，全部壶末地加入公共末地线程。三个维度族并行，同一维度族内的不同壶仍顺序执行。
 
-每名玩家的三个维度和全高度区域复制任务共享一个毫秒/秒 token bucket，全部尘歌壶还共享一个全局池。预算不足、禁用、冻结或创建中时会跳过整个 `ServerLevel.tick`。区域复制按玩家轮转，方块、生物群系、计划刻和实体扫描都按区块推进，每次最多准备一个新区块，并受每 tick 4 ms 的额外总上限约束。`perf` 显示 `RUNNING`、`COPYING`、`THROTTLED`、`FROZEN`、`DISABLED` 等运行状态，并记录最近完整一秒的总耗时、其中复制耗时、平均/最大维度 tick、执行/跳过次数和有效 TPS。
+预算每个服务器 tick 重新开始，不累积债务。已加载的壶先随机排序，再按顺序执行完整三维度 tick，直到本 tick 实测耗时用尽全局预算。安装 WorldThreader 时单壶成本取三个并行维度中最慢者；未安装时取三个串行维度之和。区域复制使用本 tick 剩余的单壶与全局预算。默认单壶预算为 2 ms/tick，全局预算为 20 ms/tick；默认最大半径为 4 区块，默认值命令只影响之后新建的玩家配置。
 
-单次维度 tick、同步区块加载或模组回调无法从中途安全终止；如果一次调用超过预算，实际耗时会形成 token 债务，后续工作被节流。只有已经运行的尘歌壶单次 `ServerLevel.tick` 达到 200 ms 才会自动冻结；玩家留在原地，从下一 tick 起进入维修模式。创建会直接克隆每个完整区块的 section palette，再单独复制方块实体、计划刻、实体、POI、光照、结构和 Fabric 持久化 chunk attachment，而不是逐方块写入。慢区块不会导致冻结或失败：超出的耗时记为预算债务，之后降低推进频率继续执行。
+单次维度 tick、同步区块加载或模组回调无法从中途安全终止，因此预算只能在一次完整调用结束后按实际耗时决定下一个壶是否运行。单次 `ServerLevel.tick` 达到 200 ms 时仍会自动冻结；玩家留在原地，从下一 tick 起进入维修模式。创建直接克隆完整区块数据并按剩余预算继续推进，慢区块不会把创建计划直接判定为失败。
 
 实体复制同样属于计划的一部分：每片最多收集 256 个非玩家根实体，单区块超过该数量时会留在当前区块继续分片收集，不会直接判定创建失败；乘客树随根实体整体复制。
 
@@ -107,7 +109,7 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 
 产物内嵌并强依赖 Arcade Dimensions 0.13.0-beta.6。尘歌壶三维度由 `VanillaLikeLevelsBuilder` 组成；Arcade 的 Nether/End portal mixin 和 `VanillaDimensionMapper` 负责让玩家及实体只在同一名主人的主世界、下界、末地之间传送。不要从 jar 中移除或替换这组 Arcade 依赖。
 
-Worldthreader 3.1.0 由独立的可选兼容层支持；安装后仍保留每壶性能预算和冻结语义，并在跳过冻结维度时继续参加 Worldthreader 的同步屏障。未安装时该兼容层不会加载。
+WorldThreader 3.1.0 由独立且精确锁版的 Mixin 兼容层支持。壶维度挂到三个原版维度族线程，并完整参加世界 tick、传送接收、到达后补 tick 和失败恢复阶段；未安装时该兼容层不会加载。
 
 尘歌壶（Serenitea Pot）的实现源码全部使用 Java 25。Arcade Dimensions 自身使用 Kotlin 编写，因此最终服务端产物仍声明 `fabric-language-kotlin` 运行时依赖；这不代表本项目还混有 Kotlin 业务源码，也不要求玩家客户端安装任何模组。
 
