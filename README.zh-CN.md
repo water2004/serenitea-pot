@@ -25,12 +25,12 @@ Minecraft 26.2 的 Fabric 服务端尘歌壶模组，支持独立服务器和单
 
 Arcade Dimensions `0.13.0-beta.6+26.2`、其相关模块以及 Fabric Permissions API v0 `0.7.0` 已嵌入最终 JAR，不需要另外安装，也不应从产物中移除。
 
-当前快照版本：`1.0.0-snapshot.2-26.2`
+当前快照版本：`1.0.0-snapshot.3-26.2`
 
 ## 安装
 
 1. 在服务端安装 Minecraft 26.2 和 Fabric Loader 0.19.3 或更高版本。
-2. 从 [GitHub Releases](https://github.com/water2004/serenitea-pot/releases) 下载 `serenitea-pot-1.0.0-snapshot.2-26.2.jar`。
+2. 从 [GitHub Releases](https://github.com/water2004/serenitea-pot/releases) 下载 `serenitea-pot-1.0.0-snapshot.3-26.2.jar`。
 3. 下载 Fabric API `0.158.0+26.2`，以及 Fabric Language Kotlin `1.13.12+kotlin.2.4.0` 或更高版本。
 4. 将三个 JAR 放入服务端 `mods` 目录，并使用 Java 25 启动服务器。
 

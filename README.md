@@ -47,12 +47,12 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 
 Arcade Dimensions `0.13.0-beta.6+26.2`, its supporting modules, and Fabric Permissions API v0 `0.7.0` are embedded in the built mod. Do not install duplicate copies or remove the embedded modules from the JAR.
 
-Current snapshot: `1.0.0-snapshot.2-26.2`
+Current snapshot: `1.0.0-snapshot.3-26.2`
 
 ## Installation
 
 1. Install Minecraft 26.2 with Fabric Loader 0.19.3 or newer on the server.
-2. Download `serenitea-pot-1.0.0-snapshot.2-26.2.jar` from [GitHub Releases](https://github.com/water2004/serenitea-pot/releases).
+2. Download `serenitea-pot-1.0.0-snapshot.3-26.2.jar` from [GitHub Releases](https://github.com/water2004/serenitea-pot/releases).
 3. Download Fabric API `0.158.0+26.2` and Fabric Language Kotlin `1.13.12+kotlin.2.4.0` or newer.
 4. Place all three JAR files in the server's `mods` directory and start the server with Java 25.
 
