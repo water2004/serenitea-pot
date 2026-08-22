@@ -2,14 +2,17 @@ package org.edtp.sereniteapot.level;
 
 import net.casual.arcade.dimensions.level.CustomLevel;
 import net.casual.arcade.dimensions.level.LevelPersistence;
+import net.casual.arcade.dimensions.level.LevelProperties;
 import net.casual.arcade.dimensions.level.builder.CustomLevelBuilder;
 import net.casual.arcade.dimensions.level.vanilla.VanillaLikeLevels;
 import net.casual.arcade.dimensions.level.vanilla.VanillaLikeLevelsBuilder;
 import net.casual.arcade.dimensions.utils.DimensionUtilsKt;
 import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
+import net.minecraft.network.protocol.game.ClientboundChangeDifficultyPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
@@ -114,6 +117,7 @@ public final class SereniteaPotManager {
         // 三个维度必须由同一个 VanillaLikeLevelsBuilder 创建，Arcade 才会为它们建立
         // 主世界/下界/末地的成组传送门映射。
         VanillaLikeLevelsBuilder builder = new VanillaLikeLevelsBuilder();
+        Difficulty difficulty = catalog.getOrCreate(owner).getDifficulty();
         for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
             ServerLevel template = server.getLevel(dimension.vanillaLevelKey());
             if (template == null) {
@@ -128,6 +132,7 @@ public final class SereniteaPotManager {
                     .dimensionKey(SereniteaPotLevelKeys.key(owner, generation, dimension))
                     .dimensionType(template.dimensionTypeRegistration())
                     .chunkGenerator(voidGenerator(biome))
+                    .difficulty(difficultyProperties(difficulty))
                     .persistence(LevelPersistence.Permanent)
                     .seed(seed)
             );
@@ -173,10 +178,11 @@ public final class SereniteaPotManager {
             );
         }
 
+        SereniteaPotRecord record = catalog.getOrCreate(bundle.owner());
+        applyDifficulty(bundle, record.getDifficulty());
         for (CustomLevel level : bundle.levels().values()) {
             level.save(null, true, false);
         }
-        SereniteaPotRecord record = catalog.getOrCreate(bundle.owner());
         long oldGeneration = record.getActiveGeneration();
         int oldMaximumRadiusChunks = record.getMaxRadiusChunks();
         EnumMap<SereniteaPotDimension, SereniteaPotSlotRecord> oldSlots = copySlots(record.getSlots());
@@ -228,6 +234,7 @@ public final class SereniteaPotManager {
             throw error;
         }
         SereniteaPotBundle bundle = new SereniteaPotBundle(owner, record.getActiveGeneration(), levels);
+        applyDifficulty(bundle, record.getDifficulty());
         loaded.put(owner, bundle);
         applyBorders(bundle, record);
         return bundle;
@@ -252,6 +259,21 @@ public final class SereniteaPotManager {
         } catch (IOException error) {
             throw new IllegalStateException("Failed to save Serenitea Pot catalog", error);
         }
+    }
+
+    /** Changes the shared difficulty of all three dimensions without touching public worlds. */
+    public static void setDifficulty(UUID owner, Difficulty difficulty) {
+        requireServerThread();
+        SereniteaPotRecord record = catalog.getPlayers().get(owner);
+        if (record == null || !record.exists()) {
+            throw new IllegalArgumentException("Serenitea Pot " + owner + " does not exist");
+        }
+        record.setDifficulty(difficulty);
+        SereniteaPotBundle bundle = loaded.get(owner);
+        if (bundle != null) {
+            applyDifficulty(bundle, difficulty);
+        }
+        saveCatalog();
     }
 
     static boolean deleteEvacuatedLevel(CustomLevel level) {
@@ -301,6 +323,18 @@ public final class SereniteaPotManager {
                 border.setSize((slot.radiusChunks() * 2.0 + 1.0) * SectionPos.SECTION_SIZE);
             }
         }
+    }
+
+    private static void applyDifficulty(SereniteaPotBundle bundle, Difficulty difficulty) {
+        var packet = new ClientboundChangeDifficultyPacket(difficulty, false);
+        for (CustomLevel level : bundle.levels().values()) {
+            level.getProperties().setDifficulty(Optional.of(difficultyProperties(difficulty)));
+            level.players().forEach(player -> player.connection.send(packet));
+        }
+    }
+
+    private static LevelProperties.DifficultyProperties difficultyProperties(Difficulty difficulty) {
+        return new LevelProperties.DifficultyProperties(difficulty, false);
     }
 
     private static EnumMap<SereniteaPotDimension, SereniteaPotSlotRecord> copySlots(

@@ -4,6 +4,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.minecraft.world.Difficulty;
 import org.edtp.sereniteapot.SereniteaPotMod;
 import org.edtp.sereniteapot.model.SereniteaPotCatalog;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
@@ -22,7 +23,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public class SereniteaPotCatalogRepository {
-    private static final int FORMAT_VERSION = 3;
+    private static final int FORMAT_VERSION = 4;
 
     private final Path root;
     private final com.google.gson.Gson gson = new GsonBuilder().setPrettyPrinting().create();
@@ -83,6 +84,7 @@ public class SereniteaPotCatalogRepository {
         result.addProperty("activeGeneration", record.getActiveGeneration());
         result.addProperty("maxRadiusChunks", record.getMaxRadiusChunks());
         result.addProperty("budgetMillisPerTick", record.getBudgetMillisPerTick());
+        result.addProperty("difficulty", record.getDifficulty().getSerializedName());
         result.addProperty("enabled", record.isEnabled());
         result.addProperty("frozen", record.isFrozen());
 
@@ -122,6 +124,7 @@ public class SereniteaPotCatalogRepository {
                     activeGeneration == null ? 0 : activeGeneration.getAsLong(),
                     intValue(recordObject, "maxRadiusChunks", catalog.getDefaultMaxRadiusChunks()),
                     doubleValue(recordObject, "budgetMillisPerTick", catalog.getDefaultBudgetMillisPerTick()),
+                    difficultyValue(recordObject, "difficulty"),
                     booleanValue(recordObject, "enabled", true),
                     booleanValue(recordObject, "frozen", false));
 
@@ -162,6 +165,18 @@ public class SereniteaPotCatalogRepository {
     private static boolean booleanValue(JsonObject object, String name, boolean fallback) {
         JsonElement value = nonNull(object, name);
         return value == null ? fallback : value.getAsBoolean();
+    }
+
+    private static Difficulty difficultyValue(JsonObject object, String name) {
+        JsonElement value = nonNull(object, name);
+        if (value == null) {
+            throw new IllegalArgumentException("Missing difficulty in Serenitea Pot catalog");
+        }
+        Difficulty difficulty = Difficulty.byName(value.getAsString());
+        if (difficulty == null) {
+            throw new IllegalArgumentException("Unknown difficulty in Serenitea Pot catalog");
+        }
+        return difficulty;
     }
 
     private static String stringValue(JsonObject object, String name, String fallback) {

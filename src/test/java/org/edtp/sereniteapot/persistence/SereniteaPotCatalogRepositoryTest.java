@@ -1,5 +1,6 @@
 package org.edtp.sereniteapot.persistence;
 
+import net.minecraft.world.Difficulty;
 import org.edtp.sereniteapot.model.SereniteaPotCatalog;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
@@ -21,7 +22,7 @@ class SereniteaPotCatalogRepositoryTest {
     Path directory;
 
     @Test
-    void v3CatalogRoundTripsAdministrativeAndSlotMetadata() throws Exception {
+    void v4CatalogRoundTripsAdministrativeAndSlotMetadata() throws Exception {
         UUID owner = UUID.randomUUID();
         SereniteaPotCatalog catalog = new SereniteaPotCatalog();
         catalog.setDefaultMaxRadiusChunks(7);
@@ -30,6 +31,7 @@ class SereniteaPotCatalogRepositoryTest {
         record.setActiveGeneration(4);
         record.setMaxRadiusChunks(9);
         record.setBudgetMillisPerTick(12.25);
+        record.setDifficulty(Difficulty.HARD);
         record.setEnabled(false);
         record.getSlots().put(SereniteaPotDimension.NETHER,
                 new SereniteaPotSlotRecord("minecraft:the_nether", 12, 70, -8, 17));
@@ -45,13 +47,15 @@ class SereniteaPotCatalogRepositoryTest {
         assertEquals(4, loadedRecord.getActiveGeneration());
         assertEquals(9, loadedRecord.getMaxRadiusChunks());
         assertEquals(12.25, loadedRecord.getBudgetMillisPerTick());
+        assertEquals(Difficulty.HARD, loadedRecord.getDifficulty());
         assertFalse(loadedRecord.isEnabled());
         assertEquals(record.getStateId(), loadedRecord.getStateId());
         assertEquals(record.getSlots().get(SereniteaPotDimension.NETHER),
                 loadedRecord.getSlots().get(SereniteaPotDimension.NETHER));
-        assertTrue(json.contains("\"version\": 3"));
+        assertTrue(json.contains("\"version\": 4"));
         assertTrue(json.contains("\"globalBudgetMillisPerTick\": 37.5"));
         assertTrue(json.contains("\"budgetMillisPerTick\": 12.25"));
+        assertTrue(json.contains("\"difficulty\": \"hard\""));
         assertFalse(json.contains("MillisPerSecond"));
         assertTrue(json.contains("\"defaultMaxRadiusChunks\": 7"));
         assertTrue(json.contains("\"maxRadiusChunks\": 9"));

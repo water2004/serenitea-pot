@@ -4,6 +4,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.world.Difficulty;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
@@ -22,9 +23,25 @@ final class SereniteaPotOwnerCommands {
     static void register(LiteralArgumentBuilder<CommandSourceStack> root) {
         root.executes(SereniteaPotOwnerCommands::statusSelf);
         route(root, literal("unfreeze").executes(SereniteaPotOwnerCommands::unfreeze));
+        LiteralArgumentBuilder<CommandSourceStack> difficulty = literal("difficulty");
+        for (Difficulty value : Difficulty.values()) {
+            route(difficulty, literal(value.getSerializedName())
+                    .executes(context -> setDifficulty(context, value)));
+        }
+        route(root, difficulty);
         route(root,
                 literal("delete"),
                 literal("confirm").executes(SereniteaPotOwnerCommands::delete));
+    }
+
+    private static int setDifficulty(
+            CommandContext<CommandSourceStack> context,
+            Difficulty difficulty) throws CommandSyntaxException {
+        return SereniteaPotTargetCommands.setDifficulty(
+                context,
+                context.getSource().getPlayerOrException().getUUID(),
+                difficulty,
+                MessageKey.ERROR_SELF_NO_POT);
     }
 
     private static int unfreeze(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

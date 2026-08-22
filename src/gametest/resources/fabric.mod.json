@@ -10,6 +10,7 @@
       "org.edtp.sereniteapot.gametest.FrozenPotTickGameTest",
       "org.edtp.sereniteapot.gametest.PlayerDataIsolationGameTest",
       "org.edtp.sereniteapot.gametest.PlayerRealmTransferGameTest",
+      "org.edtp.sereniteapot.gametest.PotDifficultyGameTest",
       "org.edtp.sereniteapot.gametest.RegionCopyGameTest"
     ]
   },

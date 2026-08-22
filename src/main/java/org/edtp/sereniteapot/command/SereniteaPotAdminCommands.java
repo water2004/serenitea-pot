@@ -9,6 +9,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import net.minecraft.world.Difficulty;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
@@ -75,6 +76,12 @@ final class SereniteaPotAdminCommands {
                 literal("global-budget"),
                 argument(BUDGET_ARGUMENT, DoubleArgumentType.doubleArg(0.0))
                         .executes(SereniteaPotAdminCommands::setGlobalBudget));
+        var difficultyTarget = argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile());
+        for (Difficulty value : Difficulty.values()) {
+            route(difficultyTarget, literal(value.getSerializedName())
+                    .executes(context -> setDifficulty(context, value)));
+        }
+        route(admin, literal("difficulty"), difficultyTarget);
         route(admin,
                 literal("status"),
                 argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
@@ -160,6 +167,16 @@ final class SereniteaPotAdminCommands {
         SereniteaPotManager.catalog().setGlobalBudgetMillisPerTick(budget);
         SereniteaPotManager.saveCatalog();
         return success(context, MessageKey.COMMAND_ADMIN_GLOBAL_BUDGET_SUCCESS, budget);
+    }
+
+    private static int setDifficulty(
+            CommandContext<CommandSourceStack> context,
+            Difficulty difficulty) throws CommandSyntaxException {
+        return SereniteaPotTargetCommands.setDifficulty(
+                context,
+                profile(context, PLAYER_ARGUMENT),
+                difficulty,
+                MessageKey.ERROR_TARGET_NO_POT);
     }
 
     private static int showStatus(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

@@ -64,6 +64,7 @@ Arcade Dimensions `0.13.0-beta.6+26.2`、其相关模块以及 Fabric Permission
 /sereniteapot enter                   进入自己的尘歌壶
 /sereniteapot leave                   离开当前尘歌壶
 /sereniteapot unfreeze                维修完成后恢复自己的尘歌壶 tick
+/sereniteapot difficulty <difficulty> 设置三个壶维度共享的 peaceful/easy/normal/hard 难度
 /sereniteapot request <owner>         申请进入，60 秒过期
 /sereniteapot requests                查看收到的待处理申请
 /sereniteapot approve <player>        批准并立即送入申请者
@@ -84,12 +85,13 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 /sereniteapot admin budget <player> <ms-per-tick>
 /sereniteapot admin default-budget <ms-per-tick>
 /sereniteapot admin global-budget <ms-per-tick>
+/sereniteapot admin difficulty <player> <difficulty>
 /sereniteapot admin status <player>
 /sereniteapot admin perf [player]
 /sereniteapot admin delete <player> confirm
 ```
 
-新玩家默认最大区块半径为 `4`；OP4 可用 `max-radius` 为每名玩家独立调整。这里的半径始终以区块为单位，绝对上限为 `256`。提高上限只更新配置；降低上限且现有维度更大时，会通过同一暂存代际事务裁掉所有已创建维度超出新半径的边缘，成功切换后删除原代际，而不是只缩世界边界。
+每个尘歌壶拥有一个持久化难度，主世界、下界和末地共享该值，默认为 `normal`，且不会改变公共世界难度。新玩家默认最大区块半径为 `4`；OP4 可用 `max-radius` 为每名玩家独立调整。这里的半径始终以区块为单位，绝对上限为 `256`。提高上限只更新配置；降低上限且现有维度更大时，会通过同一暂存代际事务裁掉所有已创建维度超出新半径的边缘，成功切换后删除原代际，而不是只缩世界边界。
 
 `disable` 会禁止新进入，并在 tick 末尾通过关闭事务送出所有成员、确认维度无人占用，最后保存并卸载。`freeze` 是维修模式：仍允许主人、获批访客和管理员进入，但整组三维度的 `ServerLevel.tick` 都暂停，机器、实体、计划刻和随机刻不会推进；主人离开后仍照常卸载。运行中的尘歌壶异常卡顿时会自动进入 `frozen`，主人可以直接维修并自行 `unfreeze`；反复制造问题时 OP4 仍可 `disable`。
 

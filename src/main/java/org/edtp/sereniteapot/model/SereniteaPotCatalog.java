@@ -45,7 +45,8 @@ public class SereniteaPotCatalog {
 
     public SereniteaPotRecord getOrCreate(UUID owner) {
         return players.computeIfAbsent(owner, ignored -> new SereniteaPotRecord(UUID.randomUUID(), 0,
-                defaultMaxRadiusChunks, defaultBudgetMillisPerTick, true, false));
+                defaultMaxRadiusChunks, defaultBudgetMillisPerTick,
+                SereniteaPotRecord.DEFAULT_DIFFICULTY, true, false));
     }
 
 }

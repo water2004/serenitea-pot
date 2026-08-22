@@ -103,6 +103,7 @@ While physically inside their own pot, its owner receives full WorldEdit and Axi
 /sereniteapot enter                   Enter your own pot
 /sereniteapot leave                   Leave the current pot
 /sereniteapot unfreeze                Resume ticks after repairing your frozen pot
+/sereniteapot difficulty <difficulty> Set all three pot dimensions to peaceful/easy/normal/hard
 /sereniteapot request <owner>         Request temporary entry to another player's pot
 /sereniteapot requests                List pending requests received by you
 /sereniteapot approve <player>        Approve a request and teleport the requester
@@ -122,12 +123,13 @@ Level-4 operators may also use `/sereniteapot enter <owner>` to enter a currentl
 /sereniteapot admin budget <player> <ms-per-tick>
 /sereniteapot admin default-budget <ms-per-tick>
 /sereniteapot admin global-budget <ms-per-tick>
+/sereniteapot admin difficulty <player> <difficulty>
 /sereniteapot admin status <player>
 /sereniteapot admin perf [player]
 /sereniteapot admin delete <player> confirm
 ```
 
-The default maximum radius is 4 chunks per player and the hard maximum is 256. The default per-pot budget is 2 ms/tick; the global default is 20 ms/tick. Default commands affect player records created afterward, while `max-radius` and `budget` target one existing player.
+Each pot has one persistent difficulty shared by its Overworld, Nether, and End; it defaults to `normal` and never changes public-world difficulty. The default maximum radius is 4 chunks per player and the hard maximum is 256. The default per-pot budget is 2 ms/tick; the global default is 20 ms/tick. Default commands affect player records created afterward, while `max-radius` and `budget` target one existing player.
 
 ## Performance model
 

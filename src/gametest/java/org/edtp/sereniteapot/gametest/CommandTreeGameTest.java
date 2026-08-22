@@ -21,12 +21,16 @@ public final class CommandTreeGameTest {
                 .getDispatcher().getRoot().getChild("sereniteapot");
         helper.assertTrue(root != null, "Missing /sereniteapot command");
         assertChildren(helper, root,
-                "create", "enter", "leave", "unfreeze", "request", "requests",
+                "create", "enter", "leave", "unfreeze", "difficulty", "request", "requests",
                 "approve", "deny", "delete", "admin");
         assertChildren(helper, child(root, "admin"),
                 "enable", "disable", "max-radius", "default-max-radius",
                 "budget", "default-budget", "global-budget",
-                "status", "perf", "delete");
+                "difficulty", "status", "perf", "delete");
+        assertChildren(helper, child(root, "difficulty"),
+                "peaceful", "easy", "normal", "hard");
+        assertChildren(helper, child(root, "admin", "difficulty", "player"),
+                "peaceful", "easy", "normal", "hard");
         assertChildren(helper, child(root, "approve", "player"), "request-id");
         assertChildren(helper, child(root, "delete"), "confirm");
         assertChildren(helper, child(root, "admin", "max-radius", "player"), "radius");

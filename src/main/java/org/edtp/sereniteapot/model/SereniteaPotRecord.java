@@ -1,5 +1,7 @@
 package org.edtp.sereniteapot.model;
 
+import net.minecraft.world.Difficulty;
+
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
@@ -10,21 +12,25 @@ public class SereniteaPotRecord {
     public static final int DEFAULT_MAX_RADIUS_CHUNKS = 4;
     public static final int MAX_RADIUS_CHUNKS = 256;
     public static final double DEFAULT_BUDGET_MILLIS_PER_TICK = 2.0;
+    public static final Difficulty DEFAULT_DIFFICULTY = Difficulty.NORMAL;
 
     private UUID stateId;
     private long activeGeneration;
     private int maxRadiusChunks;
     private double budgetMillisPerTick;
+    private Difficulty difficulty;
     private boolean enabled;
     private boolean frozen;
     private final Map<SereniteaPotDimension, SereniteaPotSlotRecord> slots;
 
     public SereniteaPotRecord(UUID stateId, long activeGeneration, int maxRadiusChunks,
-                          double budgetMillisPerTick, boolean enabled, boolean frozen) {
+                          double budgetMillisPerTick, Difficulty difficulty,
+                          boolean enabled, boolean frozen) {
         this.stateId = Objects.requireNonNull(stateId, "stateId");
         this.activeGeneration = activeGeneration;
         this.maxRadiusChunks = requireValidRadiusChunks(maxRadiusChunks);
         this.budgetMillisPerTick = requireValidBudgetMillisPerTick(budgetMillisPerTick);
+        this.difficulty = Objects.requireNonNull(difficulty, "difficulty");
         this.enabled = enabled;
         this.frozen = frozen;
         this.slots = new EnumMap<>(SereniteaPotDimension.class);
@@ -60,6 +66,14 @@ public class SereniteaPotRecord {
 
     public void setBudgetMillisPerTick(double budgetMillisPerTick) {
         this.budgetMillisPerTick = requireValidBudgetMillisPerTick(budgetMillisPerTick);
+    }
+
+    public Difficulty getDifficulty() {
+        return difficulty;
+    }
+
+    public void setDifficulty(Difficulty difficulty) {
+        this.difficulty = Objects.requireNonNull(difficulty, "difficulty");
     }
 
     public boolean isEnabled() {
