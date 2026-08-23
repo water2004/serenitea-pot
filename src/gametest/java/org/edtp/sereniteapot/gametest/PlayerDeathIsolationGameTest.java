@@ -8,6 +8,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.storage.LevelData;
 import org.edtp.sereniteapot.level.SereniteaPotBundle;
 import org.edtp.sereniteapot.level.SereniteaPotDeletionService;
 import org.edtp.sereniteapot.level.SereniteaPotLevelKeys;
@@ -82,6 +83,18 @@ public final class PlayerDeathIsolationGameTest {
                     }
 
                     player.getInventory().setItem(0, new ItemStack(Items.DIRT, 2));
+                    player.setRespawnPosition(
+                        new ServerPlayer.RespawnConfig(
+                            LevelData.RespawnData.of(
+                                player.level().dimension(),
+                                player.blockPosition(),
+                                player.getYRot(),
+                                player.getXRot()
+                            ),
+                            true
+                        ),
+                        false
+                    );
                     player.setHealth(0.0F);
                     player.die(player.level().damageSources().genericKill());
 
@@ -125,20 +138,42 @@ public final class PlayerDeathIsolationGameTest {
                 return;
             }
 
-            if (phase.get() == 4 && serverTaskQueued.compareAndSet(false, true)) {
+            if (phase.get() == 4) {
+                try {
+                    var player = currentPlayer(server, owner);
+                    if (SereniteaPotLevelKeys.identify(player.level().dimension()) != null) return;
+                    if (player.getInventory().countItem(Items.DIAMOND) != 3) {
+                        throw new AssertionError("Public inventory changed after a pot death");
+                    }
+                    if (player.getInventory().countItem(Items.DIRT) != 0) {
+                        throw new AssertionError("Pot inventory leaked into the public realm");
+                    }
+                    ServerPlayer.RespawnConfig publicRespawn = player.getRespawnConfig();
+                    if (publicRespawn != null && SereniteaPotLevelKeys.identify(
+                        publicRespawn.respawnData().dimension()
+                    ) != null) {
+                        throw new AssertionError("The pot respawn point leaked into public playerdata");
+                    }
+
+                    player.setHealth(0.0F);
+                    player.die(player.level().damageSources().genericKill());
+                    player.connection.handleClientCommand(new ServerboundClientCommandPacket(
+                        ServerboundClientCommandPacket.Action.PERFORM_RESPAWN
+                    ));
+                    if (SereniteaPotLevelKeys.identify(currentPlayer(server, owner).level().dimension()) != null) {
+                        throw new AssertionError("Public-world death respawned inside a pot");
+                    }
+                    phase.set(5);
+                } catch (Throwable throwable) {
+                    failure.set(throwable);
+                }
+                return;
+            }
+
+            if (phase.get() == 5 && serverTaskQueued.compareAndSet(false, true)) {
                 server.execute(() -> {
                     try {
                         var player = currentPlayer(server, owner);
-                        if (SereniteaPotLevelKeys.identify(player.level().dimension()) != null) {
-                            return;
-                        }
-                        if (player.getInventory().countItem(Items.DIAMOND) != 3) {
-                            throw new AssertionError("Public inventory changed after a pot death");
-                        }
-                        if (player.getInventory().countItem(Items.DIRT) != 0) {
-                            throw new AssertionError("Pot inventory leaked into the public realm");
-                        }
-
                         var deletion = SereniteaPotDeletionService.deleteAndReset(server, owner);
                         if (deletion != SereniteaPotDeletionService.Success.INSTANCE) {
                             throw new AssertionError("Could not clean up death-isolation test pot: " + deletion);
@@ -146,14 +181,14 @@ public final class PlayerDeathIsolationGameTest {
                         server.getPlayerList().remove(player);
                         SereniteaPotManager.catalog().getPlayers().remove(owner);
                         SereniteaPotManager.saveCatalog();
-                        phase.set(5);
+                        phase.set(6);
                     } catch (Throwable throwable) {
                         failure.set(throwable);
                     } finally {
                         serverTaskQueued.set(false);
                     }
                 });
-            } else if (phase.get() == 5) {
+            } else if (phase.get() == 6) {
                 helper.succeed();
             }
         });

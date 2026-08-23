@@ -82,7 +82,7 @@ public final class PlayerDataIsolationGameTest {
                 if (player.level() != potLevel || !player.position().equals(new Vec3(0.5, 70.0, 0.5))) {
                     throw new AssertionError("Cancelling playerdata save mutated the live in-pot player");
                 }
-                var isolatedLocation = PlayerStateManager.savedLocation(player, owner);
+                var isolatedLocation = PlayerStateManager.savedPotLocation(player, owner);
                 if (isolatedLocation == null
                     || isolatedLocation.x() != 0.5
                     || isolatedLocation.y() != 70.0

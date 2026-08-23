@@ -230,7 +230,7 @@ public final class SereniteaPotTravelService {
         SereniteaPotRecord record,
         SereniteaPotBundle bundle
     ) {
-        PlayerStateManager.SavedLocation saved = PlayerStateManager.savedLocation(player, owner);
+        PlayerStateManager.SavedLocation saved = PlayerStateManager.savedPotLocation(player, owner);
         if (saved == null) return null;
         SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(saved.dimension());
         if (identity == null || !identity.owner().equals(owner)
@@ -247,7 +247,7 @@ public final class SereniteaPotTravelService {
     }
 
     private static Destination savedPublicDestination(ServerPlayer player) {
-        PlayerStateManager.SavedLocation saved = PlayerStateManager.savedLocation(player, null);
+        PlayerStateManager.SavedLocation saved = PlayerStateManager.savedPublicLocation(player);
         if (saved == null || SereniteaPotLevelKeys.identify(saved.dimension()) != null) return null;
         ServerLevel level = player.level().getServer().getLevel(saved.dimension());
         return level != null && usable(level, saved)

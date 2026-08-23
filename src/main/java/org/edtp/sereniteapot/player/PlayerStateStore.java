@@ -31,10 +31,10 @@ public final class PlayerStateStore {
         }
     }
 
-    public void put(UUID player, String stateKey, CompoundTag snapshot) {
+    public void put(UUID player, String stateKey, CompoundTag state) {
         synchronized (lock(player)) {
             CompoundTag states = loadPlayer(player);
-            states.put(stateKey, snapshot.copy());
+            states.put(stateKey, state.copy());
             savePlayer(player, states);
         }
     }

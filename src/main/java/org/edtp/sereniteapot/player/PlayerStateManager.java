@@ -3,6 +3,8 @@ package org.edtp.sereniteapot.player;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundSetExperiencePacket;
 import net.minecraft.network.protocol.game.ClientboundSetHealthPacket;
 import net.minecraft.resources.Identifier;
@@ -18,8 +20,11 @@ import net.minecraft.world.food.FoodData;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.level.storage.PlayerDataStorage;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.phys.Vec2;
+import net.minecraft.world.phys.Vec3;
 import org.edtp.sereniteapot.SereniteaPotMod;
 import org.edtp.sereniteapot.level.SereniteaPotLevelKeys;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
@@ -27,15 +32,17 @@ import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.mixin.accessor.PlayerListAccessor;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 
+import java.util.Objects;
 import java.util.UUID;
 
 /**
- * 在公共服务器世界与每个尘歌壶之间隔离玩家自身状态。
+ * 在原版公共玩家数据与每个尘歌壶的私有玩家数据之间切换玩家状态。
  *
- * <p>每个 realm 分别保存物品栏、末影箱、经验、生命、效果、游戏模式和所在位置。
+ * <p>公共状态始终由原版 playerdata 负责，模组只保存尘歌壶状态。尘歌壶状态包含
+ * 物品栏、末影箱、经验、生命、效果、游戏模式和所在位置。
  * 跨 realm 传送分为 {@link #beforeTeleport(ServerPlayer, ServerLevel)} 的保存阶段与
  * {@link #afterTeleport(ServerPlayer, StateSwitchPlan)} 的恢复阶段；同一尘歌壶三个维度
- * 之间传送不会切换快照。</p>
+ * 之间传送不会切换状态。</p>
  */
 public final class PlayerStateManager {
     private static final int SNAPSHOT_VERSION = 3;
@@ -74,13 +81,11 @@ public final class PlayerStateManager {
 
         // 先关闭容器，避免跨 realm 时仍有公共世界容器菜单引用或未提交的物品操作。
         player.closeContainer();
-        capture(player, sourceRealm);
         if (sourceRealm == null) {
-            // Public playerdata becomes the durable return point before the player
-            // crosses into a realm whose autosaves are intentionally isolated.
-            ((PlayerListAccessor) player.level().getServer().getPlayerList())
-                .sereniteapot$getPlayerDataStorage()
-                .save(player);
+            // 原版 playerdata 是公共状态的唯一权威来源。
+            playerDataStorage(player).save(player);
+        } else {
+            savePotState(player, sourceRealm);
         }
         return new StateSwitchPlan(sourceRealm, destinationRealm);
     }
@@ -88,11 +93,12 @@ public final class PlayerStateManager {
     public static void afterTeleport(ServerPlayer player, StateSwitchPlan plan) {
         requireAttached(player.level().getServer());
         UUID targetOwner = plan.targetOwner();
-        CompoundTag snapshot = store == null ? null : store.get(player.getUUID(), stateKey(targetOwner));
-        if (snapshot == null) {
-            snapshot = targetOwner == null ? blankPublic(player) : blankSereniteaPot(player);
+        if (targetOwner == null) {
+            restorePublicState(player);
+        } else {
+            CompoundTag state = store == null ? null : store.get(player.getUUID(), potStateKey(targetOwner));
+            applyPotState(player, state == null ? blankPotState(player) : state);
         }
-        apply(player, snapshot, targetOwner != null);
         if (player.getUUID().equals(plan.sourceOwner()) && !player.getUUID().equals(targetOwner)) {
             requestCloseOnServerThread(player);
         }
@@ -109,7 +115,7 @@ public final class PlayerStateManager {
         }
     }
 
-    /** Saves the private snapshot and tells Vanilla not to overwrite public playerdata. */
+    /** Saves private pot state and tells Vanilla not to overwrite public playerdata. */
     public static boolean saveIsolatedStateIfInsidePot(ServerPlayer player) {
         if (server == null) {
             return false;
@@ -119,27 +125,38 @@ public final class PlayerStateManager {
         if (realmOwner == null) {
             return false;
         }
-        capture(player, realmOwner);
+        savePotState(player, realmOwner);
         return true;
     }
 
-    public static void onJoin(ServerPlayer player) {
-        if (server == null) {
-            return;
-        }
+    public static SavedLocation savedPotLocation(ServerPlayer player, UUID owner) {
         requireServerThread(player.level().getServer());
-        UUID realmOwner = realm(player.level());
-        CompoundTag snapshot = store == null ? null : store.get(player.getUUID(), stateKey(realmOwner));
-        if (snapshot != null) {
-            apply(player, snapshot, realmOwner != null);
-        }
+        CompoundTag state = store == null ? null : store.get(player.getUUID(), potStateKey(owner));
+        return readLocation(player, state);
     }
 
-    public static SavedLocation savedLocation(ServerPlayer player, UUID realmOwner) {
+    public static SavedLocation savedPublicLocation(ServerPlayer player) {
         requireServerThread(player.level().getServer());
-        CompoundTag snapshot = store == null ? null : store.get(player.getUUID(), stateKey(realmOwner));
-        if (snapshot == null) return null;
-        var input = TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), snapshot);
+        CompoundTag state = loadPublicState(player);
+        if (state == null) return null;
+        var input = TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), state);
+        ResourceKey<Level> dimension = input.read("Dimension", Level.RESOURCE_KEY_CODEC).orElse(null);
+        Vec3 position = input.read("Pos", Vec3.CODEC).orElse(null);
+        if (dimension == null || position == null) return null;
+        Vec2 rotation = input.read("Rotation", Vec2.CODEC).orElse(Vec2.ZERO);
+        return new SavedLocation(
+            dimension,
+            position.x,
+            position.y,
+            position.z,
+            rotation.x,
+            rotation.y
+        );
+    }
+
+    private static SavedLocation readLocation(ServerPlayer player, CompoundTag state) {
+        if (state == null) return null;
+        var input = TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), state);
         if (input.getIntOr("snapshotVersion", 0) != SNAPSHOT_VERSION) return null;
         Identifier dimensionId = Identifier.tryParse(input.getStringOr("LocationDimension", ""));
         if (dimensionId == null) return null;
@@ -157,7 +174,7 @@ public final class PlayerStateManager {
         );
     }
 
-    private static void capture(ServerPlayer player, UUID realmOwner) {
+    private static void savePotState(ServerPlayer player, UUID owner) {
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, player.registryAccess());
         output.putInt("snapshotVersion", SNAPSHOT_VERSION);
         output.putString("LocationDimension", player.level().dimension().identifier().toString());
@@ -176,7 +193,6 @@ public final class PlayerStateManager {
         output.putFloat("Absorption", player.getAbsorptionAmount());
         player.getFoodData().addAdditionalSaveData(output);
         output.store("Abilities", Abilities.Packed.CODEC, player.getAbilities().pack());
-        output.store("GameMode", GameType.CODEC, player.gameMode());
         output.storeNullable("Respawn", ServerPlayer.RespawnConfig.CODEC, player.getRespawnConfig());
         player.getLastDeathLocation().ifPresent(value -> output.store("LastDeath", GlobalPos.CODEC, value));
         var effects = output.list("Effects", MobEffectInstance.CODEC);
@@ -184,12 +200,12 @@ public final class PlayerStateManager {
             effects.add(new MobEffectInstance(effect));
         }
         if (store != null) {
-            store.put(player.getUUID(), stateKey(realmOwner), output.buildResult());
+            store.put(player.getUUID(), potStateKey(owner), output.buildResult());
         }
     }
 
-    private static void apply(ServerPlayer player, CompoundTag snapshot, boolean forceCreative) {
-        var input = TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), snapshot);
+    private static void applyPotState(ServerPlayer player, CompoundTag state) {
+        var input = TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), state);
         player.getInventory().load(input.listOrEmpty("Inventory", ItemStackWithSlot.CODEC));
         player.getInventory().setSelectedSlot(Math.max(0, Math.min(8, input.getIntOr("SelectedItemSlot", 0))));
         player.getEnderChestInventory().fromSlots(input.listOrEmpty("EnderItems", ItemStackWithSlot.CODEC));
@@ -205,15 +221,39 @@ public final class PlayerStateManager {
             player.addEffect(new MobEffectInstance(effect));
         }
 
-        GameType storedMode = input.read("GameMode", GameType.CODEC).orElse(GameType.SURVIVAL);
         player.setRespawnPosition(input.read("Respawn", ServerPlayer.RespawnConfig.CODEC).orElse(null), false);
         player.setLastDeathLocation(input.read("LastDeath", GlobalPos.CODEC));
-        player.setGameMode(forceCreative ? GameType.CREATIVE : storedMode);
+        player.setGameMode(GameType.CREATIVE);
         input.read("Abilities", Abilities.Packed.CODEC).ifPresent(player.getAbilities()::apply);
-        if (forceCreative) {
-            GameType.CREATIVE.updatePlayerAbilities(player.getAbilities());
-        }
+        GameType.CREATIVE.updatePlayerAbilities(player.getAbilities());
 
+        syncClientState(player);
+    }
+
+    private static void restorePublicState(ServerPlayer player) {
+        CompoundTag state = loadPublicState(player);
+        if (state == null) {
+            throw new IllegalStateException("Vanilla playerdata is missing for " + player.getUUID());
+        }
+        Vec3 destination = player.position();
+        float destinationYaw = player.getYRot();
+        float destinationPitch = player.getXRot();
+        player.load(TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), state));
+        // The teleport service has already validated the destination. Keep its safe
+        // fallback when an old playerdata position is outside the current world border.
+        player.snapTo(destination.x, destination.y, destination.z, destinationYaw, destinationPitch);
+        player.connection.send(new ClientboundGameEventPacket(
+            ClientboundGameEventPacket.CHANGE_GAME_MODE,
+            player.gameMode().getId()
+        ));
+        player.level().getServer().getPlayerList().broadcastAll(new ClientboundPlayerInfoUpdatePacket(
+            ClientboundPlayerInfoUpdatePacket.Action.UPDATE_GAME_MODE,
+            player
+        ));
+        syncClientState(player);
+    }
+
+    private static void syncClientState(ServerPlayer player) {
         player.inventoryMenu.broadcastFullState();
         player.connection.send(new ClientboundSetExperiencePacket(
             player.experienceProgress,
@@ -229,24 +269,11 @@ public final class PlayerStateManager {
         player.level().getServer().getPlayerList().sendActivePlayerEffects(player);
     }
 
-    private static CompoundTag blankSereniteaPot(ServerPlayer player) {
+    private static CompoundTag blankPotState(ServerPlayer player) {
         TagValueOutput output = blankBase(player);
         Abilities abilities = new Abilities();
         GameType.CREATIVE.updatePlayerAbilities(abilities);
         output.store("Abilities", Abilities.Packed.CODEC, abilities.pack());
-        output.store("GameMode", GameType.CODEC, GameType.CREATIVE);
-        output.list("Effects", MobEffectInstance.CODEC);
-        return output.buildResult();
-    }
-
-    private static CompoundTag blankPublic(ServerPlayer player) {
-        SereniteaPotMod.LOGGER.warn(
-            "No public-state snapshot existed for {}; using a safe empty survival state",
-            player.getUUID()
-        );
-        TagValueOutput output = blankBase(player);
-        output.store("Abilities", Abilities.Packed.CODEC, new Abilities().pack());
-        output.store("GameMode", GameType.CODEC, GameType.SURVIVAL);
         output.list("Effects", MobEffectInstance.CODEC);
         return output.buildResult();
     }
@@ -271,14 +298,23 @@ public final class PlayerStateManager {
         return identity == null ? null : identity.owner();
     }
 
-    private static String stateKey(UUID owner) {
-        if (owner == null) {
-            return "public";
-        }
+    private static String potStateKey(UUID owner) {
+        Objects.requireNonNull(owner, "owner");
         // stateId 在删除尘歌壶时重置，使旧壶的玩家状态自然失效，无需读取或迁移旧快照。
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
         UUID stateId = record == null ? owner : record.getStateId();
         return "serenitea_pot_" + owner + "_" + stateId;
+    }
+
+    private static CompoundTag loadPublicState(ServerPlayer player) {
+        return playerDataStorage(player)
+            .load(player.nameAndId())
+            .orElse(null);
+    }
+
+    private static PlayerDataStorage playerDataStorage(ServerPlayer player) {
+        return ((PlayerListAccessor) player.level().getServer().getPlayerList())
+            .sereniteapot$getPlayerDataStorage();
     }
 
     private static void requireServerThread(MinecraftServer currentServer) {

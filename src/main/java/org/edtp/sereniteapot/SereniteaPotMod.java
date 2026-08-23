@@ -2,7 +2,6 @@ package org.edtp.sereniteapot;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import org.edtp.sereniteapot.command.SereniteaPotCommands;
 import org.edtp.sereniteapot.level.SereniteaPotInvitationService;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
@@ -33,8 +32,5 @@ public final class SereniteaPotMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register(SereniteaPotManager::start);
         ServerLifecycleEvents.SERVER_STOPPING.register(SereniteaPotManager::stop);
         ServerLifecycleEvents.SERVER_STOPPING.register(PlayerStateManager::stop);
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-            PlayerStateManager.onJoin(handler.getPlayer())
-        );
     }
 }
