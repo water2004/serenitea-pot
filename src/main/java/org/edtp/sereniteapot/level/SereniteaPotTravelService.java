@@ -5,6 +5,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.Vec3;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
@@ -113,6 +114,62 @@ public final class SereniteaPotTravelService {
         return identity == null
             ? new Rejected(message(MessageKey.TRAVEL_NOT_INSIDE))
             : evict(player, identity.owner());
+    }
+
+    /**
+     * Keeps Vanilla's death-respawn path inside the current Serenitea Pot realm.
+     * A valid bed or respawn anchor in any dimension of the same pot is preserved;
+     * Vanilla's public-world fallback is replaced with a local entry in the same pot.
+     * If the current dimension has never been extracted, the first extracted pot
+     * dimension becomes the fallback instead.
+     */
+    public static TeleportTransition containRespawn(
+        ServerPlayer player,
+        TeleportTransition vanillaDestination
+    ) {
+        SereniteaPotLevelKeys.Identity source = SereniteaPotLevelKeys.identify(player.level().dimension());
+        if (source == null) return vanillaDestination;
+
+        SereniteaPotLevelKeys.Identity target = SereniteaPotLevelKeys.identify(
+            vanillaDestination.newLevel().dimension()
+        );
+        if (target != null
+            && target.owner().equals(source.owner())
+            && target.generation() == source.generation()) {
+            return vanillaDestination;
+        }
+
+        SereniteaPotRecord record = SereniteaPotManager.record(source.owner());
+        SereniteaPotSlotRecord slot = record == null ? null : record.getSlots().get(source.dimension());
+        ServerLevel destinationLevel = player.level();
+        if (slot == null) {
+            SereniteaPotBundle bundle = SereniteaPotManager.loaded(source.owner());
+            if (record != null && bundle != null && bundle.generation() == source.generation()) {
+                for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
+                    SereniteaPotSlotRecord candidate = record.getSlots().get(dimension);
+                    if (candidate != null) {
+                        slot = candidate;
+                        destinationLevel = bundle.get(dimension);
+                        break;
+                    }
+                }
+            }
+        }
+        if (slot == null) {
+            throw new IllegalStateException("Occupied Serenitea Pot has no extracted dimension");
+        }
+
+        return new TeleportTransition(
+            destinationLevel,
+            new Vec3(slot.localEntryX() + 0.5, slot.localEntryY(), slot.localEntryZ() + 0.5),
+            Vec3.ZERO,
+            player.getYRot(),
+            player.getXRot(),
+            vanillaDestination.missingRespawnBlock(),
+            false,
+            Set.of(),
+            vanillaDestination.postTeleportTransition()
+        );
     }
 
     /** Used only by the lifecycle close transaction. */

@@ -11,6 +11,7 @@
     "PlayerListMixin",
     "PlayerDataStorageMixin",
     "ServerCommonPacketListenerAccessor",
+    "ServerPlayerRespawnMixin",
     "ServerPlayerTeleportMixin",
     "accessor.CommandNodeAccessor",
     "accessor.PlayerListAccessor"
