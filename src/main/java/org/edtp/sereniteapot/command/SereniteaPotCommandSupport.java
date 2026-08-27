@@ -3,12 +3,18 @@ package org.edtp.sereniteapot.command;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.GameProfileArgument;
+import net.minecraft.server.level.ServerPlayer;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
+import org.edtp.sereniteapot.level.SereniteaPotAccessPolicy;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
@@ -57,6 +63,23 @@ final class SereniteaPotCommandSupport {
             throw GameProfileArgument.ERROR_UNKNOWN_PLAYER.create();
         }
         return profiles.iterator().next().id();
+    }
+
+    /**
+     * 提示当前确实能接待访客的壶主。申请和进入共用这一定义，执行时仍会重新鉴权。
+     */
+    static CompletableFuture<Suggestions> suggestAvailableOwners(
+            CommandContext<CommandSourceStack> context,
+            SuggestionsBuilder builder) {
+        var source = context.getSource();
+        var server = source.getServer();
+        ServerPlayer requester = source.getPlayer();
+        return SharedSuggestionProvider.suggest(
+                server.getPlayerList().getPlayers().stream()
+                        .filter(player -> requester == null || !player.getUUID().equals(requester.getUUID()))
+                        .filter(player -> SereniteaPotAccessPolicy.isRealOwnerInside(server, player.getUUID()))
+                        .map(ServerPlayer::getScoreboardName),
+                builder);
     }
 
     static int success(CommandContext<CommandSourceStack> context, MessageKey key, Object... arguments) {

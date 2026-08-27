@@ -3,7 +3,10 @@ package org.edtp.sereniteapot.command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.server.level.ServerPlayer;
@@ -12,6 +15,7 @@ import org.edtp.sereniteapot.level.SereniteaPotInvitationService;
 
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import static net.minecraft.commands.Commands.argument;
@@ -33,6 +37,7 @@ final class SereniteaPotInvitationCommands {
         route(root,
                 literal("request"),
                 argument(OWNER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .suggests(SereniteaPotCommandSupport::suggestAvailableOwners)
                         .executes(SereniteaPotInvitationCommands::request));
         route(root, literal("requests").executes(SereniteaPotInvitationCommands::requests));
         // request-id 只由聊天中的接受/拒绝按钮附带，用来阻止过期按钮处理后来的同名申请。
@@ -40,15 +45,33 @@ final class SereniteaPotInvitationCommands {
         route(root,
                 literal("approve"),
                 argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .suggests(SereniteaPotInvitationCommands::suggestPendingRequesters)
                         .executes(SereniteaPotInvitationCommands::approve),
                 argument(REQUEST_ID_ARGUMENT, UuidArgument.uuid())
                         .executes(SereniteaPotInvitationCommands::approveFromButton));
         route(root,
                 literal("deny"),
                 argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .suggests(SereniteaPotInvitationCommands::suggestPendingRequesters)
                         .executes(SereniteaPotInvitationCommands::deny),
                 argument(REQUEST_ID_ARGUMENT, UuidArgument.uuid())
                         .executes(SereniteaPotInvitationCommands::denyFromButton));
+    }
+
+    private static CompletableFuture<Suggestions> suggestPendingRequesters(
+            CommandContext<CommandSourceStack> context,
+            SuggestionsBuilder builder) {
+        var source = context.getSource();
+        ServerPlayer owner = source.getPlayer();
+        Set<UUID> pending = owner == null
+                ? Set.of()
+                : SereniteaPotInvitationService.pending(owner.getUUID());
+        // 只提示仍在线且申请未过期的玩家；离线申请仍可按名字手动拒绝。
+        return SharedSuggestionProvider.suggest(
+                source.getServer().getPlayerList().getPlayers().stream()
+                        .filter(player -> pending.contains(player.getUUID()))
+                        .map(ServerPlayer::getScoreboardName),
+                builder);
     }
 
     private static int request(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

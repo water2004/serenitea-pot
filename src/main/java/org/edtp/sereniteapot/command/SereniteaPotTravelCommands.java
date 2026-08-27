@@ -29,6 +29,7 @@ final class SereniteaPotTravelCommands {
                         .executes(context -> enter(
                                 context, context.getSource().getPlayerOrException().getUUID())),
                 argument(OWNER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .suggests(SereniteaPotCommandSupport::suggestAvailableOwners)
                         .executes(SereniteaPotTravelCommands::enterTarget));
         route(root, literal("leave").executes(SereniteaPotTravelCommands::leave));
     }

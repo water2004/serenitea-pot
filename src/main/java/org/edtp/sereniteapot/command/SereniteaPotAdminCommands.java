@@ -5,7 +5,10 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
@@ -21,6 +24,7 @@ import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
@@ -78,17 +82,30 @@ final class SereniteaPotAdminCommands {
         route(admin,
                 literal("status"),
                 argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .suggests(SereniteaPotAdminCommands::suggestConfiguredPlayers)
                         .executes(SereniteaPotAdminCommands::showStatus));
         route(admin,
                 literal("perf")
                         .executes(SereniteaPotAdminCommands::showPerformanceList),
                 argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .suggests(SereniteaPotAdminCommands::suggestConfiguredPlayers)
                         .executes(SereniteaPotAdminCommands::showPerformance));
         route(admin,
                 literal("delete"),
-                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile()),
+                argument(PLAYER_ARGUMENT, GameProfileArgument.gameProfile())
+                        .suggests(SereniteaPotAdminCommands::suggestConfiguredPlayers),
                 literal("confirm").executes(SereniteaPotAdminCommands::deleteTarget));
         route(root, admin);
+    }
+
+    private static CompletableFuture<Suggestions> suggestConfiguredPlayers(
+            CommandContext<CommandSourceStack> context,
+            SuggestionsBuilder builder) {
+        return SharedSuggestionProvider.suggest(
+                context.getSource().getServer().getPlayerList().getPlayers().stream()
+                        .filter(player -> SereniteaPotManager.record(player.getUUID()) != null)
+                        .map(ServerPlayer::getScoreboardName),
+                builder);
     }
 
     private static int setDefaultMaximumRadius(CommandContext<CommandSourceStack> context) {
