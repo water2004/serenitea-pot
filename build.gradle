@@ -42,8 +42,17 @@ dependencies {
     if (project.hasProperty('testWorldthreader')) {
         runtimeOnly(libs.worldthreader)
     }
-    // Optional public protocol used to restart Axiom's permission handshake after re-entering a pot.
-    compileOnly(libs.axiom)
+    // Axiom 5 supplies the legacy packet compiled by the isolated compatibility adapter.
+    compileOnly(libs.axiom5)
+    if (project.hasProperty('testAxiom5') && project.hasProperty('testAxiom6')) {
+        throw new GradleException('Choose either testAxiom5 or testAxiom6')
+    }
+    if (project.hasProperty('testAxiom5')) {
+        runtimeOnly(libs.axiom5)
+    }
+    if (project.hasProperty('testAxiom6')) {
+        runtimeOnly(libs.axiom6)
+    }
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

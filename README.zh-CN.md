@@ -20,7 +20,7 @@ Minecraft 26.2 的 Fabric 服务端尘歌壶模组，支持独立服务器和单
 | Fabric API | 0.158.0+26.2 |
 | Fabric Language Kotlin | 1.13.12+kotlin.2.4.0 或更高 |
 | WorldEdit（可选） | 7.2.2 至 7.4.5 |
-| Axiom（可选） | 5.0.0 至 5.5.0 |
+| Axiom（可选） | 5.0.0 至 6.0.0 |
 | Worldthreader（可选） | 3.1.0 |
 
 Arcade Dimensions `0.13.0-beta.6+26.2`、其相关模块以及 Fabric Permissions API v0 `0.7.0` 已嵌入最终 JAR，不需要另外安装，也不应从产物中移除。
@@ -93,7 +93,7 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 
 `disable` 会禁止新进入，并在 tick 末尾通过关闭事务送出所有成员、确认维度无人占用，最后保存并卸载。`freeze` 是维修模式：仍允许主人、获批访客和管理员进入，但整组三维度的 `ServerLevel.tick` 都暂停，机器、实体、计划刻和随机刻不会推进；主人离开后仍照常卸载。运行中的尘歌壶异常卡顿时会自动进入 `frozen`，主人可以直接维修并自行 `unfreeze`；反复制造问题时 OP4 仍可 `disable`。
 
-主人仅在自己的尘歌壶内获得完整的 WorldEdit 与 Axiom 权限，并可使用 `/difficulty`、`/fill`、`/fillbiome`、`/place`、`/setblock` 和 `/summon`；离开后立即失效。每次进壶都会重新发起 Axiom 客户端握手，因此反复离开、进入也会重新获取当前授权；WorldEdit 则在每次命令时读取当前玩家权限。公共世界、其他玩家的尘歌壶以及访客的权限保持服务器原样。尘歌壶内的命令方块始终不会执行。
+主人仅在自己的尘歌壶内获得完整的 WorldEdit 与 Axiom 权限，并可使用 `/difficulty`、`/fill`、`/fillbiome`、`/place`、`/setblock` 和 `/summon`；离开后立即失效。每次进壶都会通过当前 Axiom 版本支持的机制刷新会话授权，因此反复离开、进入也会重新获取当前授权；WorldEdit 则在每次命令时读取当前玩家权限。公共世界、其他玩家的尘歌壶以及访客的权限保持服务器原样。尘歌壶内的命令方块始终不会执行。
 
 ## 性能模型
 

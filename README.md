@@ -42,7 +42,7 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 | Fabric API | 0.158.0+26.2 |
 | Fabric Language Kotlin | 1.13.12+kotlin.2.4.0 or newer |
 | WorldEdit (optional) | 7.2.2 through 7.4.5 |
-| Axiom (optional) | 5.0.0 through 5.5.0 |
+| Axiom (optional) | 5.0.0 through 6.0.0 |
 | Worldthreader (optional) | 3.1.0 |
 
 Arcade Dimensions `0.13.0-beta.6+26.2`, its supporting modules, and Fabric Permissions API v0 `0.7.0` are embedded in the built mod. Do not install duplicate copies or remove the embedded modules from the JAR.
@@ -93,7 +93,7 @@ Carpet fake players, portal loaders, chunk tickets, and machines cannot keep a p
 
 `disable` is an operator action that closes a player's pot and prevents future admission. `freeze` only stops world ticks: the owner, approved visitors, and operators may still enter for repairs, and the owner can run `unfreeze` afterward.
 
-While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions, plus the world-local Vanilla commands `/difficulty`, `/fill`, `/fillbiome`, `/place`, `/setblock`, and `/summon`. These grants disappear immediately on leaving. Pot entry restarts Axiom's client handshake so repeated leave/enter cycles receive the current grant; WorldEdit checks the current player on every command. Permissions in public dimensions, other players' pots, and for visitors remain unchanged. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
+While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions, plus the world-local Vanilla commands `/difficulty`, `/fill`, `/fillbiome`, `/place`, `/setblock`, and `/summon`. These grants disappear immediately on leaving. Pot entry refreshes Axiom's session authorization through the mechanism supported by the installed version, so repeated leave/enter cycles receive the current grant; WorldEdit checks the current player on every command. Permissions in public dimensions, other players' pots, and for visitors remain unchanged. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
 
 ## Player commands
 

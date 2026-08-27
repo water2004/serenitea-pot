@@ -77,8 +77,8 @@ public final class CommandTreeGameTest {
     public void refreshesOptionalToolSessionThroughTheLiveConnection(GameTestHelper helper) {
         var player = helper.makeMockServerPlayerInLevel();
         try {
-            // This is a no-op without Axiom. With Axiom in the test runtime it sends
-            // the public redo-handshake packet through the same live connection.
+            // This is a no-op without Axiom or with Axiom 6's native refresh path.
+            // Axiom 5 sends its public redo-handshake packet through this connection.
             SereniteaPotToolPermissions.afterRealmChange(player, player.getUUID());
         } finally {
             helper.getLevel().getServer().getPlayerList().remove(player);

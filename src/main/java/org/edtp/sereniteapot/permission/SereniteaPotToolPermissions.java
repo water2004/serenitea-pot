@@ -35,7 +35,7 @@ public final class SereniteaPotToolPermissions {
         // Newer WorldEdit releases use Fabric's typed v1 nodes (for example worldedit:region.set).
         PermissionEvents.ON_REQUEST.register(SereniteaPotToolPermissions::worldEditPermission);
 
-        // WorldEdit 7.2.2-7.4.4 and Axiom 5.x query the legacy string API. Axiom expands
+        // WorldEdit 7.2.2-7.4.4 and Axiom query the legacy string API. Axiom expands
         // axiom.all itself, while WorldEdit asks for each worldedit.* node individually.
         PermissionCheckEvent.EVENT.register(SereniteaPotToolPermissions::legacyPermission);
     }
@@ -43,7 +43,7 @@ public final class SereniteaPotToolPermissions {
     /** Refreshes stateful tool protocols after the owner crosses into their own pot. */
     public static void afterRealmChange(ServerPlayer player, UUID targetOwner) {
         if (targetOwner != null && targetOwner.equals(player.getUUID())) {
-            AxiomSessionCompatibility.refreshIfInstalled(player);
+            AxiomSessionCompatibility.refreshIfRequired(player);
         }
     }
 

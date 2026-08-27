@@ -5,7 +5,8 @@ fabric-permissions = "0.7.0"
 fabric-kotlin = "1.13.12+kotlin.2.4.0"
 arcade = "0.13.0-beta.6+26.2"
 worldthreader = "D84PMJ4Y"
-axiom = "QO99kC52"
+axiom5 = "QO99kC52"
+axiom6 = "DEXe5O7N"
 fabric-loom = "1.17-SNAPSHOT"
 junit = "5.11.4"
 junit-platform = "1.11.4"
@@ -21,7 +22,8 @@ arcade-events-server = { module = "net.casualchampionships:arcade-events-server"
 arcade-extensions = { module = "net.casualchampionships:arcade-extensions", version.ref = "arcade" }
 arcade-utils = { module = "net.casualchampionships:arcade-utils", version.ref = "arcade" }
 worldthreader = { module = "maven.modrinth:LwH5rYyd", version.ref = "worldthreader" }
-axiom = { module = "maven.modrinth:N6n5dqoA", version.ref = "axiom" }
+axiom5 = { module = "maven.modrinth:N6n5dqoA", version.ref = "axiom5" }
+axiom6 = { module = "maven.modrinth:N6n5dqoA", version.ref = "axiom6" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
 
