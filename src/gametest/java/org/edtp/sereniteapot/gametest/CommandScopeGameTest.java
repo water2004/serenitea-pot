@@ -12,6 +12,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import org.edtp.sereniteapot.level.SereniteaPotBundle;
 import org.edtp.sereniteapot.level.SereniteaPotDeletionService;
@@ -103,10 +104,14 @@ public final class CommandScopeGameTest {
         var commandRoot = server.getCommands().getDispatcher().getRoot();
         var ownerSource = owner.createCommandSourceStack();
         for (String globalCommand : List.of(
-            "op", "whitelist", "reload", "scoreboard", "function")) {
+            "gamemode", "op", "whitelist", "reload", "scoreboard", "function")) {
             require(!commandRoot.getChild(globalCommand).canUse(ownerSource),
                 "The owner whitelist accidentally granted /" + globalCommand);
         }
+        owner.setGameMode(GameType.CREATIVE);
+        run(server, owner, "gamemode survival @s");
+        require(owner.gameMode().isCreative(),
+            "A pot owner used /gamemode to leave the enforced creative mode");
         clearAt(OWNER_SETBLOCK, potOverworld, publicWorld, otherPot);
         run(server, owner, "setblock 2 100 2 minecraft:diamond_block");
         requireBlock(potOverworld, OWNER_SETBLOCK, Blocks.DIAMOND_BLOCK,

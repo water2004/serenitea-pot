@@ -62,7 +62,7 @@ public final class CommandTreeGameTest {
         for (String command : Set.of(
                 "attribute", "clear", "clone", "damage", "data", "dialog", "difficulty",
                 "effect", "enchant", "execute", "experience", "fill", "fillbiome",
-                "forceload", "gamemode", "gamerule", "give", "item", "kill", "locate",
+                "forceload", "gamerule", "give", "item", "kill", "locate",
                 "loot", "particle", "place", "playsound", "recipe", "ride", "rotate",
                 "setblock", "setworldspawn", "spawnpoint", "spectate", "spreadplayers",
                 "stopsound", "summon", "swing", "tag", "teleport", "tellraw", "time",
