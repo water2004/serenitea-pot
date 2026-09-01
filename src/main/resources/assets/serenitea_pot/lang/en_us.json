@@ -23,6 +23,8 @@
   "serenitea_pot.command.admin.perf.empty": "No Serenitea Pot performance data is available",
   "serenitea_pot.command.admin.perf.heading": "Serenitea Pot performance ranking (latest complete one-second window):",
   "serenitea_pot.command.admin.perf.row": "%1$s: state=%2$s, cost=%3$s/%4$sms/tick, copy=%5$sms/tick, avg=%6$sms, max=%7$sms, effectiveTPS=%8$s, run=%9$s, skip=%10$s",
+  "serenitea_pot.command.scope.escape.denied": "The command tried to leave the current Serenitea Pot scope",
+  "serenitea_pot.command.scope.dimension.denied": "That dimension is outside the current Serenitea Pot",
   "serenitea_pot.performance.state.disabled": "DISABLED",
   "serenitea_pot.performance.state.frozen": "FROZEN",
   "serenitea_pot.performance.state.copying": "COPYING",

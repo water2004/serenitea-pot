@@ -8,6 +8,7 @@
     "fabric-gametest": [
       "org.edtp.sereniteapot.gametest.AdminSuggestionGameTest",
       "org.edtp.sereniteapot.gametest.AxiomCompatibilityGameTest",
+      "org.edtp.sereniteapot.gametest.CommandScopeGameTest",
       "org.edtp.sereniteapot.gametest.CommandTreeGameTest",
       "org.edtp.sereniteapot.gametest.FrozenPotTickGameTest",
       "org.edtp.sereniteapot.gametest.InvitationSuggestionGameTest",

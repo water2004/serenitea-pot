@@ -56,18 +56,26 @@ public final class CommandTreeGameTest {
     }
 
     @GameTest
-    public void extendsOnlyWorldLocalVanillaCommandRequirements(GameTestHelper helper) {
+    public void rewritesOnlyTheDeclaredVanillaCommandPolicy(GameTestHelper helper) {
         CommandNode<CommandSourceStack> root = helper.getLevel().getServer().getCommands()
                 .getDispatcher().getRoot();
-        for (String command : Set.of("difficulty", "fill", "fillbiome", "place", "setblock", "summon")) {
+        for (String command : Set.of(
+                "attribute", "clear", "clone", "damage", "data", "dialog", "difficulty",
+                "effect", "enchant", "execute", "experience", "fill", "fillbiome",
+                "forceload", "gamemode", "gamerule", "give", "item", "kill", "locate",
+                "loot", "particle", "place", "playsound", "recipe", "ride", "rotate",
+                "setblock", "setworldspawn", "spawnpoint", "spectate", "spreadplayers",
+                "stopsound", "summon", "swing", "tag", "teleport", "tellraw", "time",
+                "title", "tp", "waypoint", "weather", "worldborder", "xp")) {
             helper.assertTrue(
                     !(child(root, command).getRequirement() instanceof PermissionProviderCheck<?>),
-                    "/" + command + " requirement was not extended");
+                    "/" + command + " owner whitelist requirement was not installed");
         }
-        for (String command : Set.of("clone", "execute", "forceload", "weather", "worldborder")) {
+        // Read-only commands outside both policy lists retain their exact Vanilla requirement.
+        for (String command : Set.of("seed", "version")) {
             helper.assertTrue(
                     child(root, command).getRequirement() instanceof PermissionProviderCheck<?>,
-                    "/" + command + " must retain its vanilla permission requirement");
+                    "/" + command + " must retain its Vanilla permission requirement");
         }
         helper.succeed();
     }

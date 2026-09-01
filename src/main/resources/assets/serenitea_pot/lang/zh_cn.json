@@ -23,6 +23,8 @@
   "serenitea_pot.command.admin.perf.empty": "暂无尘歌壶性能数据",
   "serenitea_pot.command.admin.perf.heading": "尘歌壶性能排行（最近完整 1 秒窗口）：",
   "serenitea_pot.command.admin.perf.row": "%1$s：状态=%2$s，耗时=%3$s/%4$sms/tick，复制=%5$sms/tick，平均=%6$sms，最大=%7$sms，有效TPS=%8$s，运行=%9$s，跳过=%10$s",
+  "serenitea_pot.command.scope.escape.denied": "指令试图越出当前尘歌壶的作用域",
+  "serenitea_pot.command.scope.dimension.denied": "该维度不属于当前尘歌壶",
   "serenitea_pot.performance.state.disabled": "已禁用",
   "serenitea_pot.performance.state.frozen": "已冻结",
   "serenitea_pot.performance.state.copying": "复制中",
