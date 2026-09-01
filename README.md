@@ -27,10 +27,10 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 - Temporary 60-second visit requests with clickable accept and deny actions. Level-4 operators bypass approval, but the owner must still be present.
 - Per-owner and global performance budgets shared by dimension ticks and region-copy work.
 - Automatic freezing after a dangerous tick instead of deleting or disabling the pot, allowing the owner to enter and repair it.
-- Scoped building-tool access: a pot owner receives full WorldEdit and Axiom permissions only while inside their own pot; public-world authorization is untouched.
+- Scoped command access: a pot owner receives full WorldEdit and Axiom permissions plus an explicit allow-list of audited Vanilla commands only inside their own pot.
+- Vanilla entity selectors, literal player names, UUIDs, and dimension arguments are confined to the occupied pot; public-world command behavior is untouched.
 - Command blocks and command-block minecarts never execute inside pot dimensions.
 - Level-4 operator controls for enable/disable, maximum radius, performance budgets, status, diagnostics, trimming, and permanent deletion.
-- Pot owners can use `/fill`, `/fillbiome`, `/place`, `/setblock`, and `/summon` inside their own pot without receiving OP outside it.
 
 ## Requirements
 
@@ -47,12 +47,12 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 
 Arcade Dimensions `0.13.0-beta.6+26.2`, its supporting modules, and Fabric Permissions API v0 `0.7.0` are embedded in the built mod. Do not install duplicate copies or remove the embedded modules from the JAR.
 
-Current snapshot: `1.0.0-snapshot.3-26.2`
+Current snapshot: `1.0.0-snapshot.5-26.2`
 
 ## Installation
 
 1. Install Minecraft 26.2 with Fabric Loader 0.19.3 or newer on the server.
-2. Download `serenitea-pot-1.0.0-snapshot.3-26.2.jar` from [GitHub Releases](https://github.com/water2004/serenitea-pot/releases).
+2. Download `serenitea-pot-1.0.0-snapshot.5-26.2.jar` from [GitHub Releases](https://github.com/water2004/serenitea-pot/releases).
 3. Download Fabric API `0.158.0+26.2` and Fabric Language Kotlin `1.13.12+kotlin.2.4.0` or newer.
 4. Place all three JAR files in the server's `mods` directory and start the server with Java 25.
 
@@ -93,7 +93,11 @@ Carpet fake players, portal loaders, chunk tickets, and machines cannot keep a p
 
 `disable` is an operator action that closes a player's pot and prevents future admission. `freeze` only stops world ticks: the owner, approved visitors, and operators may still enter for repairs, and the owner can run `unfreeze` afterward.
 
-While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions, plus the world-local Vanilla commands `/difficulty`, `/fill`, `/fillbiome`, `/place`, `/setblock`, and `/summon`. These grants disappear immediately on leaving. Pot entry refreshes Axiom's session authorization through the mechanism supported by the installed version, so repeated leave/enter cycles receive the current grant; WorldEdit checks the current player on every command. Permissions in public dimensions, other players' pots, and for visitors remain unchanged. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
+While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions plus an explicit allow-list of audited, pot-local Vanilla commands. This is not blanket OP access. The allow-list covers building, entity, inventory, presentation, time/weather, world-border, and `/execute` operations; server-global commands such as `/op`, `/whitelist`, `/reload`, `/scoreboard`, and `/function` are not granted.
+
+All six Vanilla selectors (`@s`, `@a`, `@e`, `@p`, `@r`, and `@n`), literal player names, and UUIDs are filtered to the occupied pot before sorting and limiting. Vanilla dimension aliases resolve to that pot's own Overworld, Nether, and End. A real operator standing inside a pot uses the same entity and dimension boundary, while public-world authorization and behavior remain unchanged. Commands supplied by other mods are not added to this allow-list; only their use of Vanilla selector arguments inherits this boundary, while custom selector types remain the owning mod's responsibility.
+
+These grants disappear immediately on leaving. Pot entry refreshes Axiom's session authorization through the mechanism supported by the installed version, while WorldEdit checks the current player on every command. Permissions in other players' pots and for visitors remain unchanged. Command blocks remain inert in pot dimensions even when command blocks are globally enabled.
 
 ## Player commands
 
