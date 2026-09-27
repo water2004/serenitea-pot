@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 
 /** Verifies that invitation-related completion reflects the command's actionable targets. */
 public final class InvitationSuggestionGameTest {
+    private static final Set<String> FIXTURE_PLAYERS = Set.of("requester", "publicPlayer", "potOwner");
     @GameTest(maxTicks = 200)
     public void suggestionsMatchAvailableOwnersAndPendingRequests(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
@@ -125,8 +126,11 @@ public final class InvitationSuggestionGameTest {
         var parsed = dispatcher.parse(command, source.createCommandSourceStack());
         Set<String> actual = dispatcher.getCompletionSuggestions(parsed).join().getList().stream()
                 .map(suggestion -> suggestion.getText())
+                // Other concurrent GameTests may also have legitimate owners inside pots.
+                // Check all three fixture players, including the two negative cases.
+                .filter(FIXTURE_PLAYERS::contains)
                 .collect(Collectors.toSet());
-        helper.assertValueEqual(expected, actual, "Unexpected suggestions for /" + command);
+        helper.assertValueEqual(actual, expected, "Unexpected suggestions for /" + command);
     }
 
     private static ServerPlayer connectedPlayer(GameTestHelper helper, String name) {

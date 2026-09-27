@@ -9,6 +9,7 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.storage.LevelResource;
 import org.edtp.sereniteapot.player.PlayerStateManager;
 import org.edtp.sereniteapot.level.SereniteaPotLevelKeys;
+import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.level.SereniteaPotTravelService;
 import org.edtp.sereniteapot.mixin.accessor.PlayerListAccessor;
@@ -88,14 +89,29 @@ public final class PublicSaveBoundaryGameTest {
                                     if (returned.experienceLevel != 37 || returned.getInventory().countItem(Items.DIAMOND) != 3) {
                                         throw new AssertionError("Return used cached rather than current public file");
                                     }
-                                    server.getPlayerList().remove(returned);
-                                    GameTestStorage.deleteAndReset(server, id);
-                                    SereniteaPotManager.catalog().getPlayers().remove(id);
-                                    phase[0] = 3;
+                                    SereniteaPotLifecycleService.cancelPendingClose(id);
+                                    if (SereniteaPotTravelService.enter(returned, id) != SereniteaPotTravelService.Success.INSTANCE) {
+                                        throw new AssertionError("Second entry failed");
+                                    }
+                                    // Forced close also starts its read lazily. Loading must
+                                    // never be mistaken for a failed teleport and kick us.
+                                    SereniteaPotLifecycleService.closeNow(server, id);
+                                    phase[0] = 4;
                                 } catch (Throwable error) { failure.set(error); }
                             });
                         }
                         case 2 -> { }
+                        case 4 -> {
+                            if (player == null || player.hasDisconnected()) {
+                                throw new AssertionError("Pending return data caused a disconnect");
+                            }
+                            if (SereniteaPotLevelKeys.identify(player.level().dimension()) != null) return;
+                            if (SereniteaPotManager.loaded(id) != null) return;
+                            server.getPlayerList().remove(player);
+                            GameTestStorage.deleteAndReset(server, id);
+                            SereniteaPotManager.catalog().getPlayers().remove(id);
+                            phase[0] = 3;
+                        }
                         default -> throw new AssertionError("Unexpected phase");
                     }
                 } catch (Throwable error) { failure.set(error); }

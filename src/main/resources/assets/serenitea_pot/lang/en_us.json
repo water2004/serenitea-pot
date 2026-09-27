@@ -76,7 +76,6 @@
   "serenitea_pot.lifecycle.evacuation.failed": "Could not safely evacuate %s Serenitea Pot occupants",
   "serenitea_pot.lifecycle.closing": "That Serenitea Pot is already closing",
   "serenitea_pot.lifecycle.disconnect.for.unload": "The Serenitea Pot is unloading safely; please reconnect",
-  "serenitea_pot.lifecycle.disconnect.retry": "%s players have not left; they were disconnected and unloading will retry next tick",
   "serenitea_pot.lifecycle.unload.retry": "At least one dimension is still loaded; unloading will retry next tick",
   "serenitea_pot.deletion.no.config": "That player has no Serenitea Pot configuration",
   "serenitea_pot.deletion.commit.failed": "Could not commit the deletion transaction: %s",

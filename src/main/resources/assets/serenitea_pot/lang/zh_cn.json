@@ -76,7 +76,6 @@
   "serenitea_pot.lifecycle.evacuation.failed": "无法安全送出 %s 名尘歌壶成员",
   "serenitea_pot.lifecycle.closing": "该尘歌壶正在关闭",
   "serenitea_pot.lifecycle.disconnect.for.unload": "尘歌壶正在安全卸载，请重新连接",
-  "serenitea_pot.lifecycle.disconnect.retry": "仍有 %s 名玩家未完成离场，已断开连接并将在下一 tick 重试",
   "serenitea_pot.lifecycle.unload.retry": "至少一个维度尚未完成卸载，将在下一 tick 重试",
   "serenitea_pot.deletion.no.config": "该玩家没有尘歌壶配置",
   "serenitea_pot.deletion.commit.failed": "无法提交删除事务：%s",

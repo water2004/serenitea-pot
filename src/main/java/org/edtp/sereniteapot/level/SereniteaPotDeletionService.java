@@ -49,6 +49,10 @@ public final class SereniteaPotDeletionService {
             return new Rejected(rejected.reason());
         }
         SereniteaPotLifecycleService.Result close = SereniteaPotLifecycleService.closeNow(server, owner);
+        if (close == SereniteaPotLifecycleService.Pending.INSTANCE) {
+            SereniteaPotLifecycleService.endMaintenance(owner);
+            return new Rejected(message(MessageKey.LIFECYCLE_PLAYER_DATA_PENDING));
+        }
         if (close instanceof SereniteaPotLifecycleService.Rejected rejected) {
             SereniteaPotLifecycleService.endMaintenance(owner);
             return new Rejected(rejected.reason());

@@ -124,6 +124,7 @@ public final class PlayerStateManager {
         Object token = new Object();
         pendingTransfers.put(playerId, token);
         var sourceLevel = player.level();
+        var preparedReturn = pendingPublicReturns.get(playerId);
         Runnable resume = () -> {
             if (server != currentServer || !pendingTransfers.remove(playerId, token)) return;
             try {
@@ -139,7 +140,7 @@ public final class PlayerStateManager {
                 }
                 action.accept(current);
             } finally {
-                pendingPublicReturns.remove(playerId);
+                if (preparedReturn != null) pendingPublicReturns.remove(playerId, preparedReturn);
             }
         };
         if (ready.isDone()) {

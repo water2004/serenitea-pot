@@ -2,6 +2,7 @@ package org.edtp.sereniteapot.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.player.Player;
@@ -20,8 +21,9 @@ import java.nio.file.Path;
 public abstract class PlayerDataStorageMixin {
     @WrapOperation(method = "save", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/util/Util;safeReplaceFile(Ljava/nio/file/Path;Ljava/nio/file/Path;Ljava/nio/file/Path;)V"))
-    private void sereniteapot$reportSaveResult(Path target, Path temporary, Path backup, Operation<Void> original) {
-        if (!PublicPlayerData.isCheckingSave()) {
+    private void sereniteapot$reportSaveResult(Path target, Path temporary, Path backup, Operation<Void> original,
+                                             @Local(argsOnly = true) Player player) {
+        if (!PublicPlayerData.isCheckingSave(player)) {
             original.call(target, temporary, backup);
             return;
         }

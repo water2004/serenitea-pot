@@ -67,7 +67,7 @@ public final class SereniteaPotLifecycleService {
             return new Rejected(message(MessageKey.LIFECYCLE_MAINTENANCE_EXISTS));
         }
         pendingCloses.remove(owner);
-        List<ServerPlayer> remaining = evacuate(server, owner);
+        List<ServerPlayer> remaining = evacuate(server, owner, false);
         if (!remaining.isEmpty()) {
             maintenance.remove(owner);
             pendingCloses.add(owner);
@@ -88,22 +88,8 @@ public final class SereniteaPotLifecycleService {
             return new Rejected(message(MessageKey.LIFECYCLE_CLOSING));
         }
         try {
-            List<ServerPlayer> remaining = evacuate(server, owner);
-            if (!remaining.isEmpty()) {
-                boolean waitingForData = false;
-                for (ServerPlayer player : remaining) {
-                    if (!PlayerStateManager.prepare(player).isDone()) {
-                        waitingForData = true;
-                        continue;
-                    }
-                    player.connection.disconnect(component(
-                        player,
-                        message(MessageKey.LIFECYCLE_DISCONNECT_FOR_UNLOAD)
-                    ));
-                }
-                if (waitingForData) return new Rejected(message(MessageKey.LIFECYCLE_PLAYER_DATA_PENDING));
-                return new Rejected(message(MessageKey.LIFECYCLE_DISCONNECT_RETRY, remaining.size()));
-            }
+            List<ServerPlayer> remaining = evacuate(server, owner, true);
+            if (!remaining.isEmpty()) return Pending.INSTANCE;
             if (!SereniteaPotManager.unloadEvacuated(owner)) {
                 return new Rejected(message(MessageKey.LIFECYCLE_UNLOAD_RETRY));
             }
@@ -134,15 +120,21 @@ public final class SereniteaPotLifecycleService {
         processPendingDeletes(false);
     }
 
-    private static List<ServerPlayer> evacuate(MinecraftServer server, UUID owner) {
+    private static List<ServerPlayer> evacuate(MinecraftServer server, UUID owner, boolean disconnectFailures) {
         List<ServerPlayer> occupants = occupants(server, owner);
         for (ServerPlayer player : occupants) {
+            // Loading is normal pending work, not a failed teleport. Check before
+            // attempting eviction, so completion between two checks cannot cause a kick.
+            if (!PlayerStateManager.prepareReturn(player).isDone()) continue;
             SereniteaPotTravelService.Result result = SereniteaPotTravelService.evict(player, owner);
             if (result instanceof SereniteaPotTravelService.Rejected rejected) {
                 SereniteaPotMod.LOGGER.warn(
                     "Failed to evacuate {} from Serenitea Pot {}: {}",
                     player.getUUID(), owner, rejected.reason()
                 );
+                if (disconnectFailures) {
+                    player.connection.disconnect(component(player, message(MessageKey.LIFECYCLE_DISCONNECT_FOR_UNLOAD)));
+                }
             }
         }
         return occupants(server, owner);
@@ -226,7 +218,11 @@ public final class SereniteaPotLifecycleService {
         }
     }
 
-    public sealed interface Result permits Success, Rejected {
+    public sealed interface Result permits Success, Pending, Rejected {
+    }
+
+    public enum Pending implements Result {
+        INSTANCE
     }
 
     public enum Success implements Result {
