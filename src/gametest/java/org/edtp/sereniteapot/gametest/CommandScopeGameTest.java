@@ -569,7 +569,7 @@ public final class CommandScopeGameTest {
 
         private static SereniteaPotBundle createPot(MinecraftServer server, UUID owner, long generation) {
             SereniteaPotBundle bundle = SereniteaPotManager.createStaging(owner, generation, 1L);
-            SereniteaPotManager.commitGeneration(
+            GameTestStorage.commitGeneration(
                 bundle,
                 Map.of(
                     SereniteaPotDimension.OVERWORLD,
@@ -611,7 +611,7 @@ public final class CommandScopeGameTest {
         private void delete(UUID owner, List<Throwable> failures) {
             try {
                 SereniteaPotDeletionService.Result result =
-                    SereniteaPotDeletionService.deleteAndReset(server, owner);
+                    GameTestStorage.deleteAndReset(server, owner);
                 if (result != SereniteaPotDeletionService.Success.INSTANCE) {
                     failures.add(new IllegalStateException("Could not delete test pot " + owner + ": " + result));
                 }

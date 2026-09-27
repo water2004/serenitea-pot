@@ -32,6 +32,12 @@ public abstract class ServerPlayerTeleportMixin {
         CallbackInfoReturnable<ServerPlayer> cir
     ) {
         ServerPlayer player = (ServerPlayer) (Object) this;
+        // Do not consume a one-use invitation until the transfer can proceed.
+        this.sereniteapot$pendingStateSwitch = null;
+        if (PlayerStateManager.deferTeleportIfLoading(player, transition)) {
+            cir.setReturnValue(null);
+            return;
+        }
         var denial = SereniteaPotAccessPolicy.denialReason(player, transition.newLevel());
         if (denial != null) {
             player.sendSystemMessage(denial);
@@ -40,7 +46,6 @@ public abstract class ServerPlayerTeleportMixin {
         }
         // Validate target data before changing worlds; unsupported data must also
         // reject portal transfers safely, rather than escaping into the world tick.
-        this.sereniteapot$pendingStateSwitch = null;
         try {
             this.sereniteapot$pendingStateSwitch = PlayerStateManager.beforeTeleport(player, transition.newLevel());
         } catch (InvalidPlayerStateException error) {

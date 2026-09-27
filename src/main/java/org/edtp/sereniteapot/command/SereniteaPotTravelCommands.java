@@ -7,6 +7,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotTravelService;
+import org.edtp.sereniteapot.player.PlayerStateManager;
 
 import java.util.UUID;
 
@@ -39,18 +40,20 @@ final class SereniteaPotTravelCommands {
     }
 
     private static int enter(CommandContext<CommandSourceStack> context, UUID owner) throws CommandSyntaxException {
-        SereniteaPotTravelService.Result result = SereniteaPotTravelService.enter(
-                context.getSource().getPlayerOrException(), owner);
-        return result == SereniteaPotTravelService.Success.INSTANCE
-                ? success(context, MessageKey.COMMAND_ENTER_SUCCESS)
-                : failure(context, ((SereniteaPotTravelService.Rejected) result).reason());
+        PlayerStateManager.whenReady(context.getSource().getPlayerOrException(), player -> {
+            SereniteaPotTravelService.Result result = SereniteaPotTravelService.enter(player, owner);
+            if (result == SereniteaPotTravelService.Success.INSTANCE) success(context, MessageKey.COMMAND_ENTER_SUCCESS);
+            else failure(context, ((SereniteaPotTravelService.Rejected) result).reason());
+        });
+        return 1;
     }
 
     private static int leave(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        SereniteaPotTravelService.Result result = SereniteaPotTravelService.leave(
-                context.getSource().getPlayerOrException());
-        return result == SereniteaPotTravelService.Success.INSTANCE
-                ? success(context, MessageKey.COMMAND_LEAVE_SUCCESS)
-                : failure(context, ((SereniteaPotTravelService.Rejected) result).reason());
+        PlayerStateManager.whenReady(context.getSource().getPlayerOrException(), player -> {
+            SereniteaPotTravelService.Result result = SereniteaPotTravelService.leave(player);
+            if (result == SereniteaPotTravelService.Success.INSTANCE) success(context, MessageKey.COMMAND_LEAVE_SUCCESS);
+            else failure(context, ((SereniteaPotTravelService.Rejected) result).reason());
+        });
+        return 1;
     }
 }

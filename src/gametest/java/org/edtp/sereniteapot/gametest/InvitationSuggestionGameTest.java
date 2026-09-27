@@ -40,7 +40,7 @@ public final class InvitationSuggestionGameTest {
                 potOwner = connectedPlayer(helper, "potOwner");
 
                 SereniteaPotBundle bundle = SereniteaPotManager.createStaging(potOwner.getUUID(), 1L, 1L);
-                SereniteaPotManager.commitGeneration(
+                GameTestStorage.commitGeneration(
                         bundle,
                         Map.of(
                                 SereniteaPotDimension.OVERWORLD,
@@ -89,7 +89,7 @@ public final class InvitationSuggestionGameTest {
                 }
 
                 potOwner.setServerLevel(server.overworld());
-                var deletion = SereniteaPotDeletionService.deleteAndReset(server, potOwner.getUUID());
+                var deletion = GameTestStorage.deleteAndReset(server, potOwner.getUUID());
                 if (deletion != SereniteaPotDeletionService.Success.INSTANCE) {
                     throw new AssertionError("Could not clean up invitation suggestion test pot: " + deletion);
                 }

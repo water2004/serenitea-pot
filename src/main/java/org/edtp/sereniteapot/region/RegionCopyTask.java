@@ -7,8 +7,12 @@ import net.fabricmc.fabric.impl.attachment.AttachmentTargetImpl;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -27,13 +31,16 @@ import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSeriali
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.phys.AABB;
+import org.edtp.sereniteapot.mixin.accessor.ServerLevelEntityManagerAccessor;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -42,13 +49,14 @@ import java.util.concurrent.CompletableFuture;
  * between distinct dimensions at identical coordinates.
  *
  * <p>Block states and biomes are cloned one palette-backed chunk section at a
- * time instead of being rewritten block by block. Chunk loading and mod hooks
- * still cannot be preempted, so each slice prepares at most one new chunk and
+ * time instead of being rewritten block by block. Native chunk loads are
+ * requested without waiting; each slice prepares at most one new chunk and
  * the scheduler charges its real elapsed time.</p>
  */
 public final class RegionCopyTask {
     private static final int ENTITY_ROOTS_PER_SLICE = 256;
-    private static final int MAX_PENDING_LIGHT_CHUNKS = 32;
+    private static TicketType copyTicketType;
+    private static final Map<ServerLevel, Map<Long, SharedChunkLoad>> sharedChunkLoads = new IdentityHashMap<>();
 
     private final ServerLevel source;
     private final ServerLevel target;
@@ -62,14 +70,15 @@ public final class RegionCopyTask {
     private long chunkCursor;
     private LevelChunk sourceChunk;
     private LevelChunk targetChunk;
+    private ChunkPos pendingChunkPos;
+    private SharedChunkLoad pendingSourceLoad;
+    private SharedChunkLoad pendingTargetLoad;
+    private boolean chunkReady;
+    private boolean closed;
     private final ArrayDeque<CompletableFuture<?>> lightingBarriers = new ArrayDeque<>();
 
     private final ArrayDeque<Entity> entities = new ArrayDeque<>();
     private final HashSet<UUID> collectedEntityIds = new HashSet<>();
-    private long tickChunkCursor;
-    private long entityScanChunkCursor;
-    private int totalEntities;
-    private int copiedEntities;
 
     public RegionCopyTask(
         ServerLevel source,
@@ -93,15 +102,33 @@ public final class RegionCopyTask {
         return phase == Phase.DONE;
     }
 
+    /** Register before Minecraft freezes built-in registries. */
+    public static void registerTicketType() {
+        if (copyTicketType == null) {
+            copyTicketType = Registry.register(BuiltInRegistries.TICKET_TYPE,
+                Identifier.fromNamespaceAndPath("serenitea_pot", "region_copy"),
+                new TicketType(TicketType.NO_TIMEOUT, TicketType.FLAG_LOADING));
+        }
+    }
+
+    /** Cancel a pending load and release its native tickets. Calls are idempotent. */
+    public void close() {
+        if (closed) return;
+        closed = true;
+        releaseChunkTickets();
+    }
+
     public double getProgress() {
-        return switch (phase) {
-            case CHUNKS -> chunkCursor / (double) chunkCount * 0.9;
-            case TICKS -> 0.9 + tickChunkCursor / (double) chunkCount * 0.04;
-            case ENTITY_SCAN -> 0.94 + entityScanChunkCursor / (double) chunkCount * 0.03;
-            case ENTITIES -> 0.97 + copiedEntities / (double) Math.max(totalEntities, 1) * 0.02;
-            case LIGHTING -> 0.99;
+        if (phase == Phase.DONE) return 1.0;
+        double phaseProgress = switch (phase) {
+            case CHUNKS -> 0.0;
+            case TICKS -> 0.2;
+            case ENTITY_SCAN -> 0.4;
+            case ENTITIES -> 0.6;
+            case LIGHTING -> 0.8;
             case DONE -> 1.0;
         };
+        return Math.min(0.99, (chunkCursor + phaseProgress) / chunkCount * 0.99);
     }
 
     public void step(long deadlineNanos) {
@@ -109,22 +136,21 @@ public final class RegionCopyTask {
     }
 
     public void step(long deadlineNanos, int maximumOperations) {
+        if (closed) return;
+        try {
+            stepOpen(deadlineNanos, maximumOperations);
+        } catch (RuntimeException | Error error) {
+            close();
+            throw error;
+        }
+    }
+
+    private void stepOpen(long deadlineNanos, int maximumOperations) {
+        if (maximumOperations <= 0 || System.nanoTime() >= deadlineNanos) return;
+        if (chunkCursor < chunkCount && !chunkReady && !prepareChunk()) return;
         int operations = 0;
-        int preparedChunks = 0;
         while (!getComplete() && operations < maximumOperations && System.nanoTime() < deadlineNanos) {
-            if (phase == Phase.CHUNKS && sourceChunk == null && chunkCursor < chunkCount) {
-                pumpLighting();
-                drainCompletedLighting();
-                if (lightingBarriers.size() >= MAX_PENDING_LIGHT_CHUNKS) {
-                    operations++;
-                    continue;
-                }
-                if (preparedChunks >= 1) return;
-                prepareChunk();
-                preparedChunks++;
-                operations++;
-                continue;
-            }
+            long activeChunk = chunkCursor;
             switch (phase) {
                 case CHUNKS -> copyPreparedChunk();
                 case TICKS -> copyNextChunkTicks();
@@ -134,21 +160,119 @@ public final class RegionCopyTask {
                 case DONE -> { }
             }
             operations++;
+            if (chunkCursor != activeChunk) return;
         }
     }
 
-    private void prepareChunk() {
+    private boolean prepareChunk() {
         int relativeChunkX = (int) (chunkCursor % chunkSizeX);
         int relativeChunkZ = (int) (chunkCursor / chunkSizeX);
-        sourceChunk = source.getChunk(chunkMinX + relativeChunkX, chunkMinZ + relativeChunkZ);
-        targetChunk = target.getChunk(chunkMinX + relativeChunkX, chunkMinZ + relativeChunkZ);
+        if (pendingChunkPos == null) {
+            if (copyTicketType == null) throw new IllegalStateException("Region copy ticket type was not registered");
+            pendingChunkPos = new ChunkPos(chunkMinX + relativeChunkX, chunkMinZ + relativeChunkZ);
+            pendingSourceLoad = acquireChunkLoad(source, pendingChunkPos);
+            try {
+                pendingTargetLoad = acquireChunkLoad(target, pendingChunkPos);
+            } catch (RuntimeException | Error error) {
+                releaseChunkTickets();
+                throw error;
+            }
+        }
+        processPendingEntityLoads(source);
+        processPendingEntityLoads(target);
+        if (!pendingSourceLoad.future.isDone() || !pendingTargetLoad.future.isDone()) return false;
+        pendingSourceLoad.future.getNow(null);
+        pendingTargetLoad.future.getNow(null);
+        if (sourceChunk == null) {
+            sourceChunk = source.getChunkSource().getChunkNow(pendingChunkPos.x(), pendingChunkPos.z());
+            targetChunk = target.getChunkSource().getChunkNow(pendingChunkPos.x(), pendingChunkPos.z());
+        }
+        if (sourceChunk == null || targetChunk == null) {
+            throw new IllegalStateException("Completed native chunk request has no full chunk at " + pendingChunkPos);
+        }
+        chunkReady = source.areEntitiesLoaded(pendingChunkPos.pack())
+                && target.areEntitiesLoaded(pendingChunkPos.pack());
+        return chunkReady;
+    }
+
+    private static void processPendingEntityLoads(ServerLevel level) {
+        ((ServerLevelEntityManagerAccessor) (Object) level)
+                .sereniteapot$getEntityManager()
+                .processPendingLoads();
+    }
+
+    private void releaseChunkTickets() {
+        if (pendingChunkPos == null) return;
+        ChunkPos pos = pendingChunkPos;
+        SharedChunkLoad sourceLoad = pendingSourceLoad;
+        SharedChunkLoad targetLoad = pendingTargetLoad;
+        pendingChunkPos = null;
+        pendingSourceLoad = null;
+        pendingTargetLoad = null;
+        chunkReady = false;
+        sourceChunk = null;
+        targetChunk = null;
+        try {
+            if (sourceLoad != null) releaseChunkLoad(source, pos, sourceLoad);
+        } finally {
+            if (targetLoad != null) releaseChunkLoad(target, pos, targetLoad);
+        }
+    }
+
+    /**
+     * A ticket is identified by its type and level, so native ticket storage
+     * coalesces identical requests instead of counting their owners. Keep that
+     * ownership count here and share the original load future between tasks.
+     * All callers run on the server thread, like the native ticket APIs.
+     */
+    private static SharedChunkLoad acquireChunkLoad(ServerLevel level, ChunkPos pos) {
+        long key = pos.pack();
+        Map<Long, SharedChunkLoad> levelLoads = sharedChunkLoads.computeIfAbsent(level, ignored -> new HashMap<>());
+        SharedChunkLoad existing = levelLoads.get(key);
+        if (existing != null) {
+            existing.references++;
+            return existing;
+        }
+
+        CompletableFuture<?> future;
+        try {
+            future = level.getChunkSource().addTicketAndLoadWithRadius(copyTicketType, pos, 0);
+        } catch (RuntimeException | Error error) {
+            if (levelLoads.isEmpty()) sharedChunkLoads.remove(level);
+            try {
+                // addTicketAndLoadWithRadius installs the ticket before doing
+                // its distance-manager work, which can itself fail.
+                level.getChunkSource().removeTicketWithRadius(copyTicketType, pos, 0);
+            } catch (RuntimeException | Error cleanupError) {
+                error.addSuppressed(cleanupError);
+            }
+            throw error;
+        }
+        SharedChunkLoad created = new SharedChunkLoad(future);
+        levelLoads.put(key, created);
+        return created;
+    }
+
+    private static void releaseChunkLoad(ServerLevel level, ChunkPos pos, SharedChunkLoad load) {
+        if (--load.references > 0) return;
+        Map<Long, SharedChunkLoad> levelLoads = sharedChunkLoads.get(level);
+        if (levelLoads != null && levelLoads.get(pos.pack()) == load) {
+            levelLoads.remove(pos.pack());
+            if (levelLoads.isEmpty()) sharedChunkLoads.remove(level);
+        }
+        level.getChunkSource().removeTicketWithRadius(copyTicketType, pos, 0);
+    }
+
+    private static final class SharedChunkLoad {
+        private final CompletableFuture<?> future;
+        private int references = 1;
+
+        private SharedChunkLoad(CompletableFuture<?> future) {
+            this.future = future;
+        }
     }
 
     private void copyPreparedChunk() {
-        if (chunkCursor >= chunkCount) {
-            phase = Phase.TICKS;
-            return;
-        }
         if (sourceChunk == null || targetChunk == null) {
             throw new IllegalStateException("Chunk was not prepared");
         }
@@ -178,10 +302,7 @@ public final class RegionCopyTask {
         refreshPoiAndLighting();
         targetChunk.markUnsaved();
 
-        chunkCursor++;
-        sourceChunk = null;
-        targetChunk = null;
-        if (chunkCursor >= chunkCount) phase = Phase.TICKS;
+        phase = Phase.TICKS;
     }
 
     private void copyPostProcessing() {
@@ -303,26 +424,29 @@ public final class RegionCopyTask {
     }
 
     private void copyNextChunkTicks() {
-        if (tickChunkCursor >= chunkCount) {
-            phase = Phase.ENTITY_SCAN;
-            return;
-        }
-        long index = tickChunkCursor++;
-        var box = chunkBox(index);
+        var box = chunkBox(chunkCursor);
+        // FULL chunks can still have packed ticks that LevelTicks.copyAreaFrom
+        // cannot see. Vanilla's pack/unpack preserves those and rebases delays
+        // onto the destination world's clock without mutating the source.
+        long sourceTime = source.getGameTime();
+        long targetTime = target.getGameTime();
+        var savedTicks = sourceChunk.getTicksForSerialization(sourceTime);
+        targetChunk.unpackTicks(targetTime);
         target.getBlockTicks().clearArea(box);
-        target.getBlockTicks().copyAreaFrom(source.getBlockTicks(), box, BlockPos.ZERO);
         target.getFluidTicks().clearArea(box);
-        target.getFluidTicks().copyAreaFrom(source.getFluidTicks(), box, BlockPos.ZERO);
-        if (tickChunkCursor >= chunkCount) phase = Phase.ENTITY_SCAN;
+        long order = 0;
+        for (var tick : savedTicks.blocks()) {
+            targetChunk.getBlockTicks().schedule(tick.unpack(targetTime, order++));
+        }
+        for (var tick : savedTicks.fluids()) {
+            targetChunk.getFluidTicks().schedule(tick.unpack(targetTime, order++));
+        }
+        targetChunk.markUnsaved();
+        phase = Phase.ENTITY_SCAN;
     }
 
     private void collectNextChunkEntities() {
-        if (entityScanChunkCursor >= chunkCount) {
-            totalEntities = entities.size();
-            phase = Phase.ENTITIES;
-            return;
-        }
-        var area = AABB.of(chunkBox(entityScanChunkCursor));
+        var area = AABB.of(chunkBox(chunkCursor));
         var found = new ArrayList<Entity>(ENTITY_ROOTS_PER_SLICE);
         source.getEntities(EntityTypeTest.forClass(Entity.class), area,
                 entity -> !(entity instanceof ServerPlayer)
@@ -333,11 +457,7 @@ public final class RegionCopyTask {
             if (collectedEntityIds.add(entity.getUUID())) entities.addLast(entity);
         }
         if (found.size() >= ENTITY_ROOTS_PER_SLICE) return;
-        entityScanChunkCursor++;
-        if (entityScanChunkCursor >= chunkCount) {
-            totalEntities = entities.size();
-            phase = Phase.ENTITIES;
-        }
+        phase = entities.isEmpty() ? Phase.LIGHTING : Phase.ENTITIES;
     }
 
     private void copyNextEntity() {
@@ -355,14 +475,17 @@ public final class RegionCopyTask {
                 target.tryAddFreshEntityWithPassengers(copy);
             }
         }
-        copiedEntities++;
         if (entities.isEmpty()) phase = Phase.LIGHTING;
     }
 
     private void finishLighting() {
         pumpLighting();
         drainCompletedLighting();
-        if (lightingBarriers.isEmpty()) phase = Phase.DONE;
+        if (lightingBarriers.isEmpty()) {
+            releaseChunkTickets();
+            chunkCursor++;
+            phase = chunkCursor >= chunkCount ? Phase.DONE : Phase.CHUNKS;
+        }
     }
 
     private void pumpLighting() {

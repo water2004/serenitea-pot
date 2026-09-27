@@ -14,6 +14,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.util.Util;
 import net.minecraft.world.ItemStackWithSlot;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Abilities;
@@ -24,9 +25,11 @@ import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.PlayerDataStorage;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.edtp.sereniteapot.SereniteaPotMod;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotLevelKeys;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
 import org.edtp.sereniteapot.level.SereniteaPotManager;
@@ -35,6 +38,14 @@ import org.edtp.sereniteapot.model.SereniteaPotRecord;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
+
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
 
 /**
  * 在原版公共玩家数据与每个尘歌壶的私有玩家数据之间切换玩家状态。
@@ -50,6 +61,9 @@ public final class PlayerStateManager {
 
     private static MinecraftServer server;
     private static PlayerStateStore store;
+    // Only an in-flight pot visit caches a read of Vanilla's authoritative file.
+    private static final Map<UUID, CompletableFuture<CompoundTag>> publicReads = new ConcurrentHashMap<>();
+    private static final Map<UUID, Object> pendingTransfers = new ConcurrentHashMap<>();
 
     private PlayerStateManager() {
     }
@@ -65,11 +79,76 @@ public final class PlayerStateManager {
         if (PlayerStateManager.server != server) {
             return;
         }
-        if (store != null) {
-            store.clear();
+        try {
+            try {
+                if (store != null) store.close();
+            } finally {
+                CompletableFuture.allOf(publicReads.values().stream()
+                    .map(read -> read.handle((value, error) -> null))
+                    .toArray(CompletableFuture[]::new)).join();
+            }
+        } finally {
+            publicReads.clear();
+            pendingTransfers.clear();
+            store = null;
+            PlayerStateManager.server = null;
         }
-        store = null;
-        PlayerStateManager.server = null;
+    }
+
+    public static CompletableFuture<Void> prepare(ServerPlayer player) {
+        requireAttached(player.level().getServer());
+        CompletableFuture<Void> privateData = store.preload(player.getUUID());
+        CompletableFuture<CompoundTag> publicData = publicReads.get(player.getUUID());
+        return publicData == null ? privateData : CompletableFuture.allOf(privateData, publicData);
+    }
+
+    /** A request is submitted once; only its continuation touches the live player. */
+    public static void whenReady(ServerPlayer player, Consumer<ServerPlayer> action) {
+        whenReady(player, prepare(player), action);
+    }
+
+    static void whenReady(ServerPlayer player, CompletableFuture<Void> ready, Consumer<ServerPlayer> action) {
+        MinecraftServer currentServer = player.level().getServer();
+        UUID playerId = player.getUUID();
+        Object token = new Object();
+        pendingTransfers.put(playerId, token);
+        var sourceLevel = player.level();
+        Runnable resume = () -> {
+            if (server != currentServer || !pendingTransfers.remove(playerId, token)) return;
+            ServerPlayer current = currentServer.getPlayerList().getPlayer(playerId);
+            // A disconnect, death or unrelated world transfer invalidates the request.
+            if (current != player || current.level() != sourceLevel || !current.isAlive()) return;
+            try {
+                ready.getNow(null);
+            } catch (CompletionException error) {
+                SereniteaPotMod.LOGGER.error("Failed to prepare player data for {}", playerId, error.getCause());
+                current.sendSystemMessage(component(current, message(MessageKey.TRAVEL_PLAYER_DATA_INVALID)));
+                return;
+            }
+            action.accept(current);
+        };
+        if (ready.isDone()) {
+            resume.run();
+        } else {
+            player.sendSystemMessage(component(player, message(MessageKey.TRAVEL_PLAYER_DATA_LOADING)));
+            ready.whenComplete((ignored, error) -> currentServer.execute(resume));
+        }
+    }
+
+    public static boolean deferTeleportIfLoading(ServerPlayer player, TeleportTransition transition) {
+        if (Objects.equals(realm(player.level()), realm(transition.newLevel()))) return false;
+        if (realm(transition.newLevel()) == null) {
+            publicReads.computeIfAbsent(player.getUUID(), ignored -> readPublicStateAsync(player));
+        }
+        if (prepare(player).isDone()) return false;
+        whenReady(player, current -> {
+            if (current.level().getServer().getLevel(transition.newLevel().dimension()) == transition.newLevel()) {
+                // Re-enter the normal boundary: recheck authorization and the
+                // target generation instead of applying a stale permission result.
+                current.teleport(transition);
+            }
+        });
+        return true;
     }
 
     public static StateSwitchPlan beforeTeleport(ServerPlayer player, ServerLevel destination) {
@@ -100,6 +179,7 @@ public final class PlayerStateManager {
         if (sourceRealm == null) {
             // 原版 playerdata 是公共状态的唯一权威来源。
             playerDataStorage(player).save(player);
+            publicReads.put(player.getUUID(), readPublicStateAsync(player));
         } else {
             savePotState(player, sourceRealm);
         }
@@ -108,9 +188,11 @@ public final class PlayerStateManager {
 
     public static void afterTeleport(ServerPlayer player, StateSwitchPlan plan) {
         requireAttached(player.level().getServer());
+        pendingTransfers.remove(player.getUUID());
         UUID targetOwner = plan.targetOwner();
         if (targetOwner == null) {
             restorePublicState(player, plan.targetState());
+            publicReads.remove(player.getUUID());
         } else {
             applyPotState(player, plan.targetState() == null ? blankPotState(player) : plan.targetState());
         }
@@ -124,6 +206,8 @@ public final class PlayerStateManager {
             return;
         }
         requireAttached(player.level().getServer());
+        publicReads.remove(player.getUUID());
+        pendingTransfers.remove(player.getUUID());
         UUID realmOwner = realm(player.level());
         if (player.getUUID().equals(realmOwner)) {
             requestCloseOnServerThread(player);
@@ -140,7 +224,13 @@ public final class PlayerStateManager {
         if (realmOwner == null) {
             return false;
         }
-        savePotState(player, realmOwner);
+        try {
+            savePotState(player, realmOwner);
+        } catch (PlayerStateStore.InvalidPlayerStateException | PlayerStateStore.LoadingPlayerStateException error) {
+            // A failed private save must never fall through to Vanilla and
+            // overwrite the public-world inventory with pot items.
+            SereniteaPotMod.LOGGER.error("Cannot save private player data for {}", player.getUUID(), error);
+        }
         return true;
     }
 
@@ -329,9 +419,21 @@ public final class PlayerStateManager {
     }
 
     private static CompoundTag loadPublicState(ServerPlayer player) {
-        return playerDataStorage(player)
-            .load(player.nameAndId())
-            .orElse(null);
+        CompletableFuture<CompoundTag> read = publicReads.computeIfAbsent(
+            player.getUUID(), ignored -> readPublicStateAsync(player));
+        if (!read.isDone()) throw new PlayerStateStore.LoadingPlayerStateException();
+        try {
+            return read.getNow(null);
+        } catch (CompletionException error) {
+            throw new PlayerStateStore.InvalidPlayerStateException("Failed to read Vanilla playerdata", error.getCause());
+        }
+    }
+
+    private static CompletableFuture<CompoundTag> readPublicStateAsync(ServerPlayer player) {
+        PlayerDataStorage storage = playerDataStorage(player);
+        var nameAndId = player.nameAndId();
+        // Do not capture a mutable ServerPlayer in a worker task.
+        return CompletableFuture.supplyAsync(() -> storage.load(nameAndId).orElse(null), Util.ioPool());
     }
 
     private static PlayerDataStorage playerDataStorage(ServerPlayer player) {

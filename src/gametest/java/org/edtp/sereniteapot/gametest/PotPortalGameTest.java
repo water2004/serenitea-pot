@@ -46,7 +46,7 @@ public final class PotPortalGameTest {
                 end.getWorldBorder().setCenter(8008, -7992);
                 var overworldSlot = new SereniteaPotSlotRecord("minecraft:overworld", -231, 80, -146, 0);
                 overworld.setBlockAndUpdate(new BlockPos(-231, 79, -146), Blocks.STONE.defaultBlockState());
-                SereniteaPotManager.commitGeneration(bundle, Map.of(
+                GameTestStorage.commitGeneration(bundle, Map.of(
                     SereniteaPotDimension.OVERWORLD, overworldSlot,
                     SereniteaPotDimension.END, new SereniteaPotSlotRecord("minecraft:the_end", 8001, 70, -7999, 0)
                 ), 0);
@@ -119,7 +119,7 @@ public final class PotPortalGameTest {
                     && publicArrival.position().equals(Vec3.atBottomCenterOf(ServerLevel.END_SPAWN_POINT)),
                     "Public-world End portal behavior changed");
 
-                check(SereniteaPotDeletionService.deleteAndReset(server, owner)
+                check(GameTestStorage.deleteAndReset(server, owner)
                     == SereniteaPotDeletionService.Success.INSTANCE, "Portal fixture cleanup failed");
                 server.getPlayerList().remove(server.getPlayerList().getPlayer(owner));
                 SereniteaPotManager.catalog().getPlayers().remove(owner);

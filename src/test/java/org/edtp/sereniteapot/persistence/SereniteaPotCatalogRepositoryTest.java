@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,7 +39,7 @@ class SereniteaPotCatalogRepositoryTest {
                 new SereniteaPotSlotRecord("minecraft:the_nether", 12, 70, -8, 17));
 
         SereniteaPotCatalogRepository repository = new SereniteaPotCatalogRepository(directory);
-        repository.save(catalog);
+        repository.saveAsync(catalog).join();
         SereniteaPotCatalog loaded = repository.load();
         var loadedRecord = loaded.getPlayers().get(owner);
         String json = Files.readString(directory.resolve("serenitea_pots.json"));
@@ -129,8 +130,42 @@ class SereniteaPotCatalogRepositoryTest {
         UUID owner = UUID.randomUUID();
         catalog.getOrCreate(owner);
         SereniteaPotCatalogRepository repository = new SereniteaPotCatalogRepository(directory);
-        repository.save(catalog);
+        repository.saveAsync(catalog).join();
         assertEquals(0, repository.load().getPlayers().get(owner).getActiveGeneration());
         assertTrue(repository.load().getPlayers().get(owner).getSlots().isEmpty());
+    }
+
+    @Test
+    void asyncSavesUseCallerSnapshotsAndCommitInOrder() throws Exception {
+        SereniteaPotCatalogRepository repository = new SereniteaPotCatalogRepository(directory);
+        SereniteaPotCatalog catalog = new SereniteaPotCatalog();
+        var first = repository.saveAsync(catalog);
+        catalog.setGlobalBudgetMillisPerTick(31.0);
+        var second = repository.saveAsync(catalog);
+        catalog.setGlobalBudgetMillisPerTick(42.0);
+        var third = repository.saveAsync(catalog);
+        catalog.setGlobalBudgetMillisPerTick(99.0);
+
+        repository.pendingWrites().join();
+        first.join();
+        second.join();
+        third.join();
+        assertEquals(42.0, repository.load().getGlobalBudgetMillisPerTick());
+    }
+
+    @Test
+    void asyncWriteFailureIsObservableAndLaterWritesDoNotOvertakeIt() throws Exception {
+        Path blockedRoot = directory.resolve("blocked-root");
+        Files.writeString(blockedRoot, "existing file");
+        SereniteaPotCatalogRepository repository = new SereniteaPotCatalogRepository(blockedRoot);
+        SereniteaPotCatalog catalog = new SereniteaPotCatalog();
+        var first = repository.saveAsync(catalog);
+        catalog.setGlobalBudgetMillisPerTick(7.0);
+        var second = repository.saveAsync(catalog);
+
+        assertThrows(CompletionException.class, first::join);
+        assertThrows(CompletionException.class, second::join);
+        assertThrows(CompletionException.class, () -> repository.pendingWrites().join());
+        assertEquals("existing file", Files.readString(blockedRoot));
     }
 }

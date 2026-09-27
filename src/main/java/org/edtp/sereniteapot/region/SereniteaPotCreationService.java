@@ -251,11 +251,15 @@ public final class SereniteaPotCreationService {
         return job == null ? null : job.progress();
     }
 
-    public static void cancel(UUID owner) {
-        CreationJob job = jobs.remove(owner);
-        if (job == null) return;
+    public static boolean cancel(UUID owner) {
+        CreationJob job = jobs.get(owner);
+        if (job == null) return true;
+        if (job.commit != null) return false;
+        jobs.remove(owner);
+        job.closeTasks();
         SereniteaPotLifecycleService.deleteEvacuated(job.staging);
         abortMaintenance(owner);
+        return true;
     }
 
     private static void tick(MinecraftServer server) {
@@ -270,6 +274,24 @@ public final class SereniteaPotCreationService {
             UUID owner = owners.get(Math.floorMod(start + visited, owners.size()));
             CreationJob job = jobs.get(owner);
             if (job == null) continue;
+            if (job.commit != null) {
+                if (!job.commit.isDone()) continue;
+                SereniteaPotBundle replaced;
+                try {
+                    replaced = SereniteaPotManager.finishCommitGeneration(job.commit);
+                } catch (RuntimeException error) {
+                    SereniteaPotMod.LOGGER.error("Serenitea Pot creation commit failed for {}", job.owner, error);
+                    fail(server, job, message(MessageKey.CREATION_INTERNAL_ERROR, errorMessage(error)));
+                    jobs.remove(owner);
+                    continue;
+                }
+                jobs.remove(owner);
+                // Past the commit point, cleanup must never discard the newly
+                // published generation merely because deleting the old one fails.
+                if (replaced != null) SereniteaPotLifecycleService.deleteEvacuated(replaced);
+                finishCommitted(server, job);
+                continue;
+            }
             SereniteaPotRecord record = SereniteaPotManager.record(owner);
             if (job.shouldStop(record)) {
                 fail(server, job, message(MessageKey.CREATION_STOPPED_BY_ADMIN_CHANGE));
@@ -297,10 +319,9 @@ public final class SereniteaPotCreationService {
                 continue;
             }
             if (job.complete()) {
-                // 只有全部复制任务成功后才发布新代际；commit 之前旧元数据仍是权威状态。
-                SereniteaPotBundle replaced;
+                // Keep the previous generation until the catalog snapshot reaches disk.
                 try {
-                    replaced = SereniteaPotManager.commitGeneration(
+                    job.commit = SereniteaPotManager.beginCommitGeneration(
                         job.staging,
                         job.replacementSlots,
                         job.committedMaximumRadiusChunks
@@ -309,11 +330,7 @@ public final class SereniteaPotCreationService {
                     SereniteaPotMod.LOGGER.error("Serenitea Pot creation commit failed for {}", job.owner, error);
                     fail(server, job, message(MessageKey.CREATION_INTERNAL_ERROR, errorMessage(error)));
                     jobs.remove(owner);
-                    continue;
                 }
-                jobs.remove(owner);
-                if (replaced != null) SereniteaPotLifecycleService.deleteEvacuated(replaced);
-                finishCommitted(server, job);
             }
         }
         roundRobinOffset = Math.floorMod(start + 1, Math.max(jobs.size(), 1));
@@ -321,7 +338,19 @@ public final class SereniteaPotCreationService {
 
     private static void stop(MinecraftServer server) {
         if (!server.isSameThread()) throw new IllegalStateException("Creation stop must run on the server thread");
+        SereniteaPotManager.awaitCatalogWrites();
         for (CreationJob job : jobs.values()) {
+            job.closeTasks();
+            if (job.commit != null) {
+                try {
+                    SereniteaPotBundle replaced = SereniteaPotManager.finishCommitGeneration(job.commit);
+                    if (replaced != null) SereniteaPotLifecycleService.deleteEvacuated(replaced);
+                    SereniteaPotLifecycleService.endMaintenance(job.owner);
+                    continue;
+                } catch (RuntimeException error) {
+                    SereniteaPotMod.LOGGER.error("Failed to finish Serenitea Pot commit during shutdown for {}", job.owner, error);
+                }
+            }
             try {
                 SereniteaPotLifecycleService.deleteEvacuated(job.staging);
             } catch (RuntimeException error) {
@@ -366,6 +395,7 @@ public final class SereniteaPotCreationService {
     }
 
     private static void fail(MinecraftServer server, CreationJob job, Message reason) {
+        job.closeTasks();
         try {
             SereniteaPotLifecycleService.deleteEvacuated(job.staging);
         } catch (RuntimeException ignored) {
@@ -433,6 +463,7 @@ public final class SereniteaPotCreationService {
         private final boolean expectedEnabled;
         private final int totalTasks;
         private int completedTasks;
+        private SereniteaPotManager.GenerationCommit commit;
 
         private CreationJob(
             UUID owner,
@@ -468,6 +499,7 @@ public final class SereniteaPotCreationService {
             if (task == null) return;
             task.step(deadline);
             if (task.getComplete()) {
+                task.close();
                 tasks.removeFirst();
                 completedTasks++;
             }
@@ -475,6 +507,10 @@ public final class SereniteaPotCreationService {
 
         private boolean complete() {
             return tasks.isEmpty();
+        }
+
+        private void closeTasks() {
+            for (RegionCopyTask task : tasks) task.close();
         }
 
         private double progress() {

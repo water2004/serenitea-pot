@@ -35,7 +35,7 @@ public final class FrozenPotTickGameTest {
             try {
                 UUID owner = UUID.randomUUID();
                 SereniteaPotBundle bundle = SereniteaPotManager.createStaging(owner, 1L, 1L);
-                SereniteaPotManager.commitGeneration(
+                GameTestStorage.commitGeneration(
                     bundle,
                     Map.of(
                         SereniteaPotDimension.OVERWORLD,
@@ -85,7 +85,7 @@ public final class FrozenPotTickGameTest {
                                 "Frozen pot entity ticked " + current.marker.tickCount + " times"
                             );
                         }
-                        var deletion = SereniteaPotDeletionService.deleteAndReset(server, current.owner);
+                        var deletion = GameTestStorage.deleteAndReset(server, current.owner);
                         if (deletion != SereniteaPotDeletionService.Success.INSTANCE) {
                             throw new IllegalStateException("Could not clean up frozen test pot: " + deletion);
                         }

@@ -55,6 +55,8 @@
   "serenitea_pot.travel.other.pot": "玩家位于另一个尘歌壶",
   "serenitea_pot.travel.leave.failed": "无法离开尘歌壶",
   "serenitea_pot.travel.player.data.invalid": "传送已取消：玩家数据无法读取或格式不受支持，请查看服务器日志。",
+  "serenitea_pot.travel.player.data.loading": "正在加载玩家数据，完成后将自动传送。",
+  "serenitea_pot.lifecycle.player.data.pending": "正在等待玩家数据加载，完成后将继续移出玩家",
   "serenitea_pot.invitation.self": "不能申请加入自己的尘歌壶",
   "serenitea_pot.invitation.target.no.pot": "该玩家还没有尘歌壶",
   "serenitea_pot.invitation.unavailable": "该尘歌壶当前不可申请",

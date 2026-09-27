@@ -12,6 +12,7 @@ import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.server.level.ServerPlayer;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotInvitationService;
+import org.edtp.sereniteapot.player.PlayerStateManager;
 
 import java.util.Set;
 import java.util.UUID;
@@ -101,12 +102,22 @@ final class SereniteaPotInvitationCommands {
 
     private static int approve(CommandContext<CommandSourceStack> context, UUID requestId)
             throws CommandSyntaxException {
-        SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.approve(
-                context.getSource().getPlayerOrException(), profile(context, PLAYER_ARGUMENT), requestId);
-        if (result == SereniteaPotInvitationService.Success.INSTANCE) {
-            return success(context, MessageKey.COMMAND_APPROVE_SUCCESS);
-        }
-        return failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
+        ServerPlayer owner = context.getSource().getPlayerOrException();
+        UUID ownerId = owner.getUUID();
+        UUID visitorId = profile(context, PLAYER_ARGUMENT);
+        var server = context.getSource().getServer();
+        ServerPlayer visitor = server.getPlayerList().getPlayer(visitorId);
+        if (visitor == null) return failure(context, MessageKey.INVITATION_VISITOR_OFFLINE);
+        // Load first, then validate the still-current request and issue its one-use grant.
+        PlayerStateManager.whenReady(visitor, currentVisitor -> {
+            ServerPlayer currentOwner = server.getPlayerList().getPlayer(ownerId);
+            if (currentOwner == null || currentOwner.connection != owner.connection) return;
+            SereniteaPotInvitationService.Result result = SereniteaPotInvitationService.approve(
+                currentOwner, currentVisitor.getUUID(), requestId);
+            if (result == SereniteaPotInvitationService.Success.INSTANCE) success(context, MessageKey.COMMAND_APPROVE_SUCCESS);
+            else failure(context, ((SereniteaPotInvitationService.Rejected) result).reason());
+        });
+        return 1;
     }
 
     private static int deny(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

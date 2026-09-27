@@ -40,7 +40,7 @@ public final class PublicPlayerDataGameTest {
             try {
                 initialPlayer.setGameMode(GameType.SURVIVAL);
                 SereniteaPotBundle bundle = SereniteaPotManager.createStaging(owner, 1L, 1L);
-                SereniteaPotManager.commitGeneration(
+                GameTestStorage.commitGeneration(
                     bundle,
                     Map.of(
                         SereniteaPotDimension.OVERWORLD,
@@ -66,6 +66,7 @@ public final class PublicPlayerDataGameTest {
                 helper.fail("Public playerdata authority failed: " + thrown);
                 return;
             }
+            if (phase.get() < 5 && !PlayerStateManager.prepare(currentPlayer(server, owner)).isDone()) return;
 
             if (phase.compareAndSet(1, 2)) {
                 SereniteaPotTravelService.enter(currentPlayer(server, owner), owner);
@@ -145,7 +146,7 @@ public final class PublicPlayerDataGameTest {
             if (phase.get() == 4 && serverTaskQueued.compareAndSet(false, true)) {
                 server.execute(() -> {
                     try {
-                        var deletion = SereniteaPotDeletionService.deleteAndReset(server, owner);
+                        var deletion = GameTestStorage.deleteAndReset(server, owner);
                         if (deletion != SereniteaPotDeletionService.Success.INSTANCE) {
                             throw new AssertionError("Could not clean up public-playerdata test pot: " + deletion);
                         }

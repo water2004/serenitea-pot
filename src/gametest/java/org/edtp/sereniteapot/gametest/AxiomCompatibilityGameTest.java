@@ -37,7 +37,7 @@ public final class AxiomCompatibilityGameTest {
                 long generation = System.currentTimeMillis();
                 SereniteaPotBundle bundle = SereniteaPotManager.createStaging(
                         owner.getUUID(), generation, helper.getLevel().getSeed());
-                SereniteaPotManager.commitGeneration(
+                GameTestStorage.commitGeneration(
                         bundle,
                         Map.of(
                                 SereniteaPotDimension.OVERWORLD,
@@ -61,7 +61,7 @@ public final class AxiomCompatibilityGameTest {
                 SereniteaPotToolPermissions.afterRealmChange(owner, owner.getUUID());
             } finally {
                 owner.setServerLevel(server.overworld());
-                SereniteaPotDeletionService.deleteAndReset(server, owner.getUUID());
+                GameTestStorage.deleteAndReset(server, owner.getUUID());
                 SereniteaPotManager.catalog().getPlayers().remove(owner.getUUID());
                 SereniteaPotManager.saveCatalog();
                 server.getPlayerList().remove(owner);

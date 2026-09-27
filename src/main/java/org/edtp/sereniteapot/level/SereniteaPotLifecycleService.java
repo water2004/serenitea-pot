@@ -8,6 +8,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.edtp.sereniteapot.SereniteaPotMod;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
+import org.edtp.sereniteapot.player.PlayerStateManager;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -89,12 +90,18 @@ public final class SereniteaPotLifecycleService {
         try {
             List<ServerPlayer> remaining = evacuate(server, owner);
             if (!remaining.isEmpty()) {
+                boolean waitingForData = false;
                 for (ServerPlayer player : remaining) {
+                    if (!PlayerStateManager.prepare(player).isDone()) {
+                        waitingForData = true;
+                        continue;
+                    }
                     player.connection.disconnect(component(
                         player,
                         message(MessageKey.LIFECYCLE_DISCONNECT_FOR_UNLOAD)
                     ));
                 }
+                if (waitingForData) return new Rejected(message(MessageKey.LIFECYCLE_PLAYER_DATA_PENDING));
                 return new Rejected(message(MessageKey.LIFECYCLE_DISCONNECT_RETRY, remaining.size()));
             }
             if (!SereniteaPotManager.unloadEvacuated(owner)) {

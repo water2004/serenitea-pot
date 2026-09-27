@@ -16,6 +16,7 @@
       "org.edtp.sereniteapot.gametest.PlayerDeathIsolationGameTest",
       "org.edtp.sereniteapot.gametest.PlayerRealmTransferGameTest",
       "org.edtp.sereniteapot.gametest.PlayerStateVersionGameTest",
+      "org.edtp.sereniteapot.player.PlayerTransferReadinessGameTest",
       "org.edtp.sereniteapot.gametest.PublicPlayerDataGameTest",
       "org.edtp.sereniteapot.gametest.PotDifficultyGameTest",
       "org.edtp.sereniteapot.gametest.PotCoordinatesGameTest",

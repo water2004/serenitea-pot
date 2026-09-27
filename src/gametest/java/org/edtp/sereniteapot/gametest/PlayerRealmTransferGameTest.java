@@ -11,6 +11,7 @@ import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.level.SereniteaPotTravelService;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
+import org.edtp.sereniteapot.player.PlayerStateManager;
 
 import java.util.Map;
 import java.util.UUID;
@@ -35,7 +36,7 @@ public final class PlayerRealmTransferGameTest {
         server.execute(() -> {
             try {
                 SereniteaPotBundle bundle = SereniteaPotManager.createStaging(owner, 1L, 1L);
-                SereniteaPotManager.commitGeneration(
+                GameTestStorage.commitGeneration(
                     bundle,
                     Map.of(
                         SereniteaPotDimension.OVERWORLD,
@@ -61,6 +62,7 @@ public final class PlayerRealmTransferGameTest {
                 helper.fail("Player realm transfer failed: " + thrown);
                 return;
             }
+            if (phase.get() < 5 && !PlayerStateManager.prepare(currentPlayer(server, owner)).isDone()) return;
 
             if (phase.compareAndSet(1, 2)) {
                 SereniteaPotTravelService.enter(currentPlayer(server, owner), owner);
@@ -114,7 +116,7 @@ public final class PlayerRealmTransferGameTest {
                         }
 
                         SereniteaPotDeletionService.Result deletion =
-                            SereniteaPotDeletionService.deleteAndReset(server, owner);
+                            GameTestStorage.deleteAndReset(server, owner);
                         if (deletion != SereniteaPotDeletionService.Success.INSTANCE) {
                             throw new AssertionError("Could not clean up transfer test pot: " + deletion);
                         }

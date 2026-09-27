@@ -28,15 +28,17 @@ public final class PlayerDataIsolationGameTest {
         var server = helper.getLevel().getServer();
         AtomicReference<Throwable> failure = new AtomicReference<>();
         AtomicBoolean complete = new AtomicBoolean();
+        UUID owner = UUID.randomUUID();
+        ServerPlayer player = new ServerPlayer(server, server.overworld(),
+            new GameProfile(owner, "save-isolation-test"), ClientInformation.createDefault());
 
         // Custom level lifecycle changes belong to the server thread, including
         // when the surrounding GameTest level is running on Worldthreader.
-        server.execute(() -> {
-            UUID owner = UUID.randomUUID();
-            ServerPlayer player = null;
+        PlayerStateManager.prepare(player).whenComplete((ignored, loadError) -> server.execute(() -> {
             try {
+                if (loadError != null) throw new IllegalStateException("Private preload failed", loadError);
                 SereniteaPotBundle bundle = SereniteaPotManager.createStaging(owner, 1L, 1L);
-                SereniteaPotManager.commitGeneration(
+                GameTestStorage.commitGeneration(
                     bundle,
                     Map.of(
                         SereniteaPotDimension.OVERWORLD,
@@ -45,12 +47,6 @@ public final class PlayerDataIsolationGameTest {
                     0
                 );
 
-                player = new ServerPlayer(
-                    server,
-                    server.overworld(),
-                    new GameProfile(owner, "save-isolation-test"),
-                    ClientInformation.createDefault()
-                );
                 player.snapTo(120.5, 80.0, -39.5, 30.0F, -5.0F);
                 int publicGameType = player.gameMode().getId();
                 var playerDataStorage = ((PlayerListAccessor) server.getPlayerList())
@@ -91,7 +87,7 @@ public final class PlayerDataIsolationGameTest {
                 }
 
                 player.setServerLevel(server.overworld());
-                var deletion = SereniteaPotDeletionService.deleteAndReset(server, owner);
+                var deletion = GameTestStorage.deleteAndReset(server, owner);
                 if (deletion != SereniteaPotDeletionService.Success.INSTANCE) {
                     throw new IllegalStateException("Could not clean up playerdata test pot: " + deletion);
                 }
@@ -104,7 +100,7 @@ public final class PlayerDataIsolationGameTest {
                 }
                 failure.set(throwable);
             }
-        });
+        }));
 
         helper.onEachTick(() -> {
             Throwable throwable = failure.get();

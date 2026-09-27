@@ -27,7 +27,7 @@ public final class PotDifficultyGameTest {
             UUID owner = UUID.randomUUID();
             try {
                 SereniteaPotBundle bundle = SereniteaPotManager.createStaging(owner, 1L, 1L);
-                SereniteaPotManager.commitGeneration(
+                GameTestStorage.commitGeneration(
                     bundle,
                     Map.of(
                         SereniteaPotDimension.OVERWORLD,
@@ -57,7 +57,7 @@ public final class PotDifficultyGameTest {
                     throw new AssertionError("Changing pot difficulty modified the public world");
                 }
 
-                var deletion = SereniteaPotDeletionService.deleteAndReset(server, owner);
+                var deletion = GameTestStorage.deleteAndReset(server, owner);
                 if (deletion != SereniteaPotDeletionService.Success.INSTANCE) {
                     throw new IllegalStateException("Could not clean up difficulty test pot: " + deletion);
                 }

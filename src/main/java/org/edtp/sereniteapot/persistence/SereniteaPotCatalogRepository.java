@@ -4,6 +4,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.minecraft.util.Util;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.Difficulty;
 import org.edtp.sereniteapot.SereniteaPotMod;
@@ -14,6 +15,7 @@ import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -23,6 +25,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class SereniteaPotCatalogRepository {
     // v4 is the supported baseline; future format changes must explicitly migrate it.
@@ -31,6 +34,7 @@ public class SereniteaPotCatalogRepository {
     private final Path root;
     private final com.google.gson.Gson gson = new GsonBuilder().setPrettyPrinting().create();
     private final Path file;
+    private CompletableFuture<Void> pendingWrites = CompletableFuture.completedFuture(null);
 
     public SereniteaPotCatalogRepository(Path root) {
         this.root = root;
@@ -56,11 +60,29 @@ public class SereniteaPotCatalogRepository {
         }
     }
 
-    public void save(SereniteaPotCatalog catalog) throws IOException {
+    /** Encodes mutable catalog data on the caller thread, then writes snapshots in order. */
+    public synchronized CompletableFuture<Void> saveAsync(SereniteaPotCatalog catalog) {
+        String snapshot = gson.toJson(encode(catalog));
+        pendingWrites = pendingWrites.thenRunAsync(() -> {
+            try {
+                writeJson(snapshot);
+            } catch (IOException error) {
+                throw new UncheckedIOException(error);
+            }
+        }, Util.ioPool());
+        return pendingWrites;
+    }
+
+    /** Wait for this future during shutdown, after no more saves can be queued. */
+    public synchronized CompletableFuture<Void> pendingWrites() {
+        return pendingWrites;
+    }
+
+    private void writeJson(String snapshot) throws IOException {
         Files.createDirectories(root);
         Path temporary = root.resolve("serenitea_pots.json.tmp");
         try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
-            gson.toJson(encode(catalog), writer);
+            writer.write(snapshot);
         }
         try {
             Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);

@@ -21,7 +21,8 @@
     "ServerPlayerRespawnMixin",
     "ServerPlayerTeleportMixin",
     "accessor.CommandNodeAccessor",
-    "accessor.PlayerListAccessor"
+    "accessor.PlayerListAccessor",
+    "accessor.ServerLevelEntityManagerAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

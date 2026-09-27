@@ -37,6 +37,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /**
  * 尘歌壶元数据和 Arcade 自定义维度的运行时所有者。
@@ -77,10 +79,23 @@ public final class SereniteaPotManager {
 
     public static void stop(MinecraftServer server) {
         if (SereniteaPotManager.server != server) return;
+        SereniteaPotDeletionService.awaitPending(server);
         saveCatalog();
+        awaitCatalogWrites();
         loaded.clear();
         repository = null;
         SereniteaPotManager.server = null;
+    }
+
+    /** Shutdown only: the queued work contains no server-thread continuations. */
+    public static void awaitCatalogWrites() {
+        if (repository != null) {
+            try {
+                repository.pendingWrites().join();
+            } catch (CompletionException error) {
+                SereniteaPotMod.LOGGER.error("Failed to flush Serenitea Pot catalog during shutdown", error);
+            }
+        }
     }
 
     public static SereniteaPotCatalog catalog() {
@@ -164,8 +179,8 @@ public final class SereniteaPotManager {
         return new SereniteaPotBundle(owner, generation, levels);
     }
 
-    /** Atomically persists a new active generation and returns the generation it replaced. */
-    public static SereniteaPotBundle commitGeneration(
+    /** Starts persistence for a new active generation without waiting on the I/O pool. */
+    public static GenerationCommit beginCommitGeneration(
         SereniteaPotBundle bundle,
         Map<SereniteaPotDimension, SereniteaPotSlotRecord> replacementSlots,
         int maximumRadiusChunks
@@ -196,7 +211,10 @@ public final class SereniteaPotManager {
         record.getSlots().clear();
         record.getSlots().putAll(copySlots(replacementSlots));
         try {
-            saveCatalog();
+            return new GenerationCommit(
+                bundle, previous == bundle ? null : previous, record, oldGeneration,
+                oldMaximumRadiusChunks, oldSlots, saveCatalog()
+            );
         } catch (RuntimeException error) {
             record.setActiveGeneration(oldGeneration);
             record.setMaxRadiusChunks(oldMaximumRadiusChunks);
@@ -204,8 +222,56 @@ public final class SereniteaPotManager {
             record.getSlots().putAll(oldSlots);
             throw error;
         }
-        loaded.put(bundle.owner(), bundle);
-        return previous == bundle ? null : previous;
+    }
+
+    /** Poll and publish a prepared generation after its IO-only persistence future completes. */
+    public static SereniteaPotBundle finishCommitGeneration(GenerationCommit commit) {
+        requireServerThread();
+        if (!commit.isDone()) throw new IllegalStateException("Generation commit is still pending");
+        if (commit.finished) throw new IllegalStateException("Generation commit was already finished");
+        commit.finished = true;
+        try {
+            commit.persisted.join();
+        } catch (RuntimeException error) {
+            commit.record.setActiveGeneration(commit.oldGeneration);
+            commit.record.setMaxRadiusChunks(commit.oldMaximumRadiusChunks);
+            commit.record.getSlots().clear();
+            commit.record.getSlots().putAll(commit.oldSlots);
+            Throwable cause = error instanceof CompletionException && error.getCause() != null
+                ? error.getCause() : error;
+            throw new IllegalStateException("Failed to persist Serenitea Pot generation", cause);
+        }
+        loaded.put(commit.bundle.owner(), commit.bundle);
+        return commit.previous;
+    }
+
+    public static final class GenerationCommit {
+        private final SereniteaPotBundle bundle;
+        private final SereniteaPotBundle previous;
+        private final SereniteaPotRecord record;
+        private final long oldGeneration;
+        private final int oldMaximumRadiusChunks;
+        private final EnumMap<SereniteaPotDimension, SereniteaPotSlotRecord> oldSlots;
+        private final CompletableFuture<Void> persisted;
+        private boolean finished;
+
+        private GenerationCommit(
+            SereniteaPotBundle bundle, SereniteaPotBundle previous, SereniteaPotRecord record,
+            long oldGeneration, int oldMaximumRadiusChunks,
+            EnumMap<SereniteaPotDimension, SereniteaPotSlotRecord> oldSlots,
+            CompletableFuture<Void> persisted
+        ) {
+            this.bundle = bundle;
+            this.previous = previous;
+            this.record = record;
+            this.oldGeneration = oldGeneration;
+            this.oldMaximumRadiusChunks = oldMaximumRadiusChunks;
+            this.oldSlots = oldSlots;
+            this.persisted = persisted;
+        }
+
+        public boolean isDone() { return persisted.isDone(); }
+        public CompletableFuture<Void> persistedFuture() { return persisted; }
     }
 
     public static SereniteaPotBundle load(UUID owner) {
@@ -255,13 +321,13 @@ public final class SereniteaPotManager {
         return true;
     }
 
-    public static void saveCatalog() {
-        if (repository == null) return;
-        try {
-            repository.save(catalog);
-        } catch (IOException error) {
-            throw new IllegalStateException("Failed to save Serenitea Pot catalog", error);
-        }
+    public static CompletableFuture<Void> saveCatalog() {
+        CompletableFuture<Void> saved = repository == null
+            ? CompletableFuture.completedFuture(null) : repository.saveAsync(catalog);
+        saved.whenComplete((ignored, error) -> {
+            if (error != null) SereniteaPotMod.LOGGER.error("Failed to save Serenitea Pot catalog", error);
+        });
+        return saved;
     }
 
     /** Changes the shared difficulty of all three dimensions without touching public worlds. */

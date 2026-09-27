@@ -1,11 +1,16 @@
 package org.edtp.sereniteapot.gametest;
 
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import com.mojang.authlib.GameProfile;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
@@ -17,6 +22,8 @@ import org.edtp.sereniteapot.level.SereniteaPotTravelService;
 import org.edtp.sereniteapot.mixin.accessor.PlayerListAccessor;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
+import org.edtp.sereniteapot.player.PlayerStateManager;
+import org.edtp.sereniteapot.player.PlayerStateStore;
 import org.edtp.sereniteapot.SereniteaPotMod;
 
 import java.nio.file.Files;
@@ -43,23 +50,21 @@ public final class PlayerStateVersionGameTest {
     @SuppressWarnings("removal")
     private static void rejectsUnsupportedTargetState(GameTestHelper helper, boolean badSchema) {
         MinecraftServer server = helper.getLevel().getServer();
-        ServerPlayer initialPlayer = helper.makeMockServerPlayerInLevel();
-        UUID owner = initialPlayer.getUUID();
+        UUID owner = UUID.randomUUID();
         AtomicInteger phase = new AtomicInteger();
         AtomicReference<Throwable> failure = new AtomicReference<>();
         AtomicReference<Fixture> fixture = new AtomicReference<>();
         AtomicReference<Path> stateFile = new AtomicReference<>();
+        AtomicReference<java.util.concurrent.CompletableFuture<Void>> prepareRef = new AtomicReference<>();
 
         server.execute(() -> {
             try {
-                initialPlayer.setGameMode(GameType.SURVIVAL);
-                initialPlayer.getInventory().setItem(0, new ItemStack(Items.DIAMOND, 3));
                 SereniteaPotBundle bundle = SereniteaPotManager.createStaging(owner, 1L, 1L);
-                SereniteaPotManager.commitGeneration(
+                GameTestStorage.commitGeneration(
                     bundle,
                     Map.of(SereniteaPotDimension.OVERWORLD, new SereniteaPotSlotRecord(
                         helper.getLevel().dimension().identifier().toString(),
-                        initialPlayer.getBlockX(), initialPlayer.getBlockY(), initialPlayer.getBlockZ(), 0
+                        0, 64, 0, 0
                     )),
                     0
                 );
@@ -78,6 +83,17 @@ public final class PlayerStateVersionGameTest {
                 stateFile.set(file);
                 Files.createDirectories(file.getParent());
                 NbtIo.writeCompressed(root, file);
+                CommonListenerCookie cookie = CommonListenerCookie.createInitial(
+                    new GameProfile(owner, "versionTestPlayer"), false);
+                ServerPlayer initialPlayer = new ServerPlayer(
+                    server, helper.getLevel(), cookie.gameProfile(), cookie.clientInformation());
+                Connection connection = new Connection(PacketFlow.SERVERBOUND);
+                new EmbeddedChannel(connection);
+                server.getPlayerList().placeNewPlayer(connection, initialPlayer, cookie);
+                initialPlayer.setGameMode(GameType.SURVIVAL);
+                initialPlayer.getInventory().setItem(0, new ItemStack(Items.DIAMOND, 3));
+                var prepare = PlayerStateManager.prepare(initialPlayer);
+                prepareRef.set(prepare);
                 ((PlayerListAccessor) server.getPlayerList()).sereniteapot$getPlayerDataStorage()
                     .save(initialPlayer);
                 Path publicFile = server.getWorldPath(LevelResource.PLAYER_DATA_DIR)
@@ -98,8 +114,22 @@ public final class PlayerStateVersionGameTest {
         });
 
         helper.onEachTick(() -> {
-            if (phase.compareAndSet(1, 2)) {
+            if (phase.get() == 1 && prepareRef.get() != null && prepareRef.get().isDone()
+                && phase.compareAndSet(1, 2)) {
                 try {
+                    if (badSchema) {
+                        try {
+                            prepareRef.get().join();
+                            throw new AssertionError("Unsupported private player data preload unexpectedly succeeded");
+                        } catch (java.util.concurrent.CompletionException error) {
+                            Throwable cause = error.getCause();
+                            if (!(cause instanceof PlayerStateStore.InvalidPlayerStateException)) {
+                                throw new AssertionError("Preload failed for an unexpected reason", cause);
+                            }
+                        }
+                    } else {
+                        prepareRef.get().join();
+                    }
                     Fixture state = fixture.get();
                     ServerPlayer player = currentPlayer(server, owner);
                     var publicLevel = player.level();
@@ -206,7 +236,7 @@ public final class PlayerStateVersionGameTest {
 
     private static void cleanup(MinecraftServer server, UUID owner, Path stateFile) throws Exception {
         if (SereniteaPotManager.record(owner) != null) {
-            var deletion = SereniteaPotDeletionService.deleteAndReset(server, owner);
+            var deletion = GameTestStorage.deleteAndReset(server, owner);
             if (deletion != SereniteaPotDeletionService.Success.INSTANCE) {
                 throw new AssertionError("Could not clean up version test pot: " + deletion);
             }

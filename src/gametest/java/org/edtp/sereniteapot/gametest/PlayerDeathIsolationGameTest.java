@@ -16,6 +16,7 @@ import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.level.SereniteaPotTravelService;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
+import org.edtp.sereniteapot.player.PlayerStateManager;
 
 import java.util.Map;
 import java.util.UUID;
@@ -39,7 +40,7 @@ public final class PlayerDeathIsolationGameTest {
             try {
                 initialPlayer.getInventory().setItem(0, new ItemStack(Items.DIAMOND, 3));
                 SereniteaPotBundle bundle = SereniteaPotManager.createStaging(owner, 1L, 1L);
-                SereniteaPotManager.commitGeneration(
+                GameTestStorage.commitGeneration(
                     bundle,
                     Map.of(
                         SereniteaPotDimension.OVERWORLD,
@@ -65,6 +66,7 @@ public final class PlayerDeathIsolationGameTest {
                 helper.fail("Player death isolation failed: " + thrown);
                 return;
             }
+            if (phase.get() < 6 && !PlayerStateManager.prepare(currentPlayer(server, owner)).isDone()) return;
 
             if (phase.compareAndSet(1, 2)) {
                 SereniteaPotTravelService.enter(currentPlayer(server, owner), owner);
@@ -174,7 +176,7 @@ public final class PlayerDeathIsolationGameTest {
                 server.execute(() -> {
                     try {
                         var player = currentPlayer(server, owner);
-                        var deletion = SereniteaPotDeletionService.deleteAndReset(server, owner);
+                        var deletion = GameTestStorage.deleteAndReset(server, owner);
                         if (deletion != SereniteaPotDeletionService.Success.INSTANCE) {
                             throw new AssertionError("Could not clean up death-isolation test pot: " + deletion);
                         }

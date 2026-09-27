@@ -54,6 +54,10 @@ public final class PotCoordinatesGameTest {
             if (!queued.compareAndSet(false, true)) return;
             server.execute(() -> {
                 try {
+                    if (helper.getTick() > 1590) {
+                        throw new AssertionError("Timed out in phase " + phase[0] + ", progress="
+                            + SereniteaPotCreationService.progress(owner));
+                    }
                     switch (phase[0]) {
                         case 0 -> {
                             SereniteaPotManager.getOrCreateRecord(owner).setMaxRadiusChunks(1);
@@ -64,7 +68,7 @@ public final class PotCoordinatesGameTest {
                             nether.setBlockAndUpdate(netherMarker, Blocks.EMERALD_BLOCK.defaultBlockState());
                             old.get(SereniteaPotDimension.END).setBlockAndUpdate(endMarker, Blocks.GOLD_BLOCK.defaultBlockState());
                             var oldSlot = new SereniteaPotSlotRecord("minecraft:overworld", -231, 80, -146, 1);
-                            SereniteaPotManager.commitGeneration(old, Map.of(
+                            GameTestStorage.commitGeneration(old, Map.of(
                                 SereniteaPotDimension.OVERWORLD, oldSlot,
                                 SereniteaPotDimension.NETHER,
                                 new SereniteaPotSlotRecord("minecraft:the_nether", 1001, 70, 998, 1)
@@ -111,6 +115,11 @@ public final class PotCoordinatesGameTest {
                                 == SereniteaPotTravelService.Success.INSTANCE, "Could not enter copied world");
                             var inside = server.getPlayerList().getPlayer(owner);
                             check(inside.blockPosition().equals(sourceEntry), "First entry did not use source coordinates");
+                            phase[0] = 3;
+                        }
+                        case 3 -> {
+                            var inside = server.getPlayerList().getPlayer(owner);
+                            if (!org.edtp.sereniteapot.player.PlayerStateManager.prepare(inside).isDone()) return;
                             check(SereniteaPotTravelService.leave(inside) == SereniteaPotTravelService.Success.INSTANCE,
                                 "Could not leave copied world");
                             check(SereniteaPotCreationService.changeMaximum(server, owner, 0, null)
@@ -127,7 +136,7 @@ public final class PotCoordinatesGameTest {
                             check(pot.getBlockState(marker).is(Blocks.DIAMOND_BLOCK), "Trim lost center contents");
                             check(pot.getBlockState(outerMarker).isAir(), "Trim retained discarded edge contents");
                             assertRetained(bundle, netherMarker, endMarker);
-                            check(SereniteaPotDeletionService.deleteAndReset(server, owner)
+                            check(GameTestStorage.deleteAndReset(server, owner)
                                 == SereniteaPotDeletionService.Success.INSTANCE, "Test pot cleanup failed");
                             server.getPlayerList().remove(server.getPlayerList().getPlayer(owner));
                             SereniteaPotManager.catalog().getPlayers().remove(owner);

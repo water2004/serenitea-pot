@@ -16,6 +16,7 @@ import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
 import org.edtp.sereniteapot.player.HumanPlayerDetector;
 import org.edtp.sereniteapot.player.PlayerStateManager;
 import org.edtp.sereniteapot.player.PlayerStateStore.InvalidPlayerStateException;
+import org.edtp.sereniteapot.player.PlayerStateStore.LoadingPlayerStateException;
 import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 
 import java.util.Locale;
@@ -54,6 +55,8 @@ public final class SereniteaPotTravelService {
         PlayerStateManager.SavedLocation savedLocation;
         try {
             savedLocation = PlayerStateManager.savedPotLocation(player, owner);
+        } catch (LoadingPlayerStateException pending) {
+            return new Rejected(message(MessageKey.TRAVEL_PLAYER_DATA_LOADING));
         } catch (InvalidPlayerStateException error) {
             SereniteaPotMod.LOGGER.error("Rejected pot entry for {}: {}", player.getUUID(), error.getMessage());
             return new Rejected(message(MessageKey.TRAVEL_PLAYER_DATA_INVALID));
@@ -191,7 +194,15 @@ public final class SereniteaPotTravelService {
 
         var server = player.level().getServer();
         // 正常离开应精确回到进入前的位置；下方逻辑只处理旧/损坏快照的安全回退。
-        Destination savedPublic = savedPublicDestination(player);
+        Destination savedPublic;
+        try {
+            savedPublic = savedPublicDestination(player);
+        } catch (LoadingPlayerStateException pending) {
+            return new Rejected(message(MessageKey.TRAVEL_PLAYER_DATA_LOADING));
+        } catch (InvalidPlayerStateException error) {
+            SereniteaPotMod.LOGGER.error("Rejected pot exit for {}", player.getUUID(), error);
+            return new Rejected(message(MessageKey.TRAVEL_PLAYER_DATA_INVALID));
+        }
         if (savedPublic != null) {
             boolean success = player.teleportTo(
                 savedPublic.level(),
