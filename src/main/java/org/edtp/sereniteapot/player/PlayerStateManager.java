@@ -3,6 +3,7 @@ package org.edtp.sereniteapot.player;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.IntTag;
 import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundSetExperiencePacket;
@@ -79,6 +80,21 @@ public final class PlayerStateManager {
             return null;
         }
 
+        // Prepare the target before touching the live player. Carry the same data
+        // through teleport, including WorldThreader's replacement player instance.
+        CompoundTag targetState;
+        if (destinationRealm == null) {
+            targetState = loadPublicState(player);
+            if (targetState == null) {
+                throw new PlayerStateStore.InvalidPlayerStateException(
+                    "Vanilla playerdata is missing for " + player.getUUID());
+            }
+        } else {
+            targetState = store.get(player.getUUID(), potStateKey(destinationRealm));
+            if (targetState != null) {
+                validatePotState(player, targetState);
+            }
+        }
         // 先关闭容器，避免跨 realm 时仍有公共世界容器菜单引用或未提交的物品操作。
         player.closeContainer();
         if (sourceRealm == null) {
@@ -87,17 +103,16 @@ public final class PlayerStateManager {
         } else {
             savePotState(player, sourceRealm);
         }
-        return new StateSwitchPlan(sourceRealm, destinationRealm);
+        return new StateSwitchPlan(sourceRealm, destinationRealm, targetState);
     }
 
     public static void afterTeleport(ServerPlayer player, StateSwitchPlan plan) {
         requireAttached(player.level().getServer());
         UUID targetOwner = plan.targetOwner();
         if (targetOwner == null) {
-            restorePublicState(player);
+            restorePublicState(player, plan.targetState());
         } else {
-            CompoundTag state = store == null ? null : store.get(player.getUUID(), potStateKey(targetOwner));
-            applyPotState(player, state == null ? blankPotState(player) : state);
+            applyPotState(player, plan.targetState() == null ? blankPotState(player) : plan.targetState());
         }
         if (player.getUUID().equals(plan.sourceOwner()) && !player.getUUID().equals(targetOwner)) {
             requestCloseOnServerThread(player);
@@ -132,7 +147,7 @@ public final class PlayerStateManager {
     public static SavedLocation savedPotLocation(ServerPlayer player, UUID owner) {
         requireServerThread(player.level().getServer());
         CompoundTag state = store == null ? null : store.get(player.getUUID(), potStateKey(owner));
-        return readLocation(player, state);
+        return state == null ? null : validatePotState(player, state);
     }
 
     public static SavedLocation savedPublicLocation(ServerPlayer player) {
@@ -154,16 +169,23 @@ public final class PlayerStateManager {
         );
     }
 
-    private static SavedLocation readLocation(ServerPlayer player, CompoundTag state) {
-        if (state == null) return null;
+    private static SavedLocation validatePotState(ServerPlayer player, CompoundTag state) {
         var input = TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), state);
-        if (input.getIntOr("snapshotVersion", 0) != SNAPSHOT_VERSION) return null;
+        if (!(state.get("snapshotVersion") instanceof IntTag)
+                || input.getIntOr("snapshotVersion", -1) != SNAPSHOT_VERSION) {
+            throw new PlayerStateStore.InvalidPlayerStateException(
+                "Unsupported Serenitea Pot snapshot version for " + player.getUUID());
+        }
         Identifier dimensionId = Identifier.tryParse(input.getStringOr("LocationDimension", ""));
-        if (dimensionId == null) return null;
+        if (dimensionId == null) {
+            throw new PlayerStateStore.InvalidPlayerStateException("Invalid Serenitea Pot snapshot dimension");
+        }
         double x = input.getDoubleOr("LocationX", Double.NaN);
         double y = input.getDoubleOr("LocationY", Double.NaN);
         double z = input.getDoubleOr("LocationZ", Double.NaN);
-        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) return null;
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
+            throw new PlayerStateStore.InvalidPlayerStateException("Invalid Serenitea Pot snapshot location");
+        }
         return new SavedLocation(
             ResourceKey.create(Registries.DIMENSION, dimensionId),
             x,
@@ -230,10 +252,10 @@ public final class PlayerStateManager {
         syncClientState(player);
     }
 
-    private static void restorePublicState(ServerPlayer player) {
-        CompoundTag state = loadPublicState(player);
+    private static void restorePublicState(ServerPlayer player, CompoundTag state) {
         if (state == null) {
-            throw new IllegalStateException("Vanilla playerdata is missing for " + player.getUUID());
+            throw new PlayerStateStore.InvalidPlayerStateException(
+                "Vanilla playerdata is missing for " + player.getUUID());
         }
         Vec3 destination = player.position();
         float destinationYaw = player.getYRot();
@@ -342,7 +364,7 @@ public final class PlayerStateManager {
         }
     }
 
-    public record StateSwitchPlan(UUID sourceOwner, UUID targetOwner) {
+    public record StateSwitchPlan(UUID sourceOwner, UUID targetOwner, CompoundTag targetState) {
     }
 
     public record SavedLocation(

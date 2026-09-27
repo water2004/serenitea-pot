@@ -41,11 +41,11 @@ public final class CommandTreeGameTest {
                 MessageKey.INVITATION_TELEPORT_FAILED,
                 message(MessageKey.TRAVEL_DENIED));
         helper.assertValueEqual(
-                "批准后传送失败，申请仍有效：传送被访问策略拒绝",
+                "批准后传送失败，申请仍有效：传送被拒绝",
                 translate("zh_cn", message),
                 "Chinese server translation differs");
         helper.assertValueEqual(
-                "Teleport failed after approval; the request remains valid: The access policy rejected the teleport",
+                "Teleport failed after approval; the request remains valid: The teleport was rejected",
                 translate("en_us", message),
                 "English server translation differs");
         helper.assertValueEqual(

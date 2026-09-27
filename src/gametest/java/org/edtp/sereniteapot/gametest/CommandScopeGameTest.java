@@ -110,7 +110,7 @@ public final class CommandScopeGameTest {
         }
         owner.setGameMode(GameType.CREATIVE);
         run(server, owner, "gamemode survival @s");
-        require(owner.gameMode().isCreative(),
+        require(owner.gameMode.isCreative(),
             "A pot owner used /gamemode to leave the enforced creative mode");
         double borderSize = potOverworld.getWorldBorder().getSize();
         run(server, owner, "worldborder set 10000");

@@ -2,14 +2,20 @@ package org.edtp.sereniteapot.mixin;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.portal.TeleportTransition;
-import org.edtp.sereniteapot.player.PlayerStateManager;
+import org.edtp.sereniteapot.SereniteaPotMod;
+import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotAccessPolicy;
 import org.edtp.sereniteapot.permission.SereniteaPotToolPermissions;
+import org.edtp.sereniteapot.player.PlayerStateManager;
+import org.edtp.sereniteapot.player.PlayerStateStore.InvalidPlayerStateException;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
+import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
 
 /**
  * 将访问检查和玩家状态隔离放在所有 ServerPlayer 跨维度传送的共同边界上。
@@ -32,8 +38,16 @@ public abstract class ServerPlayerTeleportMixin {
             cir.setReturnValue(null);
             return;
         }
-        // 这里只保存源状态；必须等原版传送成功返回后才能应用目标状态。
-        this.sereniteapot$pendingStateSwitch = PlayerStateManager.beforeTeleport(player, transition.newLevel());
+        // Validate target data before changing worlds; unsupported data must also
+        // reject portal transfers safely, rather than escaping into the world tick.
+        this.sereniteapot$pendingStateSwitch = null;
+        try {
+            this.sereniteapot$pendingStateSwitch = PlayerStateManager.beforeTeleport(player, transition.newLevel());
+        } catch (InvalidPlayerStateException error) {
+            SereniteaPotMod.LOGGER.error("Rejected realm transfer for {}: {}", player.getUUID(), error.getMessage());
+            player.sendSystemMessage(component(player, message(MessageKey.TRAVEL_PLAYER_DATA_INVALID)));
+            cir.setReturnValue(null);
+        }
     }
 
     @Inject(method = "teleport", at = @At("RETURN"))

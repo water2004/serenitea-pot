@@ -106,7 +106,7 @@ public final class PlayerRealmTransferGameTest {
                             serverTaskQueued.set(false);
                             return;
                         }
-                        if (!current.gameMode().isCreative()
+                        if (!current.gameMode.isCreative()
                             || !current.getAbilities().mayfly
                             || !current.getAbilities().invulnerable
                             || !current.getAbilities().flying) {

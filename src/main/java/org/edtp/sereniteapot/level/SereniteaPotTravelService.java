@@ -7,13 +7,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.Vec3;
+import org.edtp.sereniteapot.SereniteaPotMod;
 import org.edtp.sereniteapot.i18n.MessageKey;
+import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.edtp.sereniteapot.model.SereniteaPotRecord;
 import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
-import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.player.HumanPlayerDetector;
 import org.edtp.sereniteapot.player.PlayerStateManager;
+import org.edtp.sereniteapot.player.PlayerStateStore.InvalidPlayerStateException;
 import org.edtp.sereniteapot.region.SereniteaPotCreationService;
 
 import java.util.Locale;
@@ -47,6 +49,14 @@ public final class SereniteaPotTravelService {
         if (!record.isEnabled()) return new Rejected(message(MessageKey.TRAVEL_DISABLED));
         if (SereniteaPotLifecycleService.isUnavailable(owner)) {
             return new Rejected(message(MessageKey.TRAVEL_UNAVAILABLE));
+        }
+
+        PlayerStateManager.SavedLocation savedLocation;
+        try {
+            savedLocation = PlayerStateManager.savedPotLocation(player, owner);
+        } catch (InvalidPlayerStateException error) {
+            SereniteaPotMod.LOGGER.error("Rejected pot entry for {}: {}", player.getUUID(), error.getMessage());
+            return new Rejected(message(MessageKey.TRAVEL_PLAYER_DATA_INVALID));
         }
 
         SereniteaPotBundle bundle;
@@ -86,7 +96,7 @@ public final class SereniteaPotTravelService {
         if (destinationDimension == null) {
             return new Rejected(message(MessageKey.TRAVEL_NO_DIMENSION));
         }
-        Destination destination = savedSereniteaPotDestination(player, owner, record, bundle);
+        Destination destination = savedSereniteaPotDestination(savedLocation, owner, record, bundle);
         if (destination == null) {
             SereniteaPotSlotRecord slot = record.getSlots().get(destinationDimension);
             destination = new Destination(
@@ -222,12 +232,11 @@ public final class SereniteaPotTravelService {
     }
 
     private static Destination savedSereniteaPotDestination(
-        ServerPlayer player,
+        PlayerStateManager.SavedLocation saved,
         UUID owner,
         SereniteaPotRecord record,
         SereniteaPotBundle bundle
     ) {
-        PlayerStateManager.SavedLocation saved = PlayerStateManager.savedPotLocation(player, owner);
         if (saved == null) return null;
         SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(saved.dimension());
         if (identity == null || !identity.owner().equals(owner)

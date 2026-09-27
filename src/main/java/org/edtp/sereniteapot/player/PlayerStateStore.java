@@ -1,6 +1,7 @@
 package org.edtp.sereniteapot.player;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.IntTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import org.edtp.sereniteapot.SereniteaPotMod;
@@ -15,6 +16,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class PlayerStateStore {
+    // Version of the file container, independent of the catalog and each pot payload.
     private static final int SCHEMA_VERSION = 1;
 
     private final Path root;
@@ -27,7 +29,12 @@ public final class PlayerStateStore {
 
     public CompoundTag get(UUID player, String stateKey) {
         synchronized (lock(player)) {
-            return loadPlayer(player).getCompound(stateKey).map(CompoundTag::copy).orElse(null);
+            CompoundTag states = loadPlayer(player);
+            if (!states.contains(stateKey)) {
+                return null;
+            }
+            return states.getCompound(stateKey).map(CompoundTag::copy).orElseThrow(() ->
+                    new InvalidPlayerStateException("Invalid isolated player state " + stateKey));
         }
     }
 
@@ -51,16 +58,24 @@ public final class PlayerStateStore {
     private CompoundTag loadPlayer(UUID player) {
         return cache.computeIfAbsent(player, ignored -> {
             Path file = file(player);
-            if (!Files.isRegularFile(file)) {
+            if (Files.notExists(file)) {
                 CompoundTag created = new CompoundTag();
                 created.putInt("schemaVersion", SCHEMA_VERSION);
                 return created;
             }
+            if (!Files.isRegularFile(file)) {
+                throw new InvalidPlayerStateException("Isolated player state is not a file " + file);
+            }
             try {
-                return NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+                CompoundTag states = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+                if (states == null || !(states.get("schemaVersion") instanceof IntTag)
+                        || states.getIntOr("schemaVersion", -1) != SCHEMA_VERSION) {
+                    throw new InvalidPlayerStateException("Unsupported isolated player state schema in " + file);
+                }
+                return states;
             } catch (IOException error) {
                 SereniteaPotMod.LOGGER.error("Failed to read isolated player state {}", file, error);
-                throw new IllegalStateException("Failed to read isolated player state " + file, error);
+                throw new InvalidPlayerStateException("Failed to read isolated player state " + file, error);
             }
         });
     }
@@ -83,5 +98,15 @@ public final class PlayerStateStore {
 
     private Path file(UUID player) {
         return root.resolve(player + ".dat");
+    }
+
+    public static final class InvalidPlayerStateException extends IllegalStateException {
+        public InvalidPlayerStateException(String message) {
+            super(message);
+        }
+
+        public InvalidPlayerStateException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

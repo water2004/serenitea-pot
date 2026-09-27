@@ -108,20 +108,20 @@ public final class PublicPlayerDataGameTest {
                     var playerDataStorage = ((PlayerListAccessor) server.getPlayerList())
                         .sereniteapot$getPlayerDataStorage();
                     playerDataStorage.save(player);
+                    var savedData = playerDataStorage
+                        .load(player.nameAndId())
+                        .orElseThrow();
 
                     player.setGameMode(GameType.SURVIVAL);
                     PlayerStateManager.afterTeleport(
                         player,
-                        new PlayerStateManager.StateSwitchPlan(owner, null)
+                        new PlayerStateManager.StateSwitchPlan(owner, null, savedData)
                     );
-                    if (!player.gameMode().isCreative()) {
+                    if (!player.gameMode.isCreative()) {
                         throw new AssertionError("Realm restore ignored Vanilla's current public game mode");
                     }
 
                     // Mojang's reconnect path loads this same file into a fresh player.
-                    var savedData = playerDataStorage
-                        .load(player.nameAndId())
-                        .orElseThrow();
                     ServerPlayer reconnected = new ServerPlayer(
                         server,
                         server.overworld(),
@@ -133,7 +133,7 @@ public final class PublicPlayerDataGameTest {
                         reconnected.registryAccess(),
                         savedData
                     ));
-                    if (!reconnected.gameMode().isCreative()) {
+                    if (!reconnected.gameMode.isCreative()) {
                         throw new AssertionError("Vanilla reconnect lost the public creative mode");
                     }
                 } catch (Throwable throwable) {
