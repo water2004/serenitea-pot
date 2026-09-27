@@ -52,7 +52,7 @@ public final class SereniteaPotDeletionService {
             record.setFrozen(oldFrozen);
             return new Rejected(message(MessageKey.DELETION_COMMIT_FAILED, error.getMessage()));
         }
-        SereniteaPotScheduler.reset(owner);
+        SereniteaPotScheduler.forgetOwner(owner);
         SereniteaPotLifecycleService.forget(owner);
 
         Path expectedRoot = server.getWorldPath(LevelResource.ROOT)

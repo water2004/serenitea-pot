@@ -32,7 +32,7 @@ import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
  *
  * <p>每个服务器 tick 都重新随机排列已加载的壶。一个壶一旦开始执行，本 tick
  * 内的三个维度便作为一个整体完成；实际耗时扣除后才决定是否放行下一个壶。
- * 预算不会跨 tick 累积，也不依赖历史耗时预测。</p>
+ * 玩家超支会留到后续 tick 偿还，未使用的额度最多保留一个 tick。</p>
  */
 public final class SereniteaPotScheduler {
     private static final int METRICS_WINDOW_TICKS = 20;
@@ -41,6 +41,7 @@ public final class SereniteaPotScheduler {
 
     private static final LinkedHashMap<UUID, OwnerMetrics> metrics = new LinkedHashMap<>();
     private static final LinkedHashMap<UUID, Long> pendingAutomaticFreezes = new LinkedHashMap<>();
+    static final OwnerBudgetLedger ownerBudgets = new OwnerBudgetLedger();
     private static volatile TickPlan currentPlan = TickPlan.empty();
     private static long serverTicks;
 
@@ -176,14 +177,19 @@ public final class SereniteaPotScheduler {
         pendingAutomaticFreezes.remove(owner);
     }
 
+    /** Drops accounting only when the pot is deleted. Freeze and unload retain debt. */
+    public static synchronized void forgetOwner(UUID owner) {
+        reset(owner);
+        ownerBudgets.remove(owner);
+    }
+
     /** Reserves a copy slice from the current tick's remaining owner and global budgets. */
     public static CreationReservation reserveCreationSlice(UUID owner, long maximumNanos) {
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
         if (record == null) return null;
         double reserved = currentPlan.reserveCreation(
             owner,
-            maximumNanos,
-            record.getBudgetMillisPerTick() * 1_000_000.0
+            maximumNanos
         );
         if (reserved < MINIMUM_CREATION_SLICE_NANOS) return null;
         return new CreationReservation(currentPlan, owner, reserved);
@@ -213,6 +219,12 @@ public final class SereniteaPotScheduler {
         }
         serverTicks++;
 
+        Map<UUID, Double> allowances = new HashMap<>();
+        SereniteaPotManager.catalog().getPlayers().forEach((owner, record) ->
+            allowances.put(owner, Math.max(0.0, record.getBudgetMillisPerTick()) * 1_000_000.0)
+        );
+        ownerBudgets.refill(allowances);
+
         LinkedHashSet<UUID> loadedOwners = new LinkedHashSet<>();
         for (ServerLevel level : server.getAllLevels()) {
             SereniteaPotLevelKeys.Identity identity = SereniteaPotLevelKeys.identify(level.dimension());
@@ -226,7 +238,8 @@ public final class SereniteaPotScheduler {
         Collections.shuffle(order);
         currentPlan = new TickPlan(
             order,
-            SereniteaPotManager.catalog().getGlobalBudgetMillisPerTick() * 1_000_000.0
+            SereniteaPotManager.catalog().getGlobalBudgetMillisPerTick() * 1_000_000.0,
+            ownerBudgets
         );
     }
 
@@ -290,6 +303,7 @@ public final class SereniteaPotScheduler {
     private static synchronized void resetAll() {
         metrics.clear();
         pendingAutomaticFreezes.clear();
+        ownerBudgets.clear();
         currentPlan = TickPlan.empty();
         serverTicks = 0L;
     }
@@ -313,8 +327,8 @@ public final class SereniteaPotScheduler {
     }
 
     /** One immutable owner order plus the mutable accounting for exactly one server tick. */
-    private static final class TickPlan {
-        private static final TickPlan EMPTY = new TickPlan(List.of(), 0.0);
+    static final class TickPlan {
+        private static final TickPlan EMPTY = new TickPlan(List.of(), 0.0, new OwnerBudgetLedger());
 
         private final List<UUID> owners;
         private final Map<UUID, Integer> indices;
@@ -322,12 +336,13 @@ public final class SereniteaPotScheduler {
         private final boolean[] threadedAdmitted;
         private final boolean[] threadedExecuted;
         private final long[][] threadedElapsed;
-        private final Map<UUID, Double> ownerRemainingNanos = new HashMap<>();
+        private final OwnerBudgetLedger ownerBudgets;
         private final Phaser threadedBarrier;
         private double globalRemainingNanos;
 
-        private TickPlan(List<UUID> owners, double globalBudgetNanos) {
+        TickPlan(List<UUID> owners, double globalBudgetNanos, OwnerBudgetLedger ownerBudgets) {
             this.owners = List.copyOf(owners);
+            this.ownerBudgets = ownerBudgets;
             this.indices = new HashMap<>();
             this.serialStarted = new boolean[owners.size()];
             this.threadedAdmitted = new boolean[owners.size()];
@@ -337,13 +352,8 @@ public final class SereniteaPotScheduler {
             for (int index = 0; index < owners.size(); index++) {
                 UUID owner = owners.get(index);
                 indices.put(owner, index);
-                SereniteaPotRecord record = SereniteaPotManager.record(owner);
-                ownerRemainingNanos.put(
-                    owner,
-                    record == null ? 0.0 : record.getBudgetMillisPerTick() * 1_000_000.0
-                );
             }
-            if (!owners.isEmpty()) threadedAdmitted[0] = globalRemainingNanos > 0.0;
+            if (!owners.isEmpty()) threadedAdmitted[0] = canAdmit(owners.get(0));
             this.threadedBarrier = new Phaser(3) {
                 @Override
                 protected boolean onAdvance(int phase, int registeredParties) {
@@ -361,29 +371,27 @@ public final class SereniteaPotScheduler {
             return owners;
         }
 
-        private synchronized boolean admitSerial(UUID owner) {
+        synchronized boolean admitSerial(UUID owner) {
             Integer index = indices.get(owner);
             if (index == null) return false;
             if (serialStarted[index]) return true;
-            if (globalRemainingNanos <= 0.0) return false;
+            if (!canAdmit(owner)) return false;
             serialStarted[index] = true;
             return true;
         }
 
-        private synchronized void recordSerialCost(UUID owner, long elapsedNanos) {
+        synchronized void recordSerialCost(UUID owner, long elapsedNanos) {
             globalRemainingNanos -= elapsedNanos;
-            ownerRemainingNanos.compute(owner, (ignored, remaining) ->
-                (remaining == null ? 0.0 : remaining) - elapsedNanos
-            );
+            ownerBudgets.debit(owner, elapsedNanos);
             recordWholePotCost(owner, elapsedNanos);
         }
 
-        private boolean admitThreaded(UUID owner) {
+        boolean admitThreaded(UUID owner) {
             Integer index = indices.get(owner);
             return index != null && threadedAdmitted[index];
         }
 
-        private boolean finishThreadedOwner(
+        boolean finishThreadedOwner(
             UUID owner,
             SereniteaPotDimension dimension,
             long elapsedNanos,
@@ -403,15 +411,13 @@ public final class SereniteaPotScheduler {
             long actualCost = cost;
             UUID owner = owners.get(index);
             globalRemainingNanos -= actualCost;
-            ownerRemainingNanos.compute(owner, (ignored, remaining) ->
-                (remaining == null ? 0.0 : remaining) - actualCost
-            );
+            ownerBudgets.debit(owner, actualCost);
             if (threadedExecuted[index]) recordWholePotCost(owner, actualCost);
             int next = index + 1;
-            if (next < owners.size()) threadedAdmitted[next] = globalRemainingNanos > 0.0;
+            if (next < owners.size()) threadedAdmitted[next] = canAdmit(owners.get(next));
         }
 
-        private void abortThreadedTick() {
+        void abortThreadedTick() {
             threadedBarrier.forceTermination();
         }
 
@@ -423,20 +429,22 @@ public final class SereniteaPotScheduler {
             return List.copyOf(executed);
         }
 
-        private synchronized double reserveCreation(UUID owner, long maximumNanos, double ownerLimitNanos) {
-            double ownerRemaining = ownerRemainingNanos.computeIfAbsent(owner, ignored -> ownerLimitNanos);
-            double reserved = Math.min((double) maximumNanos, Math.min(ownerRemaining, globalRemainingNanos));
+        private boolean canAdmit(UUID owner) {
+            return globalRemainingNanos > 0.0 && ownerBudgets.available(owner) > 0.0;
+        }
+
+        synchronized double reserveCreation(UUID owner, long maximumNanos) {
+            double reserved = Math.min((double) maximumNanos,
+                Math.min(ownerBudgets.available(owner), globalRemainingNanos));
             if (reserved < MINIMUM_CREATION_SLICE_NANOS) return 0.0;
-            ownerRemainingNanos.put(owner, ownerRemaining - reserved);
+            ownerBudgets.debit(owner, reserved);
             globalRemainingNanos -= reserved;
             return reserved;
         }
 
-        private synchronized void correctCreation(UUID owner, double reservedNanos, long elapsedNanos) {
+        synchronized void correctCreation(UUID owner, double reservedNanos, long elapsedNanos) {
             double correction = elapsedNanos - reservedNanos;
-            ownerRemainingNanos.compute(owner, (ignored, remaining) ->
-                (remaining == null ? 0.0 : remaining) - correction
-            );
+            ownerBudgets.debit(owner, correction);
             globalRemainingNanos -= correction;
         }
     }
