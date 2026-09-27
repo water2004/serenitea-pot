@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -75,7 +74,7 @@ public final class RegionCopyTask {
     private SharedChunkLoad pendingTargetLoad;
     private boolean chunkReady;
     private boolean closed;
-    private final ArrayDeque<CompletableFuture<?>> lightingBarriers = new ArrayDeque<>();
+    private CompletableFuture<?> lightingBarrier;
 
     private final ArrayDeque<Entity> entities = new ArrayDeque<>();
     private final HashSet<UUID> collectedEntityIds = new HashSet<>();
@@ -178,6 +177,10 @@ public final class RegionCopyTask {
                 throw error;
             }
         }
+        // Maintenance/staging levels do not tick. Advance their native chunk task
+        // queues as well as the entity inbox; polling a Future alone cannot do that.
+        source.getChunkSource().pollTask();
+        target.getChunkSource().pollTask();
         processPendingEntityLoads(source);
         processPendingEntityLoads(target);
         if (!pendingSourceLoad.future.isDone() || !pendingTargetLoad.future.isDone()) return false;
@@ -398,10 +401,10 @@ public final class RegionCopyTask {
         if (lightCorrect) {
             targetLight.setLightEnabled(targetChunkPos, true);
             targetLight.retainData(targetChunkPos, false);
-            lightingBarriers.add(targetLight.waitForPendingTasks(targetChunkPos.x(), targetChunkPos.z()));
+            lightingBarrier = targetLight.waitForPendingTasks(targetChunkPos.x(), targetChunkPos.z());
         } else {
-            lightingBarriers.add(targetLight.initializeLight(targetChunk, false)
-                    .thenCompose(chunk -> targetLight.lightChunk(chunk, false)));
+            lightingBarrier = targetLight.initializeLight(targetChunk, false)
+                    .thenCompose(chunk -> targetLight.lightChunk(chunk, false));
         }
         targetLight.tryScheduleUpdate();
     }
@@ -479,28 +482,14 @@ public final class RegionCopyTask {
     }
 
     private void finishLighting() {
-        pumpLighting();
-        drainCompletedLighting();
-        if (lightingBarriers.isEmpty()) {
-            releaseChunkTickets();
-            chunkCursor++;
-            phase = chunkCursor >= chunkCount ? Phase.DONE : Phase.CHUNKS;
-        }
-    }
-
-    private void pumpLighting() {
         target.getChunkSource().pollTask();
         target.getChunkSource().getLightEngine().tryScheduleUpdate();
-    }
-
-    private void drainCompletedLighting() {
-        Iterator<CompletableFuture<?>> iterator = lightingBarriers.iterator();
-        while (iterator.hasNext()) {
-            CompletableFuture<?> barrier = iterator.next();
-            if (!barrier.isDone()) continue;
-            barrier.join();
-            iterator.remove();
-        }
+        if (!lightingBarrier.isDone()) return;
+        lightingBarrier.join();
+        lightingBarrier = null;
+        releaseChunkTickets();
+        chunkCursor++;
+        phase = chunkCursor >= chunkCount ? Phase.DONE : Phase.CHUNKS;
     }
 
     private BoundingBox chunkBox(long index) {
