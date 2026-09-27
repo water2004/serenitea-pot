@@ -8,10 +8,11 @@ import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Path;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -84,5 +85,52 @@ class SereniteaPotCatalogRepositoryTest {
         assertThrows(IllegalArgumentException.class,
                 () -> catalog.getOrCreate(UUID.randomUUID())
                         .setMaxRadiusChunks(SereniteaPotRecord.MAX_RADIUS_CHUNKS + 1));
+    }
+
+    @Test
+    void rejectsCorruptMetadataWithoutChangingCatalog() throws Exception {
+        String valid = """
+                {"version":4,"players":{"00000000-0000-0000-0000-000000000001":{
+                "stateId":"00000000-0000-0000-0000-000000000002","activeGeneration":1,
+                "difficulty":"normal","enabled":true,"frozen":false,
+                "slots":{"overworld":{"sourceDimension":"minecraft:overworld",
+                "entryX":1,"entryY":64,"entryZ":2,"radiusChunks":1}}}}}
+                """;
+        String[] corrupt = {
+                valid.replace("\"players\":", "\"missingPlayers\":"),
+                valid.replace("\"stateId\":\"00000000-0000-0000-0000-000000000002\",", ""),
+                valid.replace("\"activeGeneration\":1,", ""),
+                valid.replace("\"activeGeneration\":1", "\"activeGeneration\":1.5"),
+                valid.replace("\"activeGeneration\":1", "\"activeGeneration\":-1"),
+                valid.replace("\"enabled\":true", "\"enabled\":\"true\""),
+                valid.replace("\"enabled\":true,", ""),
+                valid.replace("\"frozen\":false,", ""),
+                valid.replace("\"slots\":{\"overworld\":", "\"missingSlots\":{\"overworld\":"),
+                valid.replace("\"sourceDimension\":\"minecraft:overworld\",", ""),
+                valid.replace("\"entryX\":1,", ""),
+                valid.replace("\"entryY\":64", "\"entryY\":2147483648"),
+                valid.replace("\"radiusChunks\":1", "\"radiusChunks\":257"),
+                valid.replace("\"overworld\":", "\"unknown\":"),
+                valid.substring(0, valid.indexOf("\"slots\":")) + "\"slots\":{}}}}"
+        };
+        Path file = directory.resolve("serenitea_pots.json");
+        SereniteaPotCatalogRepository repository = new SereniteaPotCatalogRepository(directory);
+        for (String text : corrupt) {
+            Files.writeString(file, text);
+            byte[] original = Files.readAllBytes(file);
+            assertThrows(IllegalStateException.class, repository::load);
+            assertArrayEquals(original, Files.readAllBytes(file));
+        }
+    }
+
+    @Test
+    void acceptsUncreatedAdministrativeRecord() throws Exception {
+        SereniteaPotCatalog catalog = new SereniteaPotCatalog();
+        UUID owner = UUID.randomUUID();
+        catalog.getOrCreate(owner);
+        SereniteaPotCatalogRepository repository = new SereniteaPotCatalogRepository(directory);
+        repository.save(catalog);
+        assertEquals(0, repository.load().getPlayers().get(owner).getActiveGeneration());
+        assertTrue(repository.load().getPlayers().get(owner).getSlots().isEmpty());
     }
 }

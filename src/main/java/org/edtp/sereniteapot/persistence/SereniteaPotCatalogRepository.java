@@ -4,6 +4,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.Difficulty;
 import org.edtp.sereniteapot.SereniteaPotMod;
 import org.edtp.sereniteapot.model.SereniteaPotCatalog;
@@ -14,6 +15,7 @@ import org.edtp.sereniteapot.model.SereniteaPotSlotRecord;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -23,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public class SereniteaPotCatalogRepository {
+    // v4 is the supported baseline; future format changes must explicitly migrate it.
     private static final int FORMAT_VERSION = 4;
 
     private final Path root;
@@ -35,8 +38,11 @@ public class SereniteaPotCatalogRepository {
     }
 
     public SereniteaPotCatalog load() throws IOException {
-        if (!Files.isRegularFile(file)) {
+        if (Files.notExists(file)) {
             return new SereniteaPotCatalog();
+        }
+        if (!Files.isRegularFile(file)) {
+            throw new IllegalStateException("Serenitea Pot catalog is not a file: " + file);
         }
 
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
@@ -115,73 +121,124 @@ public class SereniteaPotCatalogRepository {
                 intValue(root, "defaultMaxRadiusChunks", SereniteaPotRecord.DEFAULT_MAX_RADIUS_CHUNKS),
                 doubleValue(root, "defaultBudgetMillisPerTick", SereniteaPotRecord.DEFAULT_BUDGET_MILLIS_PER_TICK),
                 doubleValue(root, "globalBudgetMillisPerTick", SereniteaPotCatalog.DEFAULT_GLOBAL_BUDGET_MILLIS_PER_TICK));
-        JsonObject players = objectValue(root, "players");
+        JsonObject players = requiredObject(root, "players");
         for (Map.Entry<String, JsonElement> entry : players.entrySet()) {
-            JsonObject recordObject = entry.getValue().getAsJsonObject();
-            JsonElement activeGeneration = nonNull(recordObject, "activeGeneration");
+            JsonObject recordObject = requiredObject(players, entry.getKey());
+            long activeGeneration = longValue(recordObject, "activeGeneration");
+            if (activeGeneration < 0) {
+                throw new IllegalArgumentException("Negative activeGeneration for " + entry.getKey());
+            }
             SereniteaPotRecord record = new SereniteaPotRecord(
-                    UUID.fromString(stringValue(recordObject, "stateId", UUID.randomUUID().toString())),
-                    activeGeneration == null ? 0 : activeGeneration.getAsLong(),
+                    UUID.fromString(requiredString(recordObject, "stateId")),
+                    activeGeneration,
                     intValue(recordObject, "maxRadiusChunks", catalog.getDefaultMaxRadiusChunks()),
                     doubleValue(recordObject, "budgetMillisPerTick", catalog.getDefaultBudgetMillisPerTick()),
                     difficultyValue(recordObject, "difficulty"),
-                    booleanValue(recordObject, "enabled", true),
-                    booleanValue(recordObject, "frozen", false));
+                    booleanValue(recordObject, "enabled"),
+                    booleanValue(recordObject, "frozen"));
 
-            JsonObject slots = objectValue(recordObject, "slots");
+            JsonObject slots = requiredObject(recordObject, "slots");
             for (Map.Entry<String, JsonElement> slotEntry : slots.entrySet()) {
                 SereniteaPotDimension dimension = SereniteaPotDimension.fromId(slotEntry.getKey());
                 if (dimension == null) {
-                    continue;
+                    throw new IllegalArgumentException("Unknown Serenitea Pot slot " + slotEntry.getKey());
                 }
-                JsonObject slot = slotEntry.getValue().getAsJsonObject();
+                JsonObject slot = requiredObject(slots, slotEntry.getKey());
+                String sourceDimension = requiredString(slot, "sourceDimension");
+                if (Identifier.tryParse(sourceDimension) == null) {
+                    throw new IllegalArgumentException("Invalid sourceDimension " + sourceDimension);
+                }
                 record.getSlots().put(dimension, new SereniteaPotSlotRecord(
-                        stringValue(slot, "sourceDimension", dimension.vanillaId()),
-                        intValue(slot, "entryX", 0),
-                        intValue(slot, "entryY", 0),
-                        intValue(slot, "entryZ", 0),
-                        intValue(slot, "radiusChunks", 0)));
+                        sourceDimension,
+                        requiredInt(slot, "entryX"),
+                        requiredInt(slot, "entryY"),
+                        requiredInt(slot, "entryZ"),
+                        requiredInt(slot, "radiusChunks")));
+            }
+            if (record.exists() && record.getSlots().isEmpty()) {
+                throw new IllegalArgumentException("Active Serenitea Pot has no slots for " + entry.getKey());
             }
             catalog.getPlayers().put(UUID.fromString(entry.getKey()), record);
         }
         return catalog;
     }
 
-    private static JsonObject objectValue(JsonObject object, String name) {
-        JsonElement value = object.get(name);
-        return value == null || value.isJsonNull() ? new JsonObject() : value.getAsJsonObject();
+    private static JsonObject requiredObject(JsonObject object, String name) {
+        JsonElement value = nonNull(object, name);
+        if (value == null || !value.isJsonObject()) {
+            throw new IllegalArgumentException("Missing or invalid object " + name);
+        }
+        return value.getAsJsonObject();
     }
 
     private static int intValue(JsonObject object, String name, int fallback) {
         JsonElement value = nonNull(object, name);
-        return value == null ? fallback : value.getAsInt();
+        return value == null ? fallback : exactInt(value, name);
+    }
+
+    private static int requiredInt(JsonObject object, String name) {
+        return exactInt(required(object, name), name);
+    }
+
+    private static long longValue(JsonObject object, String name) {
+        JsonElement value = required(object, name);
+        try {
+            return number(value, name).longValueExact();
+        } catch (ArithmeticException error) {
+            throw new IllegalArgumentException("Invalid integral value for " + name, error);
+        }
+    }
+
+    private static int exactInt(JsonElement value, String name) {
+        try {
+            return number(value, name).intValueExact();
+        } catch (ArithmeticException error) {
+            throw new IllegalArgumentException("Invalid integral value for " + name, error);
+        }
+    }
+
+    private static BigDecimal number(JsonElement value, String name) {
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException("Invalid number for " + name);
+        }
+        return new BigDecimal(value.getAsString());
     }
 
     private static double doubleValue(JsonObject object, String name, double fallback) {
         JsonElement value = nonNull(object, name);
-        return value == null ? fallback : value.getAsDouble();
+        return value == null ? fallback : number(value, name).doubleValue();
     }
 
-    private static boolean booleanValue(JsonObject object, String name, boolean fallback) {
-        JsonElement value = nonNull(object, name);
-        return value == null ? fallback : value.getAsBoolean();
+    private static boolean booleanValue(JsonObject object, String name) {
+        JsonElement value = required(object, name);
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean()) {
+            throw new IllegalArgumentException("Invalid boolean for " + name);
+        }
+        return value.getAsBoolean();
     }
 
     private static Difficulty difficultyValue(JsonObject object, String name) {
-        JsonElement value = nonNull(object, name);
-        if (value == null) {
-            throw new IllegalArgumentException("Missing difficulty in Serenitea Pot catalog");
-        }
-        Difficulty difficulty = Difficulty.byName(value.getAsString());
+        Difficulty difficulty = Difficulty.byName(requiredString(object, name));
         if (difficulty == null) {
             throw new IllegalArgumentException("Unknown difficulty in Serenitea Pot catalog");
         }
         return difficulty;
     }
 
-    private static String stringValue(JsonObject object, String name, String fallback) {
+    private static String requiredString(JsonObject object, String name) {
+        JsonElement value = required(object, name);
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+            throw new IllegalArgumentException("Invalid string for " + name);
+        }
+        return value.getAsString();
+    }
+
+    private static JsonElement required(JsonObject object, String name) {
         JsonElement value = nonNull(object, name);
-        return value == null ? fallback : value.getAsString();
+        if (value == null) {
+            throw new IllegalArgumentException("Missing " + name);
+        }
+        return value;
     }
 
     private static JsonElement nonNull(JsonObject object, String name) {
