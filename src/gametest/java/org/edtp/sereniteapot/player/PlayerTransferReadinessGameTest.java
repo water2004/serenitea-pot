@@ -69,7 +69,7 @@ public final class PlayerTransferReadinessGameTest {
                                 throw new AssertionError("Transfer did not resume exactly once");
                             }
                             phase[0] = 6;
-                            PlayerStateManager.whenReady(current, live -> {
+                            PlayerStateManager.whenReadyToLeave(current, live -> {
                                 if (SereniteaPotTravelService.leave(live) != SereniteaPotTravelService.Success.INSTANCE) {
                                     failure.set(new AssertionError("Deferred exit was rejected"));
                                 }
@@ -104,8 +104,8 @@ public final class PlayerTransferReadinessGameTest {
                             if (calls[0] != 2) throw new AssertionError("Disconnected player request resumed");
                             var deletion = SereniteaPotDeletionService.deleteAndReset(server, owner);
                             if (deletion instanceof SereniteaPotDeletionService.Pending pending) {
-                                pending.future().join(); // test fixture cleanup only
-                                deletion = pending.finish();
+                                SereniteaPotDeletionService.awaitPending(server); // fixture cleanup only
+                                deletion = pending.future().join();
                             }
                             if (deletion != SereniteaPotDeletionService.Success.INSTANCE) throw new AssertionError("Cleanup failed");
                             SereniteaPotManager.catalog().getPlayers().remove(owner);

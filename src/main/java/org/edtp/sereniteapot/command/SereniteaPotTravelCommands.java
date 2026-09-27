@@ -49,7 +49,7 @@ final class SereniteaPotTravelCommands {
     }
 
     private static int leave(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        PlayerStateManager.whenReady(context.getSource().getPlayerOrException(), player -> {
+        PlayerStateManager.whenReadyToLeave(context.getSource().getPlayerOrException(), player -> {
             SereniteaPotTravelService.Result result = SereniteaPotTravelService.leave(player);
             if (result == SereniteaPotTravelService.Success.INSTANCE) success(context, MessageKey.COMMAND_LEAVE_SUCCESS);
             else failure(context, ((SereniteaPotTravelService.Rejected) result).reason());

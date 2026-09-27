@@ -86,6 +86,8 @@ public final class SereniteaPotDeletionService {
             server, owner, record, oldStateId, oldGeneration, oldSlots, oldFrozen, committed, io
         );
         pending.put(owner, operation);
+        // The service owns completion and unlocking, even if its caller ignores the result.
+        io.whenComplete((ignored, error) -> server.execute(operation::finish));
         return operation;
     }
 
@@ -112,7 +114,7 @@ public final class SereniteaPotDeletionService {
         private final boolean oldFrozen;
         private final CompletableFuture<Void> committed;
         private final CompletableFuture<Void> io;
-        private Result result;
+        private final CompletableFuture<Result> completion = new CompletableFuture<>();
 
         private Pending(MinecraftServer server, UUID owner, SereniteaPotRecord record, UUID oldStateId,
                 long oldGeneration, EnumMap<SereniteaPotDimension, SereniteaPotSlotRecord> oldSlots,
@@ -128,11 +130,11 @@ public final class SereniteaPotDeletionService {
             this.io = io;
         }
 
-        public CompletableFuture<Void> future() { return io; }
+        public CompletableFuture<Result> future() { return completion; }
 
-        public Result finish() {
+        private void finish() {
             if (!server.isSameThread()) throw new IllegalStateException("Deletion finish must run on the server thread");
-            if (result != null) return result;
+            if (completion.isDone()) return;
             if (!io.isDone()) throw new IllegalStateException("Deletion is still pending");
             try {
                 committed.join();
@@ -140,25 +142,24 @@ public final class SereniteaPotDeletionService {
                 restoreRecord();
                 Throwable cause = error instanceof CompletionException && error.getCause() != null
                     ? error.getCause() : error;
-                result = new Rejected(message(MessageKey.DELETION_COMMIT_FAILED, cause.getMessage()));
                 release();
-                return result;
+                completion.complete(new Rejected(message(MessageKey.DELETION_COMMIT_FAILED, cause.getMessage())));
+                return;
             }
+            Result result;
             try {
                 io.join();
-                SereniteaPotScheduler.forgetOwner(owner);
-                SereniteaPotLifecycleService.forget(owner);
                 result = Success.INSTANCE;
             } catch (RuntimeException error) {
                 Throwable cause = error instanceof CompletionException && error.getCause() != null
                     ? error.getCause() : error;
-                SereniteaPotScheduler.forgetOwner(owner);
-                SereniteaPotLifecycleService.forget(owner);
                 result = new Rejected(message(MessageKey.DELETION_DIRECTORY_FAILED, cause.getMessage()));
             } finally {
+                SereniteaPotScheduler.forgetOwner(owner);
+                SereniteaPotLifecycleService.forget(owner);
                 release();
             }
-            return result;
+            completion.complete(result);
         }
 
         private void release() {

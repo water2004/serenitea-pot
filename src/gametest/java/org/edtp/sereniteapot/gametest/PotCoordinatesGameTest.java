@@ -25,7 +25,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Runs the real extraction/trim jobs, including unload and reload, not just coordinate math. */
 public final class PotCoordinatesGameTest {
-    @GameTest(maxTicks = 1600)
+    // GameTest ticks are accelerated; asynchronous disk/generation work needs wall time.
+    @GameTest(maxTicks = 8000)
     @SuppressWarnings("removal")
     public void preservesExistingDimensionsAndExtractsAtSourceCoordinates(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
@@ -54,9 +55,10 @@ public final class PotCoordinatesGameTest {
             if (!queued.compareAndSet(false, true)) return;
             server.execute(() -> {
                 try {
-                    if (helper.getTick() > 1590) {
+                    if (helper.getTick() > 7990) {
                         throw new AssertionError("Timed out in phase " + phase[0] + ", progress="
-                            + SereniteaPotCreationService.progress(owner));
+                            + SereniteaPotCreationService.progress(owner) + ", performance="
+                            + org.edtp.sereniteapot.performance.SereniteaPotScheduler.snapshot(owner));
                     }
                     switch (phase[0]) {
                         case 0 -> {
@@ -119,7 +121,7 @@ public final class PotCoordinatesGameTest {
                         }
                         case 3 -> {
                             var inside = server.getPlayerList().getPlayer(owner);
-                            if (!org.edtp.sereniteapot.player.PlayerStateManager.prepare(inside).isDone()) return;
+                            if (!org.edtp.sereniteapot.player.PlayerStateManager.prepareReturn(inside).isDone()) return;
                             check(SereniteaPotTravelService.leave(inside) == SereniteaPotTravelService.Success.INSTANCE,
                                 "Could not leave copied world");
                             check(SereniteaPotCreationService.changeMaximum(server, owner, 0, null)

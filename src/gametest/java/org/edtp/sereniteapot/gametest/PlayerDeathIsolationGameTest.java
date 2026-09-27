@@ -129,6 +129,7 @@ public final class PlayerDeathIsolationGameTest {
 
             if (phase.get() == 3) {
                 try {
+                    if (!PlayerStateManager.prepareReturn(currentPlayer(server, owner)).isDone()) return;
                     var result = SereniteaPotTravelService.leave(currentPlayer(server, owner));
                     if (result != SereniteaPotTravelService.Success.INSTANCE) {
                         throw new AssertionError("Could not leave after respawning in the pot: " + result);

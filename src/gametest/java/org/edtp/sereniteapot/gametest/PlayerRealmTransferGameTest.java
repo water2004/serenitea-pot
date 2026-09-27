@@ -63,6 +63,7 @@ public final class PlayerRealmTransferGameTest {
                 return;
             }
             if (phase.get() < 5 && !PlayerStateManager.prepare(currentPlayer(server, owner)).isDone()) return;
+            if (phase.get() == 2 && !PlayerStateManager.prepareReturn(currentPlayer(server, owner)).isDone()) return;
 
             if (phase.compareAndSet(1, 2)) {
                 SereniteaPotTravelService.enter(currentPlayer(server, owner), owner);

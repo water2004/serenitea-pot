@@ -23,14 +23,13 @@ final class SereniteaPotTargetCommands {
         SereniteaPotDeletionService.Result result = SereniteaPotDeletionService.deleteAndReset(
                 context.getSource().getServer(), owner);
         if (result instanceof SereniteaPotDeletionService.Pending pending) {
-            pending.future().whenComplete((ignored, error) -> context.getSource().getServer().execute(() -> {
-                SereniteaPotDeletionService.Result finished = pending.finish();
+            pending.future().thenAccept(finished -> {
                 if (finished == SereniteaPotDeletionService.Success.INSTANCE) {
                     success(context, MessageKey.COMMAND_DELETE_SUCCESS);
                 } else {
                     failure(context, ((SereniteaPotDeletionService.Rejected) finished).reason());
                 }
-            }));
+            });
             return 1;
         }
         return result == SereniteaPotDeletionService.Success.INSTANCE
