@@ -35,7 +35,7 @@ class PlayerStateStoreTest {
     }
 
     @Test
-    void putUpdatesCacheImmediatelyAndWritesDetachedSnapshotsInOrder(@TempDir Path directory) throws Exception {
+    void putUpdatesCacheImmediatelyAndCoalescesDetachedSnapshots(@TempDir Path directory) throws Exception {
         ManualExecutor io = new ManualExecutor();
         PlayerStateStore store = new PlayerStateStore(directory, io);
         UUID player = UUID.randomUUID();
@@ -56,17 +56,64 @@ class PlayerStateStoreTest {
         second.putInt("value", 88);
         CompletableFuture<Void> flush = store.flush();
         assertFalse(flush.isDone());
-        assertEquals(1, io.size()); // write two is chained behind write one
+        assertEquals(1, io.size()); // both submissions are covered by the latest pending image
+        assertSame(write1, write2);
 
         io.runNext();
         assertTrue(write1.isDone());
-        assertFalse(write2.isDone());
-        assertFalse(flush.isDone());
-        io.runNext();
+        assertTrue(write2.isDone());
+        assertTrue(flush.isDone());
         flush.join();
         assertEquals(2, NbtIo.readCompressed(directory.resolve(player + ".dat"), NbtAccounter.unlimitedHeap()).getCompound("realm")
                 .orElseThrow().getIntOr("value", -1));
         assertEquals(2, store.get(player, "realm").getIntOr("value", -1));
+    }
+
+    @Test
+    void slowWriterKeepsOnlyLatestPendingImage(@TempDir Path directory) throws Exception {
+        ManualExecutor io = new ManualExecutor();
+        PlayerStateStore store = new PlayerStateStore(directory, io);
+        UUID player = UUID.randomUUID();
+        io.runNextAfter(store.preload(player));
+        var first = store.put(player, "realm", state(0));
+        for (int i = 1; i <= 1000; i++) assertSame(first, store.put(player, "realm", state(i)));
+        assertEquals(1, io.size());
+        io.runNext();
+        first.join();
+        assertEquals(1000, NbtIo.readCompressed(directory.resolve(player + ".dat"), NbtAccounter.unlimitedHeap())
+                .getCompound("realm").orElseThrow().getIntOr("value", -1));
+    }
+
+    @Test
+    void disconnectDrainsDirtyDataAndReconnectRetainsTheSameEntry(@TempDir Path directory) {
+        ManualExecutor io = new ManualExecutor();
+        PlayerStateStore store = new PlayerStateStore(directory, io);
+        UUID player = UUID.randomUUID();
+        io.runNextAfter(store.preload(player));
+        store.put(player, "realm", state(4));
+        store.release(player);
+        assertTrue(store.preload(player).isDone()); // reconnect before the write completes
+        io.runNext();
+        assertEquals(4, store.get(player, "realm").getIntOr("value", -1));
+        assertEquals(0, io.size());
+        store.release(player);
+        var reloaded = store.preload(player);
+        assertFalse(reloaded.isDone()); // clean offline entry was actually evicted
+        io.runNext();
+        assertEquals(4, store.get(player, "realm").getIntOr("value", -1));
+    }
+
+    @Test
+    void disconnectDuringPreloadDoesNotEvictAReconnectedSession(@TempDir Path directory) {
+        ManualExecutor io = new ManualExecutor();
+        PlayerStateStore store = new PlayerStateStore(directory, io);
+        UUID player = UUID.randomUUID();
+        store.preload(player);
+        store.release(player);
+        store.preload(player);
+        assertEquals(1, io.size());
+        io.runNext();
+        assertTrue(store.preload(player).isDone());
     }
 
     @Test

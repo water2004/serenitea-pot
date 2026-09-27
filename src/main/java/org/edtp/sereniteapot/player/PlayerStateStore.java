@@ -38,38 +38,94 @@ public final class PlayerStateStore implements AutoCloseable {
         return entry(player).loaded.thenApply(ignored -> null);
     }
 
-    /** Never waits for disk: callers may retry after preload completes. */
-    public CompoundTag get(UUID player, String key) {
+    /** Never waits for disk: transfer continuations run after preload completes. */
+    public synchronized CompoundTag get(UUID player, String key) {
         Entry entry = entry(player);
-        synchronized (entry) {
-            CompoundTag states = ready(entry.loaded);
-            checkWriteFailure(entry);
-            if (!states.contains(key)) return null;
-            return states.getCompound(key).map(CompoundTag::copy).orElseThrow(() ->
-                new InvalidPlayerStateException("Invalid isolated player state " + key));
-        }
+        CompoundTag states = ready(entry.loaded);
+        checkWriteFailure(entry);
+        if (!states.contains(key)) return null;
+        return states.getCompound(key).map(CompoundTag::copy).orElseThrow(() ->
+            new InvalidPlayerStateException("Invalid isolated player state " + key));
     }
 
-    public CompletableFuture<Void> put(UUID player, String key, CompoundTag state) {
+    public synchronized CompletableFuture<Void> put(UUID player, String key, CompoundTag state) {
         Entry entry = entry(player);
-        synchronized (entry) {
-            CompoundTag states = ready(entry.loaded);
-            checkWriteFailure(entry);
-            states.put(key, state.copy());
-            // Own a complete image at submission, never the cache or a live player.
-            CompoundTag snapshot = states.copy();
-            entry.written = entry.written.thenRunAsync(() -> write(player, snapshot), io);
-            entry.written.whenComplete((ignored, error) -> {
-                if (error != null) SereniteaPotMod.LOGGER.error("Failed to save private state for {}", player, error);
-            });
-            return entry.written;
+        CompoundTag states = ready(entry.loaded);
+        checkWriteFailure(entry);
+        states.put(key, state.copy());
+        // At most one active write and one replaceable pending image per player.
+        // Superseded submissions share completion of the newer, inclusive image.
+        entry.pendingSnapshot = states.copy();
+        if (entry.pendingWrite == null) {
+            entry.pendingWrite = new CompletableFuture<>();
+            entry.written = entry.pendingWrite;
         }
+        if (!entry.writing) {
+            entry.writing = true;
+            try {
+                io.execute(() -> drain(player, entry));
+            } catch (RuntimeException error) {
+                failWrite(player, entry, error);
+            }
+        }
+        return entry.written;
     }
 
     public synchronized CompletableFuture<Void> flush() {
-        return CompletableFuture.allOf(players.values().stream().map(entry -> {
-            synchronized (entry) { return entry.written; }
-        }).toArray(CompletableFuture[]::new));
+        return CompletableFuture.allOf(players.values().stream()
+                .map(entry -> entry.written).toArray(CompletableFuture[]::new));
+    }
+
+    /** Disconnect does not discard dirty data or race a reconnect's pending write. */
+    public synchronized void release(UUID player) {
+        Entry entry = players.get(player);
+        if (entry == null) return;
+        entry.retained = false;
+        entry.loaded.whenComplete((ignored, error) -> evictIfUnused(player, entry));
+    }
+
+    private synchronized void evictIfUnused(UUID player, Entry entry) {
+        // Keep failed dirty entries available for reporting and shutdown failure.
+        if (!entry.retained && !entry.writing && entry.loaded.isDone()
+                && !entry.written.isCompletedExceptionally()) players.remove(player, entry);
+    }
+
+    private void drain(UUID player, Entry entry) {
+        while (true) {
+            CompoundTag snapshot;
+            CompletableFuture<Void> completion;
+            synchronized (this) {
+                snapshot = entry.pendingSnapshot;
+                completion = entry.pendingWrite;
+                entry.pendingSnapshot = null;
+                entry.pendingWrite = null;
+            }
+            try {
+                write(player, snapshot);
+            } catch (RuntimeException error) {
+                synchronized (this) {
+                    failWrite(player, entry, error);
+                    completion.completeExceptionally(error);
+                }
+                return;
+            }
+            completion.complete(null);
+            synchronized (this) {
+                if (entry.pendingSnapshot == null) {
+                    entry.writing = false;
+                    evictIfUnused(player, entry);
+                    return;
+                }
+            }
+        }
+    }
+
+    private void failWrite(UUID player, Entry entry, RuntimeException error) {
+        entry.writing = false;
+        entry.written.completeExceptionally(error);
+        entry.pendingSnapshot = null;
+        entry.pendingWrite = null;
+        SereniteaPotMod.LOGGER.error("Failed to save private state for {}", player, error);
     }
 
     /** Shutdown only; no game-thread continuation is needed by these I/O tasks. */
@@ -94,8 +150,10 @@ public final class PlayerStateStore implements AutoCloseable {
 
     private synchronized Entry entry(UUID player) {
         if (closed) throw new IllegalStateException("Player state store is closed");
-        return players.computeIfAbsent(player, ignored -> new Entry(
+        Entry entry = players.computeIfAbsent(player, ignored -> new Entry(
             CompletableFuture.supplyAsync(() -> read(player), io)));
+        entry.retained = true;
+        return entry;
     }
 
     private static CompoundTag ready(CompletableFuture<CompoundTag> future) {
@@ -153,6 +211,10 @@ public final class PlayerStateStore implements AutoCloseable {
     private static final class Entry {
         final CompletableFuture<CompoundTag> loaded;
         CompletableFuture<Void> written = CompletableFuture.completedFuture(null);
+        CompoundTag pendingSnapshot;
+        CompletableFuture<Void> pendingWrite;
+        boolean writing;
+        boolean retained = true;
         Entry(CompletableFuture<CompoundTag> loaded) { this.loaded = loaded; }
     }
 
