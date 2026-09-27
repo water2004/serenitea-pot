@@ -20,7 +20,7 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 
 - One personal Serenitea Pot per player, containing an isolated Overworld, Nether, and End.
 - Full-height extraction aligned to chunk boundaries, using a chunk radius rather than a block or cube radius.
-- A local coordinate system: the source center chunk becomes chunk `(0, 0)` inside the pot.
+- Extracted regions keep their source coordinates, including coordinate-dependent biome behavior.
 - Per-dimension replacement: creating from the public Overworld, Nether, or End replaces only the matching pot dimension.
 - Separate public and pot inventories, Ender Chest, experience, health, effects, abilities, game mode, respawn data, death location, dimension, position, and rotation.
 - Immediate owner-driven lifecycle: when the owner leaves or disconnects, all occupants are evacuated and all three dimensions unload.
@@ -72,7 +72,9 @@ Optionally install exactly WorldThreader 3.1.0 on the server. Other installed Wo
 
 The width is always `2 × radius + 1`. The Overworld range is `[-64, 320)` (block Y values -64 through 319); the Nether and End use their own complete build heights.
 
-The source center chunk maps to pot chunk `(0, 0)`, so a pot does not inherit the public world's absolute X/Z coordinates. The world border is geometrically centered at `(8, 8)` to contain the entire center chunk. Portal coordinates are consequently resolved within the same owner's local three-dimension bundle.
+New extractions preserve the source's absolute XYZ coordinates, including coordinate-dependent flower placement in flower forests. Each dimension persists its own world border around the extracted region. Existing pots keep their saved coordinates and borders without migration; re-extract a region to adopt source coordinates.
+
+Nether portals use Vanilla's coordinate scaling, destination-border clamp, and portal search within the same owner's dimension bundle. End portals retain the fixed Vanilla arrival point when its 5 × 5 platform fits; otherwise the point is clamped inward so the platform fits inside the destination border. Returning players use a valid pot-local respawn point, falling back to the first extracted dimension (Overworld, Nether, then End); other entities return to the paired Overworld's entry.
 
 Creation uses a staged generation. The active generation changes only after the replacement has been completely saved; the superseded generation is then permanently deleted. Reducing an owner's maximum radius uses the same staged transaction to trim every existing pot dimension beyond the new radius. The mod does not retain implicit backups.
 
@@ -93,7 +95,7 @@ Carpet fake players, portal loaders, chunk tickets, and machines cannot keep a p
 
 `disable` is an operator action that closes a player's pot and prevents future admission. `freeze` only stops world ticks: the owner, approved visitors, and operators may still enter for repairs, and the owner can run `unfreeze` afterward.
 
-While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions plus an explicit allow-list of audited, pot-local Vanilla commands. This is not blanket OP access. The allow-list covers building, entity, inventory, presentation, time/weather, world-border, and `/execute` operations; server-global commands such as `/op`, `/whitelist`, `/reload`, `/scoreboard`, and `/function` are not granted.
+While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions plus an explicit allow-list of audited, pot-local Vanilla commands. This is not blanket OP access. The allow-list covers building, entity, inventory, presentation, time/weather, and `/execute` operations; server-global commands such as `/op`, `/whitelist`, `/reload`, `/scoreboard`, and `/function` are not granted. `/worldborder` is not granted: extraction and administrator radius limits manage the pot's size.
 
 All six Vanilla selectors (`@s`, `@a`, `@e`, `@p`, `@r`, and `@n`), literal player names, and UUIDs are filtered to the occupied pot before sorting and limiting. Vanilla dimension aliases resolve to that pot's own Overworld, Nether, and End. A real operator standing inside a pot uses the same entity and dimension boundary, while public-world authorization and behavior remain unchanged. Commands supplied by other mods are not added to this allow-list; only their use of Vanilla selector arguments inherits this boundary, while custom selector types remain the owning mod's responsibility.
 

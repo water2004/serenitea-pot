@@ -29,7 +29,7 @@ public final class SereniteaPotCommandPolicy {
             "loot", "particle", "place", "playsound", "recipe", "ride", "rotate",
             "setblock", "setworldspawn", "spawnpoint", "spectate", "spreadplayers",
             "stopsound", "summon", "swing", "tag", "teleport", "tellraw", "time", "title", "tp",
-            "waypoint", "weather", "worldborder", "xp"
+            "waypoint", "weather", "xp"
     );
 
     // Real operators already have these commands, so they must be explicitly suppressed

@@ -66,7 +66,7 @@ public final class CommandTreeGameTest {
                 "loot", "particle", "place", "playsound", "recipe", "ride", "rotate",
                 "setblock", "setworldspawn", "spawnpoint", "spectate", "spreadplayers",
                 "stopsound", "summon", "swing", "tag", "teleport", "tellraw", "time",
-                "title", "tp", "waypoint", "weather", "worldborder", "xp")) {
+                "title", "tp", "waypoint", "weather", "xp")) {
             helper.assertTrue(
                     !(child(root, command).getRequirement() instanceof PermissionProviderCheck<?>),
                     "/" + command + " owner whitelist requirement was not installed");

@@ -1,13 +1,15 @@
 package org.edtp.sereniteapot.model;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.world.level.border.WorldBorder;
 
 /**
  * Immutable metadata for one full-height, chunk-aligned Serenitea Pot dimension.
  *
  * <p>The entry coordinates identify the extraction point in the public source
- * dimension. Serenitea Pot levels use their own local coordinates: the source
- * entry's chunk is mapped to chunk {@code (0, 0)}.</p>
+ * dimension. The dimension's saved world border owns its center, not this
+ * extraction metadata.</p>
  */
 public record SereniteaPotSlotRecord(
     String sourceDimension,
@@ -21,15 +23,14 @@ public record SereniteaPotSlotRecord(
         SereniteaPotRecord.requireValidRadiusChunks(radiusChunks);
     }
 
-    public int localEntryX() {
-        return SectionPos.sectionRelative(entryX);
-    }
-
-    public int localEntryY() {
-        return entryY;
-    }
-
-    public int localEntryZ() {
-        return SectionPos.sectionRelative(entryZ);
+    /** Keeps the extraction point's offset within the dimension's center chunk. */
+    public BlockPos entryPosition(WorldBorder border) {
+        return new BlockPos(
+            SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(border.getCenterX()),
+                SectionPos.sectionRelative(entryX)),
+            entryY,
+            SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(border.getCenterZ()),
+                SectionPos.sectionRelative(entryZ))
+        );
     }
 }

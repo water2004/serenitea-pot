@@ -104,7 +104,7 @@ public final class CommandScopeGameTest {
         var commandRoot = server.getCommands().getDispatcher().getRoot();
         var ownerSource = owner.createCommandSourceStack();
         for (String globalCommand : List.of(
-            "gamemode", "op", "whitelist", "reload", "scoreboard", "function")) {
+            "gamemode", "worldborder", "op", "whitelist", "reload", "scoreboard", "function")) {
             require(!commandRoot.getChild(globalCommand).canUse(ownerSource),
                 "The owner whitelist accidentally granted /" + globalCommand);
         }
@@ -112,6 +112,10 @@ public final class CommandScopeGameTest {
         run(server, owner, "gamemode survival @s");
         require(owner.gameMode().isCreative(),
             "A pot owner used /gamemode to leave the enforced creative mode");
+        double borderSize = potOverworld.getWorldBorder().getSize();
+        run(server, owner, "worldborder set 10000");
+        require(potOverworld.getWorldBorder().getSize() == borderSize,
+            "A non-operator owner bypassed the configured radius with /worldborder");
         clearAt(OWNER_SETBLOCK, potOverworld, publicWorld, otherPot);
         run(server, owner, "setblock 2 100 2 minecraft:diamond_block");
         requireBlock(potOverworld, OWNER_SETBLOCK, Blocks.DIAMOND_BLOCK,

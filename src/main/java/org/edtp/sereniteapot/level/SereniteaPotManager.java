@@ -142,6 +142,11 @@ public final class SereniteaPotManager {
         try {
             for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
                 CustomLevel level = built.getOrThrow(dimension.vanilla());
+                // Initialize new dimensions once. Existing dimensions restore their own
+                // Vanilla world_border SavedData; loading must never recenter them.
+                level.getWorldBorder().setCenter(ChunkPos.ZERO.getMiddleBlockX(), ChunkPos.ZERO.getMiddleBlockZ());
+                level.getWorldBorder().setSize((catalog.getOrCreate(owner).getMaxRadiusChunks() * 2.0 + 1.0)
+                    * SectionPos.SECTION_SIZE);
                 DimensionUtilsKt.addCustomLevel(server, level);
                 levels.put(dimension, level);
             }
@@ -191,7 +196,6 @@ public final class SereniteaPotManager {
         record.getSlots().clear();
         record.getSlots().putAll(copySlots(replacementSlots));
         try {
-            applyBorders(bundle, record);
             saveCatalog();
         } catch (RuntimeException error) {
             record.setActiveGeneration(oldGeneration);
@@ -236,7 +240,6 @@ public final class SereniteaPotManager {
         SereniteaPotBundle bundle = new SereniteaPotBundle(owner, record.getActiveGeneration(), levels);
         applyDifficulty(bundle, record.getDifficulty());
         loaded.put(owner, bundle);
-        applyBorders(bundle, record);
         return bundle;
     }
 
@@ -306,23 +309,6 @@ public final class SereniteaPotManager {
             if (server.getLevel(level.dimension()) == level) complete = false;
         }
         return complete;
-    }
-
-    private static void applyBorders(SereniteaPotBundle bundle, SereniteaPotRecord record) {
-        // 私有坐标以源区块映射后的 (0, 0) 区块为中心，而不是沿用公共世界坐标。
-        double localCenter = ChunkPos.ZERO.getMiddleBlockX();
-        for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
-            SereniteaPotSlotRecord slot = record.getSlots().get(dimension);
-            var border = bundle.get(dimension).getWorldBorder();
-            border.setCenter(localCenter, localCenter);
-            if (slot == null) {
-                border.setSize(
-                    (record.getMaxRadiusChunks() * 2.0 + 1.0) * SectionPos.SECTION_SIZE
-                );
-            } else {
-                border.setSize((slot.radiusChunks() * 2.0 + 1.0) * SectionPos.SECTION_SIZE);
-            }
-        }
     }
 
     private static void applyDifficulty(SereniteaPotBundle bundle, Difficulty difficulty) {

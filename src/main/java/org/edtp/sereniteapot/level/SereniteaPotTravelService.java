@@ -91,7 +91,7 @@ public final class SereniteaPotTravelService {
             SereniteaPotSlotRecord slot = record.getSlots().get(destinationDimension);
             destination = new Destination(
                 bundle.get(destinationDimension),
-                new Vec3(slot.localEntryX() + 0.5, slot.localEntryY(), slot.localEntryZ() + 0.5),
+                Vec3.atBottomCenterOf(slot.entryPosition(bundle.get(destinationDimension).getWorldBorder())),
                 player.getYRot(),
                 player.getXRot()
             );
@@ -119,9 +119,8 @@ public final class SereniteaPotTravelService {
     /**
      * Keeps Vanilla's death-respawn path inside the current Serenitea Pot realm.
      * A valid bed or respawn anchor in any dimension of the same pot is preserved;
-     * Vanilla's public-world fallback is replaced with a local entry in the same pot.
-     * If the current dimension has never been extracted, the first extracted pot
-     * dimension becomes the fallback instead.
+     * Vanilla's public-world fallback is replaced with the first extracted dimension
+     * (overworld, then nether, then end), also used when returning through an End portal.
      */
     public static TeleportTransition containRespawn(
         ServerPlayer player,
@@ -140,18 +139,16 @@ public final class SereniteaPotTravelService {
         }
 
         SereniteaPotRecord record = SereniteaPotManager.record(source.owner());
-        SereniteaPotSlotRecord slot = record == null ? null : record.getSlots().get(source.dimension());
+        SereniteaPotSlotRecord slot = null;
         ServerLevel destinationLevel = player.level();
-        if (slot == null) {
-            SereniteaPotBundle bundle = SereniteaPotManager.loaded(source.owner());
-            if (record != null && bundle != null && bundle.generation() == source.generation()) {
-                for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
-                    SereniteaPotSlotRecord candidate = record.getSlots().get(dimension);
-                    if (candidate != null) {
-                        slot = candidate;
-                        destinationLevel = bundle.get(dimension);
-                        break;
-                    }
+        SereniteaPotBundle bundle = SereniteaPotManager.loaded(source.owner());
+        if (record != null && bundle != null && bundle.generation() == source.generation()) {
+            for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
+                SereniteaPotSlotRecord candidate = record.getSlots().get(dimension);
+                if (candidate != null) {
+                    slot = candidate;
+                    destinationLevel = bundle.get(dimension);
+                    break;
                 }
             }
         }
@@ -161,7 +158,7 @@ public final class SereniteaPotTravelService {
 
         return new TeleportTransition(
             destinationLevel,
-            new Vec3(slot.localEntryX() + 0.5, slot.localEntryY(), slot.localEntryZ() + 0.5),
+            Vec3.atBottomCenterOf(slot.entryPosition(destinationLevel.getWorldBorder())),
             Vec3.ZERO,
             player.getYRot(),
             player.getXRot(),

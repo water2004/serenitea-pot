@@ -2,9 +2,11 @@ package org.edtp.sereniteapot.region;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import org.edtp.sereniteapot.SereniteaPotMod;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
@@ -100,26 +102,27 @@ public final class SereniteaPotCreationService {
 
         ArrayDeque<RegionCopyTask> tasks = new ArrayDeque<>();
         EnumMap<SereniteaPotDimension, SereniteaPotSlotRecord> replacementSlots = copySlots(record.getSlots());
-        for (SereniteaPotDimension slotDimension : SereniteaPotDimension.values()) {
-            ServerLevel destination = staging.get(slotDimension);
-            if (slotDimension == dimension) {
-                tasks.add(new RegionCopyTask(
-                    source,
-                    destination,
-                    region,
-                    localRegion(destination, radiusChunks)
-                ));
-            } else {
-                SereniteaPotSlotRecord oldSlot = record.getSlots().get(slotDimension);
-                if (previous != null && oldSlot != null) {
-                    tasks.add(new RegionCopyTask(
-                        previous.get(slotDimension),
-                        destination,
-                        localRegion(previous.get(slotDimension), oldSlot.radiusChunks()),
-                        localRegion(destination, oldSlot.radiusChunks())
-                    ));
+        try {
+            for (SereniteaPotDimension slotDimension : SereniteaPotDimension.values()) {
+                ServerLevel destination = staging.get(slotDimension);
+                if (slotDimension == dimension) {
+                    // Keep absolute XYZ: biome noise, block data and portal scaling all
+                    // continue to see the same coordinates as the public source world.
+                    destination.getWorldBorder().setCenter(
+                        region.getMinX() + region.getSizeX() / 2.0,
+                        region.getMinZ() + region.getSizeZ() / 2.0
+                    );
+                    destination.getWorldBorder().setSize(region.getSizeX());
+                    tasks.add(new RegionCopyTask(source, destination, region));
+                } else if (previous != null) {
+                    // Even an unextracted dimension may contain portal platforms or builds.
+                    tasks.add(retainDimension(previous.get(slotDimension), destination, record.getMaxRadiusChunks()));
                 }
             }
+        } catch (RuntimeException error) {
+            SereniteaPotLifecycleService.deleteEvacuated(staging);
+            abortMaintenance(owner);
+            return new Rejected(message(MessageKey.CREATION_INTERNAL_ERROR, errorMessage(error)));
         }
         replacementSlots.put(dimension, new SereniteaPotSlotRecord(
             source.dimension().identifier().toString(),
@@ -163,8 +166,8 @@ public final class SereniteaPotCreationService {
         }
 
         SereniteaPotRecord record = SereniteaPotManager.getOrCreateRecord(owner);
-        boolean requiresTrim = record.exists() && record.getSlots().values().stream()
-            .anyMatch(slot -> slot.radiusChunks() > maximumRadiusChunks);
+        boolean requiresTrim = record.exists() && (maximumRadiusChunks < record.getMaxRadiusChunks()
+            || record.getSlots().values().stream().anyMatch(slot -> slot.radiusChunks() > maximumRadiusChunks));
         if (!requiresTrim) {
             record.setMaxRadiusChunks(maximumRadiusChunks);
             SereniteaPotManager.saveCatalog();
@@ -204,6 +207,10 @@ public final class SereniteaPotCreationService {
         long retainedChunks = 0L;
         try {
             for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
+                tasks.add(retainDimension(previous.get(dimension), staging.get(dimension), maximumRadiusChunks));
+                BlockRegion retained = borderRegion(staging.get(dimension));
+                retainedChunks += (long) (retained.getSizeX() / SectionPos.SECTION_SIZE)
+                    * (retained.getSizeZ() / SectionPos.SECTION_SIZE);
                 SereniteaPotSlotRecord slot = record.getSlots().get(dimension);
                 if (slot == null) continue;
                 int retainedRadius = Math.min(slot.radiusChunks(), maximumRadiusChunks);
@@ -215,14 +222,6 @@ public final class SereniteaPotCreationService {
                     retainedRadius
                 );
                 replacementSlots.put(dimension, replacement);
-                tasks.add(new RegionCopyTask(
-                    previous.get(dimension),
-                    staging.get(dimension),
-                    localRegion(previous.get(dimension), retainedRadius),
-                    localRegion(staging.get(dimension), retainedRadius)
-                ));
-                long diameter = retainedRadius * 2L + 1L;
-                retainedChunks = Math.addExact(retainedChunks, Math.multiplyExact(diameter, diameter));
             }
         } catch (RuntimeException error) {
             SereniteaPotLifecycleService.deleteEvacuated(staging);
@@ -240,7 +239,7 @@ public final class SereniteaPotCreationService {
             JobKind.MAXIMUM_TRIM,
             record.isEnabled()
         ));
-        return new MaximumTrimStarted(generation, replacementSlots.size(), retainedChunks);
+        return new MaximumTrimStarted(generation, tasks.size(), retainedChunks);
     }
 
     public static boolean isBusy(UUID owner) {
@@ -395,13 +394,31 @@ public final class SereniteaPotCreationService {
         return copy;
     }
 
-    private static BlockRegion localRegion(ServerLevel level, int radiusChunks) {
-        return BlockRegion.chunkColumns(
-            0,
-            0,
-            radiusChunks,
+    private static RegionCopyTask retainDimension(ServerLevel source, ServerLevel destination, int maximumRadiusChunks) {
+        var from = source.getWorldBorder();
+        var to = destination.getWorldBorder();
+        // Mutate the registered border in place, preserving Arcade's packet listeners.
+        to.setCenter(from.getCenterX(), from.getCenterZ());
+        to.setSize(Math.min(from.getSize(), (maximumRadiusChunks * 2.0 + 1.0) * SectionPos.SECTION_SIZE));
+        to.setDamagePerBlock(from.getDamagePerBlock());
+        to.setSafeZone(from.getSafeZone());
+        to.setWarningBlocks(from.getWarningBlocks());
+        to.setWarningTime(from.getWarningTime());
+        BlockRegion retained = borderRegion(destination);
+        return new RegionCopyTask(source, destination, retained);
+    }
+
+    private static BlockRegion borderRegion(ServerLevel level) {
+        var border = level.getWorldBorder();
+        // Borders created by extraction are chunk-aligned. Cover the intersecting
+        // chunks as well if an administrator deliberately moved the Vanilla border.
+        return new BlockRegion(
+            SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(border.getMinX())),
             level.getMinY(),
-            level.getMaxY()
+            SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(border.getMinZ())),
+            SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(Mth.ceil(border.getMaxX()) - 1), 15),
+            level.getMaxY() - 1,
+            SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(Mth.ceil(border.getMaxZ()) - 1), 15)
         );
     }
 

@@ -17,6 +17,8 @@
       "org.edtp.sereniteapot.gametest.PlayerRealmTransferGameTest",
       "org.edtp.sereniteapot.gametest.PublicPlayerDataGameTest",
       "org.edtp.sereniteapot.gametest.PotDifficultyGameTest",
+      "org.edtp.sereniteapot.gametest.PotCoordinatesGameTest",
+      "org.edtp.sereniteapot.gametest.PotPortalGameTest",
       "org.edtp.sereniteapot.gametest.RegionCopyGameTest"
     ]
   },
