@@ -14,6 +14,7 @@ import static net.minecraft.commands.Commands.literal;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.route;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.saved;
 
 final class SereniteaPotOwnerCommands {
     private SereniteaPotOwnerCommands() {
@@ -35,8 +36,7 @@ final class SereniteaPotOwnerCommands {
             return success(context, MessageKey.COMMAND_UNFREEZE_NOT_FROZEN);
         }
         record.setFrozen(false);
-        SereniteaPotManager.saveCatalog();
-        return success(context, MessageKey.COMMAND_UNFREEZE_SUCCESS);
+        return saved(context, SereniteaPotManager.saveCatalog(), MessageKey.COMMAND_UNFREEZE_SUCCESS);
     }
 
     private static int delete(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

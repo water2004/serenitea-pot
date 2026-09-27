@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.fallback;
@@ -170,8 +171,7 @@ public final class SereniteaPotCreationService {
             || record.getSlots().values().stream().anyMatch(slot -> slot.radiusChunks() > maximumRadiusChunks));
         if (!requiresTrim) {
             record.setMaxRadiusChunks(maximumRadiusChunks);
-            SereniteaPotManager.saveCatalog();
-            return MaximumUpdated.INSTANCE;
+            return new MaximumUpdated(SereniteaPotManager.saveCatalog());
         }
 
         SereniteaPotLifecycleService.Result maintenance = SereniteaPotLifecycleService.beginMaintenance(server, owner);
@@ -537,8 +537,7 @@ public final class SereniteaPotCreationService {
     public sealed interface MaximumChangeResult permits MaximumUpdated, MaximumTrimStarted, Rejected {
     }
 
-    public enum MaximumUpdated implements MaximumChangeResult {
-        INSTANCE
+    public record MaximumUpdated(CompletableFuture<Void> persisted) implements MaximumChangeResult {
     }
 
     public record MaximumTrimStarted(

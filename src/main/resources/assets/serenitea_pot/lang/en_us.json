@@ -1,4 +1,5 @@
 {
+  "serenitea_pot.command.save.failed": "The change is active in memory only: catalog saving failed and further saves are blocked. Check the server log, fix the storage problem and restart; unsaved changes will be lost.",
   "serenitea_pot.command.delete.success": "The Serenitea Pot was unloaded and permanently deleted",
   "serenitea_pot.command.create.accepted": "Started full-height batch extraction of %1$s chunks (generation %2$s); run /sereniteapot to view progress",
   "serenitea_pot.command.request.sent": "Request sent; it expires in 60 seconds",

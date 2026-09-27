@@ -43,9 +43,12 @@ public abstract class DifficultyCommandMixin {
                         "commands.difficulty.failure", difficulty.getDisplayName()));
                 return;
             }
-            SereniteaPotManager.setDifficulty(identity.owner(), difficulty);
-            source.sendSuccess(() -> Component.translatable(
-                    "commands.difficulty.success", difficulty.getDisplayName()), false);
+            SereniteaPotManager.setDifficulty(identity.owner(), difficulty).whenComplete((ignored, error) ->
+                source.getServer().execute(() -> {
+                    if (error != null) source.sendFailure(component(source, message(MessageKey.COMMAND_SAVE_FAILED)));
+                    else source.sendSuccess(() -> Component.translatable(
+                            "commands.difficulty.success", difficulty.getDisplayName()), false);
+                }));
         };
         if (source.getServer().isSameThread()) {
             change.run();

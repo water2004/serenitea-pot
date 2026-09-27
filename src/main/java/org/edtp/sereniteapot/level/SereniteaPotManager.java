@@ -331,7 +331,7 @@ public final class SereniteaPotManager {
     }
 
     /** Changes the shared difficulty of all three dimensions without touching public worlds. */
-    public static void setDifficulty(UUID owner, Difficulty difficulty) {
+    public static CompletableFuture<Void> setDifficulty(UUID owner, Difficulty difficulty) {
         requireServerThread();
         SereniteaPotRecord record = catalog.getPlayers().get(owner);
         if (record == null || !record.exists()) {
@@ -342,7 +342,7 @@ public final class SereniteaPotManager {
         if (bundle != null) {
             applyDifficulty(bundle, difficulty);
         }
-        saveCatalog();
+        return saveCatalog();
     }
 
     static boolean deleteEvacuatedLevel(CustomLevel level) {

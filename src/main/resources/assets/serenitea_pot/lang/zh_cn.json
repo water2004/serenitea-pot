@@ -1,4 +1,5 @@
 {
+  "serenitea_pot.command.save.failed": "修改仅在本次运行中生效：目录保存失败，后续保存已停止。请检查服务器日志、修复存储问题后重启；未保存的修改将丢失。",
   "serenitea_pot.command.delete.success": "尘歌壶已卸载并永久删除",
   "serenitea_pot.command.create.accepted": "开始按区块批量提取 %1$s 个区块的完整高度（代际 %2$s），执行 /sereniteapot 可查询进度",
   "serenitea_pot.command.request.sent": "申请已发送，60 秒后过期",

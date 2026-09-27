@@ -12,6 +12,7 @@ import java.util.Locale;
  * {@code serenitea_pot.command.admin.max.radius.success}。</p>
  */
 public enum MessageKey {
+    COMMAND_SAVE_FAILED,
     COMMAND_DELETE_SUCCESS,
     COMMAND_CREATE_ACCEPTED,
     COMMAND_REQUEST_SENT,

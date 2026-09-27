@@ -62,6 +62,9 @@ public class SereniteaPotCatalogRepository {
 
     /** Encodes mutable catalog data on the caller thread, then writes snapshots in order. */
     public synchronized CompletableFuture<Void> saveAsync(SereniteaPotCatalog catalog) {
+        // A failed commit must not be bypassed by a later full-catalog snapshot.
+        // Propagate the same failure, without allocating snapshots that cannot run.
+        if (pendingWrites.isCompletedExceptionally()) return pendingWrites;
         String snapshot = gson.toJson(encode(catalog));
         pendingWrites = pendingWrites.thenRunAsync(() -> {
             try {

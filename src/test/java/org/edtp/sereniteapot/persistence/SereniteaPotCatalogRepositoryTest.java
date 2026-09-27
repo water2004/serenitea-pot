@@ -166,6 +166,8 @@ class SereniteaPotCatalogRepositoryTest {
         assertThrows(CompletionException.class, first::join);
         assertThrows(CompletionException.class, second::join);
         assertThrows(CompletionException.class, () -> repository.pendingWrites().join());
+        // Once the failure is known, no more snapshots or impossible write jobs are queued.
+        assertSame(repository.pendingWrites(), repository.saveAsync(catalog));
         assertEquals("existing file", Files.readString(blockedRoot));
     }
 }

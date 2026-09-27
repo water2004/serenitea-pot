@@ -19,6 +19,7 @@
       "org.edtp.sereniteapot.player.PlayerTransferReadinessGameTest",
       "org.edtp.sereniteapot.gametest.PublicSaveBoundaryGameTest",
       "org.edtp.sereniteapot.gametest.DeletionCompletionGameTest",
+      "org.edtp.sereniteapot.command.PersistenceFeedbackGameTest",
       "org.edtp.sereniteapot.gametest.PublicPlayerDataGameTest",
       "org.edtp.sereniteapot.gametest.PotDifficultyGameTest",
       "org.edtp.sereniteapot.gametest.PotCoordinatesGameTest",

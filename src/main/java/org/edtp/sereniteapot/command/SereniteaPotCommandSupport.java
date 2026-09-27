@@ -88,6 +88,21 @@ final class SereniteaPotCommandSupport {
         return 1;
     }
 
+    /** Runtime changes are immediate; success is reported only after durable catalog storage. */
+    static int saved(CommandContext<CommandSourceStack> context, CompletableFuture<Void> persisted,
+                     MessageKey key, Object... arguments) {
+        var server = context.getSource().getServer();
+        persisted.whenComplete((ignored, error) -> {
+            Runnable feedback = () -> {
+                if (error == null) success(context, key, arguments);
+                else failure(context, MessageKey.COMMAND_SAVE_FAILED);
+            };
+            if (server.isSameThread()) feedback.run();
+            else server.execute(feedback);
+        });
+        return persisted.isCompletedExceptionally() ? 0 : 1;
+    }
+
     static int failure(CommandContext<CommandSourceStack> context, MessageKey key, Object... arguments) {
         return failure(context, message(key, arguments));
     }

@@ -34,6 +34,7 @@ import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.profile;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.route;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.saved;
 
 final class SereniteaPotAdminCommands {
     private static final String PLAYER_ARGUMENT = "player";
@@ -111,8 +112,7 @@ final class SereniteaPotAdminCommands {
     private static int setDefaultMaximumRadius(CommandContext<CommandSourceStack> context) {
         int radius = IntegerArgumentType.getInteger(context, RADIUS_ARGUMENT);
         SereniteaPotManager.catalog().setDefaultMaxRadiusChunks(radius);
-        SereniteaPotManager.saveCatalog();
-        return success(context, MessageKey.COMMAND_ADMIN_DEFAULT_MAX_RADIUS_SUCCESS,
+        return saved(context, SereniteaPotManager.saveCatalog(), MessageKey.COMMAND_ADMIN_DEFAULT_MAX_RADIUS_SUCCESS,
                 radius, (long) radius * 2L + 1L);
     }
 
@@ -128,9 +128,9 @@ final class SereniteaPotAdminCommands {
         } else if (!enabled) {
             SereniteaPotLifecycleService.requestClose(owner);
         }
-        SereniteaPotManager.saveCatalog();
-        if (!enabled) return success(context, MessageKey.COMMAND_ADMIN_DISABLE_SUCCESS, owner);
-        return success(context,
+        var persisted = SereniteaPotManager.saveCatalog();
+        if (!enabled) return saved(context, persisted, MessageKey.COMMAND_ADMIN_DISABLE_SUCCESS, owner);
+        return saved(context, persisted,
                 record.isFrozen()
                         ? MessageKey.COMMAND_ADMIN_ENABLE_FROZEN
                         : MessageKey.COMMAND_ADMIN_ENABLE_SUCCESS,
@@ -145,8 +145,8 @@ final class SereniteaPotAdminCommands {
         SereniteaPotCreationService.MaximumChangeResult result = SereniteaPotCreationService.changeMaximum(
                 context.getSource().getServer(), owner, radius,
                 requester == null ? null : requester.getUUID());
-        if (result == SereniteaPotCreationService.MaximumUpdated.INSTANCE) {
-            return success(context, MessageKey.COMMAND_ADMIN_MAX_RADIUS_SUCCESS,
+        if (result instanceof SereniteaPotCreationService.MaximumUpdated updated) {
+            return saved(context, updated.persisted(), MessageKey.COMMAND_ADMIN_MAX_RADIUS_SUCCESS,
                     owner, radius, (long) radius * 2L + 1L);
         }
         if (result instanceof SereniteaPotCreationService.MaximumTrimStarted started) {
@@ -161,22 +161,19 @@ final class SereniteaPotAdminCommands {
         UUID owner = profile(context, PLAYER_ARGUMENT);
         double budget = DoubleArgumentType.getDouble(context, BUDGET_ARGUMENT);
         SereniteaPotManager.getOrCreateRecord(owner).setBudgetMillisPerTick(budget);
-        SereniteaPotManager.saveCatalog();
-        return success(context, MessageKey.COMMAND_ADMIN_BUDGET_SUCCESS, owner, budget);
+        return saved(context, SereniteaPotManager.saveCatalog(), MessageKey.COMMAND_ADMIN_BUDGET_SUCCESS, owner, budget);
     }
 
     private static int setDefaultBudget(CommandContext<CommandSourceStack> context) {
         double budget = DoubleArgumentType.getDouble(context, BUDGET_ARGUMENT);
         SereniteaPotManager.catalog().setDefaultBudgetMillisPerTick(budget);
-        SereniteaPotManager.saveCatalog();
-        return success(context, MessageKey.COMMAND_ADMIN_DEFAULT_BUDGET_SUCCESS, budget);
+        return saved(context, SereniteaPotManager.saveCatalog(), MessageKey.COMMAND_ADMIN_DEFAULT_BUDGET_SUCCESS, budget);
     }
 
     private static int setGlobalBudget(CommandContext<CommandSourceStack> context) {
         double budget = DoubleArgumentType.getDouble(context, BUDGET_ARGUMENT);
         SereniteaPotManager.catalog().setGlobalBudgetMillisPerTick(budget);
-        SereniteaPotManager.saveCatalog();
-        return success(context, MessageKey.COMMAND_ADMIN_GLOBAL_BUDGET_SUCCESS, budget);
+        return saved(context, SereniteaPotManager.saveCatalog(), MessageKey.COMMAND_ADMIN_GLOBAL_BUDGET_SUCCESS, budget);
     }
 
     private static int showStatus(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
