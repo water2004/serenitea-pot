@@ -3,7 +3,9 @@ package org.edtp.sereniteapot.gametest;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket;
+import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.permissions.LevelBasedPermissionSet;
 import net.minecraft.server.players.NameAndId;
@@ -11,17 +13,23 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.AndrewElizabeth.teleportcommandsfabric.core.teleport.manager.TeleportOperationManager;
+import org.AndrewElizabeth.teleportcommandsfabric.TeleportCommands;
 import org.AndrewElizabeth.teleportcommandsfabric.core.teleport.task.TeleportExecutor;
 import org.AndrewElizabeth.teleportcommandsfabric.core.teleport.types.TeleportStatus;
 import org.AndrewElizabeth.teleportcommandsfabric.core.teleport.types.TeleportTarget;
 import org.AndrewElizabeth.teleportcommandsfabric.core.teleport.types.target.TargetTeleportOptions;
 import org.AndrewElizabeth.teleportcommandsfabric.core.teleport.types.target.TeleportRequest;
+import org.AndrewElizabeth.teleportcommandsfabric.core.teleport.types.tpa.Tpa;
+import org.AndrewElizabeth.teleportcommandsfabric.core.teleport.types.tpa.TpaRequest;
 import org.edtp.sereniteapot.level.*;
 import org.edtp.sereniteapot.model.*;
 import org.edtp.sereniteapot.player.PlayerStateManager;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class TpcCompatibilityGameTest {
@@ -55,10 +63,11 @@ public final class TpcCompatibilityGameTest {
         final GameTestHelper helper;
         final int scenario;
         ConnectedTestPlayer traveler;
+        ConnectedTestPlayer host;
         final TeleportOperationManager manager = new TeleportOperationManager();
-        org.AndrewElizabeth.teleportcommandsfabric.core.teleport.types.TeleportOperation operation;
-        java.util.concurrent.CompletableFuture<net.minecraft.nbt.CompoundTag> gate;
-        net.minecraft.nbt.CompoundTag publicData;
+        CompletableFuture<TeleportStatus> result;
+        CompletableFuture<CompoundTag> gate;
+        CompoundTag publicData;
         int tick;
         boolean done;
 
@@ -76,29 +85,39 @@ public final class TpcCompatibilityGameTest {
                 PlayerStateManager.prepareReturn(traveler.player()).join(); // fixture-only I/O
                 var field = PlayerStateManager.class.getDeclaredField("pendingPublicReturns");
                 field.setAccessible(true);
-                var reads = (Map<java.util.UUID, java.util.concurrent.CompletableFuture<net.minecraft.nbt.CompoundTag>>) field.get(null);
+                var reads = (Map<UUID, CompletableFuture<CompoundTag>>) field.get(null);
                 publicData = reads.get(traveler.id).join();
-                gate = new java.util.concurrent.CompletableFuture<>();
+                gate = new CompletableFuture<>();
                 reads.put(traveler.id, gate);
                 var target = TeleportTarget.of(server.overworld(), new Vec3(8, 80, 8));
-                operation = manager.createPending(traveler.id, TeleportRequest.resolved(target,
-                    new TargetTeleportOptions(0, 0, false, false)), 0).pending();
                 traveler.takePackets();
-                TpcAssertions.require(new TeleportExecutor(null, manager).executeResolved(server, operation, target)
-                    == TeleportStatus.ACCEPTED, "Pending transfer was not accepted");
+                if (scenario == 0) {
+                    // Exercise the real accepted /tpahere queue, including its tick listener.
+                    host = new ConnectedTestPlayer(server);
+                    var service = TeleportCommands.TPA_SERVICE;
+                    var request = service.createRequest(new TpaRequest(
+                        host.id, traveler.id, Tpa.Type.TPAHERE, Duration.ofSeconds(60), 0, 0, false));
+                    result = service.acceptRequest(server, request.sessionId());
+                } else {
+                    var operation = manager.createPending(traveler.id, TeleportRequest.resolved(target,
+                        new TargetTeleportOptions(0, 0, false, false)), 0).pending();
+                    result = operation.resultFuture();
+                    TpcAssertions.require(new TeleportExecutor(null, manager).executeResolved(server, operation, target)
+                        == TeleportStatus.ACCEPTED, "Pending transfer was not accepted");
+                }
             } else if (++tick < 5) {
-                TpcAssertions.require(!operation.resultFuture().isDone(), "TPC completed before read");
+                TpcAssertions.require(!result.isDone(), "TPC completed before read");
                 TpcAssertions.require(SereniteaPotLevelKeys.identify(traveler.player().level().dimension()) != null,
                     "Player moved before read");
             } else if (!gate.isDone()) {
                 if (scenario == 1) manager.cancelCurrent(traveler.id, TeleportStatus.CANCELLED);
                 if (scenario == 2) gate.completeExceptionally(new java.io.IOException("injected read failure"));
                 else gate.complete(publicData);
-            } else if (tick >= 8 && operation.resultFuture().isDone()) {
+            } else if (tick >= 8 && result.isDone()) {
                 var expected = scenario == 0 ? TeleportStatus.SUCCESS : scenario == 1 ? TeleportStatus.CANCELLED : TeleportStatus.FAILED;
-                TpcAssertions.require(operation.resultFuture().join() == expected, "Wrong final TPC result");
+                TpcAssertions.require(result.join() == expected, "Wrong final TPC result");
                 var packets = traveler.takePackets();
-                long respawns = packets.stream().filter(net.minecraft.network.protocol.game.ClientboundRespawnPacket.class::isInstance).count();
+                long respawns = packets.stream().filter(ClientboundRespawnPacket.class::isInstance).count();
                 TpcAssertions.require(respawns == (scenario == 0 ? 1 : 0), "Unexpected deferred/duplicate teleport");
                 TpcAssertions.require((traveler.player().level() == server.overworld()) == (scenario == 0), "Wrong final realm");
                 if (scenario == 0) TpcAssertions.require(!traveler.player().gameMode.isCreative()
@@ -111,6 +130,7 @@ public final class TpcCompatibilityGameTest {
 
         void cleanup() {
             if (gate != null && !gate.isDone()) gate.complete(publicData);
+            if (host != null) host.close();
             if (traveler != null) {
                 traveler.close();
                 GameTestStorage.deleteAndReset(helper.getLevel().getServer(), traveler.id);
