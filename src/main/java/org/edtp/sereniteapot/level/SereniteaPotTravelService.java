@@ -48,6 +48,9 @@ public final class SereniteaPotTravelService {
             return new Rejected(message(MessageKey.TRAVEL_TARGET_NO_POT));
         }
         if (!record.isEnabled()) return new Rejected(message(MessageKey.TRAVEL_DISABLED));
+        if (SereniteaPotManager.hasFailedClose(owner)) {
+            return new Rejected(message(MessageKey.LIFECYCLE_CLOSE_FAILED));
+        }
         if (SereniteaPotLifecycleService.isUnavailable(owner)) {
             return new Rejected(message(MessageKey.TRAVEL_UNAVAILABLE));
         }

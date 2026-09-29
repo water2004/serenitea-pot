@@ -76,6 +76,7 @@
   "serenitea_pot.lifecycle.closing": "该尘歌壶正在关闭",
   "serenitea_pot.lifecycle.disconnect.for.unload": "尘歌壶正在安全卸载，请重新连接",
   "serenitea_pot.lifecycle.unload.retry": "至少一个维度尚未完成卸载，将在下一 tick 重试",
+  "serenitea_pot.lifecycle.close.failed": "维度关闭出错，无法确认资源已释放。请检查服务端日志并重启服务端进程（单人游戏需重启游戏）后再打开此壶",
   "serenitea_pot.deletion.no.config": "该玩家没有尘歌壶配置",
   "serenitea_pot.deletion.commit.failed": "无法提交删除事务：%s",
   "serenitea_pot.deletion.unsafe.path": "拒绝删除异常的尘歌壶路径：%s",

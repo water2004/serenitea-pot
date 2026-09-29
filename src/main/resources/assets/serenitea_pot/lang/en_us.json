@@ -76,6 +76,7 @@
   "serenitea_pot.lifecycle.closing": "That Serenitea Pot is already closing",
   "serenitea_pot.lifecycle.disconnect.for.unload": "The Serenitea Pot is unloading safely; please reconnect",
   "serenitea_pot.lifecycle.unload.retry": "At least one dimension is still loaded; unloading will retry next tick",
+  "serenitea_pot.lifecycle.close.failed": "A dimension failed to close safely. Check the server log and restart the server process (or the game in singleplayer) before reopening this pot",
   "serenitea_pot.deletion.no.config": "That player has no Serenitea Pot configuration",
   "serenitea_pot.deletion.commit.failed": "Could not commit the deletion transaction: %s",
   "serenitea_pot.deletion.unsafe.path": "Refused to delete an unexpected Serenitea Pot path: %s",

@@ -84,7 +84,7 @@ public final class SereniteaPotLifecycleService {
     public static CompletableFuture<Result> beginMaintenance(MinecraftServer server, UUID owner) {
         requireServerThread(server);
         if (SereniteaPotManager.hasFailedClose(owner)) {
-            return CompletableFuture.completedFuture(new Rejected(message(MessageKey.LIFECYCLE_UNLOAD_RETRY)));
+            return CompletableFuture.completedFuture(new Rejected(message(MessageKey.LIFECYCLE_CLOSE_FAILED)));
         }
         if (!maintenance.add(owner)) {
             return CompletableFuture.completedFuture(new Rejected(message(MessageKey.LIFECYCLE_MAINTENANCE_EXISTS)));
@@ -129,7 +129,8 @@ public final class SereniteaPotLifecycleService {
             Result evacuation = evacuate(server, owner, true);
             if (evacuation != Success.INSTANCE) return evacuation;
             if (!SereniteaPotManager.unloadEvacuated(owner)) {
-                return new Rejected(message(MessageKey.LIFECYCLE_UNLOAD_RETRY));
+                return new Rejected(message(SereniteaPotManager.hasFailedClose(owner)
+                    ? MessageKey.LIFECYCLE_CLOSE_FAILED : MessageKey.LIFECYCLE_UNLOAD_RETRY));
             }
             pendingCloses.remove(owner);
             return Success.INSTANCE;

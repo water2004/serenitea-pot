@@ -36,6 +36,9 @@ public final class SereniteaPotAccessPolicy {
         if (identity.generation() != record.getActiveGeneration()) {
             return component(player, message(MessageKey.ACCESS_INACTIVE_GENERATION));
         }
+        if (SereniteaPotManager.hasFailedClose(identity.owner())) {
+            return component(player, message(MessageKey.LIFECYCLE_CLOSE_FAILED));
+        }
         if (SereniteaPotLifecycleService.isUnavailable(identity.owner())) {
             return component(player, message(MessageKey.ACCESS_UNAVAILABLE));
         }
