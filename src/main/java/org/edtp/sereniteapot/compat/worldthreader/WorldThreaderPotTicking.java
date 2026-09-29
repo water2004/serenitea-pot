@@ -33,6 +33,7 @@ public final class WorldThreaderPotTicking {
             ServerLevel level = SereniteaPotScheduler.activeLevel(server, owner, lane);
             boolean ran = level != null && SereniteaPotScheduler.beforeThreadedLevelTick(level);
             long started = 0L;
+            boolean completed;
             try {
                 if (ran) {
                     ((ServerWorldExtended) level).worldthreader$setTickPhase(WorldThreaderTickPhase.WORLD_TICK);
@@ -49,8 +50,11 @@ public final class WorldThreaderPotTicking {
                 throw throwable;
             } finally {
                 long elapsed = ran ? System.nanoTime() - started : 0L;
-                if (!SereniteaPotScheduler.finishThreadedOwner(owner, lane, elapsed, ran)) return;
+                completed = SereniteaPotScheduler.finishThreadedOwner(owner, lane, elapsed, ran);
             }
+            // A return inside finally would swallow the original world-tick failure
+            // after abortThreadedTick terminates the barrier.
+            if (!completed) return;
         }
     }
 
