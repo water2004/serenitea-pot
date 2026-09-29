@@ -103,11 +103,8 @@ public final class PlayerTransferReadinessGameTest {
                         case 4 -> {
                             if (calls[0] != 2) throw new AssertionError("Disconnected player request resumed");
                             var deletion = SereniteaPotDeletionService.deleteAndReset(server, owner);
-                            if (deletion instanceof SereniteaPotDeletionService.Pending pending) {
-                                SereniteaPotDeletionService.awaitPending(server); // fixture cleanup only
-                                deletion = pending.future().join();
-                            }
-                            if (deletion != SereniteaPotDeletionService.Success.INSTANCE) throw new AssertionError("Cleanup failed");
+                            SereniteaPotDeletionService.awaitPending(server); // fixture cleanup only
+                            if (deletion.join() != SereniteaPotDeletionService.Success.INSTANCE) throw new AssertionError("Cleanup failed");
                             SereniteaPotManager.catalog().getPlayers().remove(owner);
                             phase[0] = 5;
                         }

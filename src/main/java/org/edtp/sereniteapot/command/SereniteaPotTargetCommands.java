@@ -20,21 +20,15 @@ final class SereniteaPotTargetCommands {
     }
 
     static int delete(CommandContext<CommandSourceStack> context, UUID owner) {
-        SereniteaPotDeletionService.Result result = SereniteaPotDeletionService.deleteAndReset(
-                context.getSource().getServer(), owner);
-        if (result instanceof SereniteaPotDeletionService.Pending pending) {
-            pending.future().thenAccept(finished -> {
+        SereniteaPotDeletionService.deleteAndReset(
+                context.getSource().getServer(), owner).thenAccept(finished -> {
                 if (finished == SereniteaPotDeletionService.Success.INSTANCE) {
                     success(context, MessageKey.COMMAND_DELETE_SUCCESS);
                 } else {
                     failure(context, ((SereniteaPotDeletionService.Rejected) finished).reason());
                 }
             });
-            return 1;
-        }
-        return result == SereniteaPotDeletionService.Success.INSTANCE
-                ? success(context, MessageKey.COMMAND_DELETE_SUCCESS)
-                : failure(context, ((SereniteaPotDeletionService.Rejected) result).reason());
+        return 1;
     }
 
     static int status(CommandContext<CommandSourceStack> context, UUID owner) {

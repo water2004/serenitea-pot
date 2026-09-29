@@ -96,7 +96,7 @@ public final class PotCoordinatesGameTest {
                                     source.getChunkSource().randomState().sampler(), 0, 0, 0);
                             }
                             player.snapTo(sourceEntry.getX() + .5, sourceEntry.getY(), sourceEntry.getZ() + .5);
-                            check(SereniteaPotCreationService.request(player, 1) instanceof SereniteaPotCreationService.Accepted,
+                            check(SereniteaPotCreationService.request(player, 1).join() instanceof SereniteaPotCreationService.Accepted,
                                 "Extraction was rejected");
                             phase[0] = 1;
                         }
@@ -124,7 +124,7 @@ public final class PotCoordinatesGameTest {
                             if (!org.edtp.sereniteapot.player.PlayerStateManager.prepareReturn(inside).isDone()) return;
                             check(SereniteaPotTravelService.leave(inside) == SereniteaPotTravelService.Success.INSTANCE,
                                 "Could not leave copied world");
-                            check(SereniteaPotCreationService.changeMaximum(server, owner, 0, null)
+                            check(SereniteaPotCreationService.changeMaximum(server, owner, 0, null).join()
                                 instanceof SereniteaPotCreationService.MaximumTrimStarted, "Trim did not start");
                             phase[0] = 2;
                         }

@@ -142,18 +142,20 @@ final class SereniteaPotAdminCommands {
         UUID owner = profile(context, PLAYER_ARGUMENT);
         int radius = IntegerArgumentType.getInteger(context, RADIUS_ARGUMENT);
         ServerPlayer requester = context.getSource().getPlayer();
-        SereniteaPotCreationService.MaximumChangeResult result = SereniteaPotCreationService.changeMaximum(
+        SereniteaPotCreationService.changeMaximum(
                 context.getSource().getServer(), owner, radius,
-                requester == null ? null : requester.getUUID());
-        if (result instanceof SereniteaPotCreationService.MaximumUpdated updated) {
-            return saved(context, updated.persisted(), MessageKey.COMMAND_ADMIN_MAX_RADIUS_SUCCESS,
-                    owner, radius, (long) radius * 2L + 1L);
-        }
-        if (result instanceof SereniteaPotCreationService.MaximumTrimStarted started) {
-            return success(context, MessageKey.COMMAND_ADMIN_MAX_RADIUS_TRIM_STARTED,
-                    owner, started.dimensionCount(), radius, started.retainedChunks(), started.generation());
-        }
-        return failure(context, ((SereniteaPotCreationService.Rejected) result).reason());
+                requester == null ? null : requester.getUUID()).thenAccept(result -> {
+            if (result instanceof SereniteaPotCreationService.MaximumUpdated updated) {
+                saved(context, updated.persisted(), MessageKey.COMMAND_ADMIN_MAX_RADIUS_SUCCESS,
+                        owner, radius, (long) radius * 2L + 1L);
+            } else if (result instanceof SereniteaPotCreationService.MaximumTrimStarted started) {
+                success(context, MessageKey.COMMAND_ADMIN_MAX_RADIUS_TRIM_STARTED,
+                        owner, started.dimensionCount(), radius, started.retainedChunks(), started.generation());
+            } else {
+                failure(context, ((SereniteaPotCreationService.Rejected) result).reason());
+            }
+        });
+        return 1;
     }
 
     private static int setPlayerBudget(CommandContext<CommandSourceStack> context)

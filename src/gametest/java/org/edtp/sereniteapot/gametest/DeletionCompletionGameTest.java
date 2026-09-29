@@ -18,9 +18,7 @@ public final class DeletionCompletionGameTest {
         var future = new AtomicReference<CompletableFuture<SereniteaPotDeletionService.Result>>();
         server.execute(() -> {
             SereniteaPotManager.getOrCreateRecord(owner);
-            var deletion = SereniteaPotDeletionService.deleteAndReset(server, owner);
-            if (deletion instanceof SereniteaPotDeletionService.Pending pending) future.set(pending.future());
-            else future.set(CompletableFuture.completedFuture(deletion));
+            future.set(SereniteaPotDeletionService.deleteAndReset(server, owner));
         });
         helper.onEachTick(() -> {
             var result = future.get();

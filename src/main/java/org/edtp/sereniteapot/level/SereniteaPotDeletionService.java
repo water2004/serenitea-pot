@@ -30,32 +30,36 @@ public final class SereniteaPotDeletionService {
     private SereniteaPotDeletionService() {
     }
 
-    public static Result deleteAndReset(MinecraftServer server, UUID owner) {
+    public static CompletableFuture<Result> deleteAndReset(MinecraftServer server, UUID owner) {
         if (!server.isSameThread()) throw new IllegalStateException("Deletion must run on the server thread");
         SereniteaPotRecord record = SereniteaPotManager.record(owner);
-        if (record == null) return new Rejected(message(MessageKey.DELETION_NO_CONFIG));
+        if (record == null) return CompletableFuture.completedFuture(new Rejected(message(MessageKey.DELETION_NO_CONFIG)));
 
         if (!SereniteaPotCreationService.cancel(owner)) {
-            return new Rejected(message(MessageKey.LIFECYCLE_MAINTENANCE_EXISTS));
+            return CompletableFuture.completedFuture(new Rejected(message(MessageKey.LIFECYCLE_MAINTENANCE_EXISTS)));
         }
         Path expectedRoot = server.getWorldPath(LevelResource.ROOT)
             .resolve("dimensions").resolve(SereniteaPotMod.MOD_ID).resolve("pot").toAbsolutePath().normalize();
         Path resolved = expectedRoot.resolve(owner.toString()).normalize();
         if (!expectedRoot.equals(resolved.getParent()) || !owner.toString().equals(resolved.getFileName().toString())) {
-            return new Rejected(message(MessageKey.DELETION_UNSAFE_PATH, resolved));
+            return CompletableFuture.completedFuture(new Rejected(message(MessageKey.DELETION_UNSAFE_PATH, resolved)));
         }
-        SereniteaPotLifecycleService.Result maintenance = SereniteaPotLifecycleService.beginMaintenance(server, owner);
-        if (maintenance instanceof SereniteaPotLifecycleService.Rejected rejected) {
-            return new Rejected(rejected.reason());
-        }
+        return SereniteaPotLifecycleService.beginMaintenance(server, owner).thenCompose(result -> {
+            if (result instanceof SereniteaPotLifecycleService.Rejected rejected) {
+                return CompletableFuture.completedFuture(new Rejected(rejected.reason()));
+            }
+            return deleteEvacuated(server, owner, record, resolved);
+        });
+    }
+
+    private static CompletableFuture<Result> deleteEvacuated(MinecraftServer server, UUID owner,
+            SereniteaPotRecord record, Path resolved) {
         SereniteaPotLifecycleService.Result close = SereniteaPotLifecycleService.closeNow(server, owner);
-        if (close == SereniteaPotLifecycleService.Pending.INSTANCE) {
+        if (close != SereniteaPotLifecycleService.Success.INSTANCE) {
             SereniteaPotLifecycleService.endMaintenance(owner);
-            return new Rejected(message(MessageKey.LIFECYCLE_PLAYER_DATA_PENDING));
-        }
-        if (close instanceof SereniteaPotLifecycleService.Rejected rejected) {
-            SereniteaPotLifecycleService.endMaintenance(owner);
-            return new Rejected(rejected.reason());
+            return CompletableFuture.completedFuture(new Rejected(
+                close instanceof SereniteaPotLifecycleService.Rejected rejected
+                    ? rejected.reason() : message(MessageKey.LIFECYCLE_UNLOAD_RETRY)));
         }
 
         UUID oldStateId = record.getStateId();
@@ -84,7 +88,7 @@ public final class SereniteaPotDeletionService {
             record.getSlots().putAll(oldSlots);
             record.setFrozen(oldFrozen);
             SereniteaPotLifecycleService.endMaintenance(owner);
-            return new Rejected(message(MessageKey.DELETION_COMMIT_FAILED, error.getMessage()));
+            return CompletableFuture.completedFuture(new Rejected(message(MessageKey.DELETION_COMMIT_FAILED, error.getMessage())));
         }
         Pending operation = new Pending(
             server, owner, record, oldStateId, oldGeneration, oldSlots, oldFrozen, committed, io
@@ -92,7 +96,7 @@ public final class SereniteaPotDeletionService {
         pending.put(owner, operation);
         // The service owns completion and unlocking, even if its caller ignores the result.
         io.whenComplete((ignored, error) -> server.execute(operation::finish));
-        return operation;
+        return operation.completion;
     }
 
     /** Drains pending file work at shutdown; this chain contains only I/O tasks. */
@@ -108,7 +112,7 @@ public final class SereniteaPotDeletionService {
         }
     }
 
-    public static final class Pending implements Result {
+    private static final class Pending {
         private final MinecraftServer server;
         private final UUID owner;
         private final SereniteaPotRecord record;
@@ -133,8 +137,6 @@ public final class SereniteaPotDeletionService {
             this.committed = committed;
             this.io = io;
         }
-
-        public CompletableFuture<Result> future() { return completion; }
 
         private void finish() {
             if (!server.isSameThread()) throw new IllegalStateException("Deletion finish must run on the server thread");
@@ -180,7 +182,7 @@ public final class SereniteaPotDeletionService {
         }
     }
 
-    public sealed interface Result permits Success, Rejected, Pending {
+    public sealed interface Result permits Success, Rejected {
     }
 
     public enum Success implements Result {

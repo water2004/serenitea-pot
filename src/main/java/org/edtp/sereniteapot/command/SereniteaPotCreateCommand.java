@@ -30,12 +30,15 @@ final class SereniteaPotCreateCommand {
 
     private static int execute(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        SereniteaPotCreationService.RequestResult result = SereniteaPotCreationService.request(
-                player, IntegerArgumentType.getInteger(context, RADIUS_ARGUMENT));
-        if (result instanceof SereniteaPotCreationService.Accepted accepted) {
-            return success(context,
+        SereniteaPotCreationService.request(
+                player, IntegerArgumentType.getInteger(context, RADIUS_ARGUMENT)).thenAccept(result -> {
+            if (result instanceof SereniteaPotCreationService.Accepted accepted) {
+                success(context,
                     MessageKey.COMMAND_CREATE_ACCEPTED, accepted.chunkCount(), accepted.generation());
-        }
-        return failure(context, ((SereniteaPotCreationService.Rejected) result).reason());
+            } else {
+                failure(context, ((SereniteaPotCreationService.Rejected) result).reason());
+            }
+        });
+        return 1;
     }
 }

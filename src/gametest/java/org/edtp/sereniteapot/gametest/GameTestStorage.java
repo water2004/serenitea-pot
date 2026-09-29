@@ -37,11 +37,8 @@ final class GameTestStorage {
                 PlayerStateManager.prepareReturn(player).join();
             }
         }
-        SereniteaPotDeletionService.Result result = SereniteaPotDeletionService.deleteAndReset(server, owner);
-        if (result instanceof SereniteaPotDeletionService.Pending pending) {
-            SereniteaPotDeletionService.awaitPending(server);
-            return pending.future().join();
-        }
-        return result;
+        var result = SereniteaPotDeletionService.deleteAndReset(server, owner);
+        SereniteaPotDeletionService.awaitPending(server);
+        return result.join();
     }
 }

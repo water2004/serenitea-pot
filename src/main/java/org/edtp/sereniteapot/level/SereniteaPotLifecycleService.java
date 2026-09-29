@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.fallback;
@@ -37,6 +38,7 @@ public final class SereniteaPotLifecycleService {
 
     private static final Set<UUID> pendingCloses = new LinkedHashSet<>();
     private static final Set<UUID> maintenance = new LinkedHashSet<>();
+    private static final Map<UUID, CompletableFuture<Result>> waitingMaintenance = new LinkedHashMap<>();
     private static final Set<UUID> closing = new LinkedHashSet<>();
     private static final Map<UUID, Map<Long, PendingDelete>> pendingDeletes = new LinkedHashMap<>();
 
@@ -73,24 +75,43 @@ public final class SereniteaPotLifecycleService {
         return pendingCloses.contains(owner) || maintenance.contains(owner) || closing.contains(owner);
     }
 
+    public static boolean isMaintaining(UUID owner) {
+        return maintenance.contains(owner);
+    }
+
     /** Locks admission and evacuates occupants while old levels remain available as copy sources. */
-    public static Result beginMaintenance(MinecraftServer server, UUID owner) {
+    public static CompletableFuture<Result> beginMaintenance(MinecraftServer server, UUID owner) {
         requireServerThread(server);
         if (!maintenance.add(owner)) {
-            return new Rejected(message(MessageKey.LIFECYCLE_MAINTENANCE_EXISTS));
+            return CompletableFuture.completedFuture(new Rejected(message(MessageKey.LIFECYCLE_MAINTENANCE_EXISTS)));
         }
         pendingCloses.remove(owner);
-        List<ServerPlayer> remaining = evacuate(server, owner, false);
-        if (!remaining.isEmpty()) {
+        CompletableFuture<Result> ready = new CompletableFuture<>();
+        waitingMaintenance.put(owner, ready);
+        advanceMaintenance(server, owner);
+        return ready;
+    }
+
+    private static void advanceMaintenance(MinecraftServer server, UUID owner) {
+        CompletableFuture<Result> ready = waitingMaintenance.get(owner);
+        if (ready == null) return;
+        Result result = evacuate(server, owner, false);
+        // Pending reads retain both admission lock and the caller's continuation.
+        if (result == Pending.INSTANCE) return;
+        waitingMaintenance.remove(owner);
+        if (result == Success.INSTANCE) {
+            ready.complete(Success.INSTANCE);
+        } else {
             maintenance.remove(owner);
             pendingCloses.add(owner);
-            return new Rejected(message(MessageKey.LIFECYCLE_EVACUATION_FAILED, remaining.size()));
+            ready.complete(result);
         }
-        return Success.INSTANCE;
     }
 
     public static void endMaintenance(UUID owner) {
         maintenance.remove(owner);
+        CompletableFuture<Result> waiting = waitingMaintenance.remove(owner);
+        if (waiting != null) waiting.complete(new Rejected(message(MessageKey.LIFECYCLE_CLOSING)));
     }
 
     /** Must be called on the server thread and outside MinecraftServer's level iterator. */
@@ -101,8 +122,8 @@ public final class SereniteaPotLifecycleService {
             return new Rejected(message(MessageKey.LIFECYCLE_CLOSING));
         }
         try {
-            List<ServerPlayer> remaining = evacuate(server, owner, true);
-            if (!remaining.isEmpty()) return Pending.INSTANCE;
+            Result evacuation = evacuate(server, owner, true);
+            if (evacuation != Success.INSTANCE) return evacuation;
             if (!SereniteaPotManager.unloadEvacuated(owner)) {
                 return new Rejected(message(MessageKey.LIFECYCLE_UNLOAD_RETRY));
             }
@@ -115,7 +136,7 @@ public final class SereniteaPotLifecycleService {
 
     public static void forget(UUID owner) {
         pendingCloses.remove(owner);
-        maintenance.remove(owner);
+        endMaintenance(owner);
         closing.remove(owner);
         pendingDeletes.remove(owner);
     }
@@ -133,14 +154,16 @@ public final class SereniteaPotLifecycleService {
         processPendingDeletes(false);
     }
 
-    private static List<ServerPlayer> evacuate(MinecraftServer server, UUID owner, boolean disconnectFailures) {
+    private static Result evacuate(MinecraftServer server, UUID owner, boolean disconnectFailures) {
         List<ServerPlayer> occupants = occupants(server, owner);
+        boolean failed = false;
         for (ServerPlayer player : occupants) {
             // Loading is normal pending work, not a failed teleport. Check before
             // attempting eviction, so completion between two checks cannot cause a kick.
             if (!PlayerStateManager.prepareReturn(player).isDone()) continue;
             SereniteaPotTravelService.Result result = SereniteaPotTravelService.evict(player, owner);
             if (result instanceof SereniteaPotTravelService.Rejected rejected) {
+                failed = true;
                 SereniteaPotMod.LOGGER.warn(
                     "Failed to evacuate {} from Serenitea Pot {}: {}",
                     player.getUUID(), owner, rejected.reason()
@@ -150,7 +173,11 @@ public final class SereniteaPotLifecycleService {
                 }
             }
         }
-        return occupants(server, owner);
+        List<ServerPlayer> remaining = occupants(server, owner);
+        if (remaining.isEmpty()) return Success.INSTANCE;
+        return failed && !disconnectFailures
+            ? new Rejected(message(MessageKey.LIFECYCLE_EVACUATION_FAILED, remaining.size()))
+            : Pending.INSTANCE;
     }
 
     private static List<ServerPlayer> occupants(MinecraftServer server, UUID owner) {
@@ -165,7 +192,11 @@ public final class SereniteaPotLifecycleService {
     }
 
     private static void endServerTick(MinecraftServer server) {
+        for (UUID owner : List.copyOf(waitingMaintenance.keySet())) advanceMaintenance(server, owner);
         for (UUID owner : List.copyOf(pendingCloses)) {
+            // Evicting the owner queues a close too. Copy sources must remain
+            // registered until the maintenance operation releases its lock.
+            if (maintenance.contains(owner)) continue;
             Result result = closeNow(server, owner);
             if (result instanceof Rejected rejected) {
                 SereniteaPotMod.LOGGER.warn(
@@ -198,6 +229,7 @@ public final class SereniteaPotLifecycleService {
 
     private static void stop(MinecraftServer server) {
         requireServerThread(server);
+        for (UUID owner : List.copyOf(waitingMaintenance.keySet())) endMaintenance(owner);
         for (UUID owner : SereniteaPotManager.loadedOwners()) {
             Result result = closeNow(server, owner);
             if (result instanceof Rejected rejected) {
@@ -212,6 +244,7 @@ public final class SereniteaPotLifecycleService {
     private static void clearAll() {
         pendingCloses.clear();
         maintenance.clear();
+        waitingMaintenance.clear();
         closing.clear();
         pendingDeletes.clear();
     }

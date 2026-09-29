@@ -3,6 +3,7 @@ package org.edtp.sereniteapot.region;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.SectionPos;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -51,19 +52,19 @@ public final class SereniteaPotCreationService {
         ServerLifecycleEvents.SERVER_STOPPING.register(SereniteaPotCreationService::stop);
     }
 
-    public static RequestResult request(ServerPlayer player, int radiusChunks) {
+    public static CompletableFuture<RequestResult> request(ServerPlayer player, int radiusChunks) {
         MinecraftServer server = player.level().getServer();
         if (!server.isSameThread()) throw new IllegalStateException("Creation must run on the server thread");
         UUID owner = player.getUUID();
         ServerLevel source = player.level();
         SereniteaPotDimension dimension = SereniteaPotDimension.fromVanillaLevel(source.dimension());
-        if (dimension == null) return new Rejected(message(MessageKey.CREATION_PUBLIC_DIMENSION_ONLY));
+        if (dimension == null) return CompletableFuture.completedFuture(new Rejected(message(MessageKey.CREATION_PUBLIC_DIMENSION_ONLY)));
 
         SereniteaPotRecord record = SereniteaPotManager.getOrCreateRecord(owner);
-        if (!record.isEnabled()) return new Rejected(message(MessageKey.CREATION_DISABLED));
-        if (jobs.containsKey(owner)) return new Rejected(message(MessageKey.CREATION_JOB_EXISTS));
+        if (!record.isEnabled()) return CompletableFuture.completedFuture(new Rejected(message(MessageKey.CREATION_DISABLED)));
+        if (jobs.containsKey(owner)) return CompletableFuture.completedFuture(new Rejected(message(MessageKey.CREATION_JOB_EXISTS)));
         if (radiusChunks < 0 || radiusChunks > record.getMaxRadiusChunks()) {
-            return new Rejected(message(MessageKey.CREATION_RADIUS_RANGE, record.getMaxRadiusChunks()));
+            return CompletableFuture.completedFuture(new Rejected(message(MessageKey.CREATION_RADIUS_RANGE, record.getMaxRadiusChunks())));
         }
 
         BlockRegion region;
@@ -72,14 +73,21 @@ public final class SereniteaPotCreationService {
                 player.blockPosition(), radiusChunks, source.getMinY(), source.getMaxY()
             );
         } catch (ArithmeticException | IllegalArgumentException error) {
-            return new Rejected(message(MessageKey.CREATION_COORDINATES_OUT_OF_RANGE));
+            return CompletableFuture.completedFuture(new Rejected(message(MessageKey.CREATION_COORDINATES_OUT_OF_RANGE)));
         }
+        BlockPos entry = player.blockPosition();
+        return SereniteaPotLifecycleService.beginMaintenance(server, owner).thenApply(result -> {
+            if (result instanceof SereniteaPotLifecycleService.Rejected rejected) return new Rejected(rejected.reason());
+            if (!record.isEnabled()) {
+                abortMaintenance(owner);
+                return new Rejected(message(MessageKey.CREATION_DISABLED));
+            }
+            return startExtraction(owner, source, dimension, record, region, entry, radiusChunks);
+        });
+    }
 
-        SereniteaPotLifecycleService.Result maintenance = SereniteaPotLifecycleService.beginMaintenance(server, owner);
-        if (maintenance instanceof SereniteaPotLifecycleService.Rejected rejected) {
-            return new Rejected(rejected.reason());
-        }
-
+    private static RequestResult startExtraction(UUID owner, ServerLevel source, SereniteaPotDimension dimension,
+            SereniteaPotRecord record, BlockRegion region, BlockPos entry, int radiusChunks) {
         SereniteaPotBundle previous = null;
         if (record.exists()) {
             previous = SereniteaPotManager.loaded(owner);
@@ -127,14 +135,14 @@ public final class SereniteaPotCreationService {
         }
         replacementSlots.put(dimension, new SereniteaPotSlotRecord(
             source.dimension().identifier().toString(),
-            player.getBlockX(), player.getBlockY(), player.getBlockZ(), radiusChunks
+            entry.getX(), entry.getY(), entry.getZ(), radiusChunks
         ));
         jobs.put(owner, new CreationJob(
             owner,
             staging,
             tasks,
             replacementSlots,
-            player.getUUID(),
+            owner,
             record.getMaxRadiusChunks(),
             JobKind.EXTRACTION,
             true
@@ -147,7 +155,7 @@ public final class SereniteaPotCreationService {
      * Changes an owner's configured maximum. If persisted dimensions exceed it,
      * they are rebuilt through the same staging/commit transaction used by extraction.
      */
-    public static MaximumChangeResult changeMaximum(
+    public static CompletableFuture<MaximumChangeResult> changeMaximum(
         MinecraftServer server,
         UUID owner,
         int maximumRadiusChunks,
@@ -157,13 +165,13 @@ public final class SereniteaPotCreationService {
             throw new IllegalStateException("Maximum change must run on the server thread");
         }
         if (maximumRadiusChunks < 0 || maximumRadiusChunks > SereniteaPotRecord.MAX_RADIUS_CHUNKS) {
-            return new Rejected(message(
+            return CompletableFuture.completedFuture(new Rejected(message(
                 MessageKey.CREATION_RADIUS_RANGE,
                 SereniteaPotRecord.MAX_RADIUS_CHUNKS
-            ));
+            )));
         }
-        if (jobs.containsKey(owner)) {
-            return new Rejected(message(MessageKey.CREATION_TARGET_JOB_EXISTS));
+        if (jobs.containsKey(owner) || SereniteaPotLifecycleService.isMaintaining(owner)) {
+            return CompletableFuture.completedFuture(new Rejected(message(MessageKey.CREATION_TARGET_JOB_EXISTS)));
         }
 
         SereniteaPotRecord record = SereniteaPotManager.getOrCreateRecord(owner);
@@ -171,14 +179,22 @@ public final class SereniteaPotCreationService {
             || record.getSlots().values().stream().anyMatch(slot -> slot.radiusChunks() > maximumRadiusChunks));
         if (!requiresTrim) {
             record.setMaxRadiusChunks(maximumRadiusChunks);
-            return new MaximumUpdated(SereniteaPotManager.saveCatalog());
+            return CompletableFuture.completedFuture(new MaximumUpdated(SereniteaPotManager.saveCatalog()));
         }
 
-        SereniteaPotLifecycleService.Result maintenance = SereniteaPotLifecycleService.beginMaintenance(server, owner);
-        if (maintenance instanceof SereniteaPotLifecycleService.Rejected rejected) {
-            return new Rejected(rejected.reason());
-        }
+        boolean enabled = record.isEnabled();
+        return SereniteaPotLifecycleService.beginMaintenance(server, owner).thenApply(result -> {
+            if (result instanceof SereniteaPotLifecycleService.Rejected rejected) return new Rejected(rejected.reason());
+            if (record.isEnabled() != enabled) {
+                abortMaintenance(owner);
+                return new Rejected(message(MessageKey.CREATION_STOPPED_BY_ADMIN_CHANGE));
+            }
+            return startTrim(owner, record, maximumRadiusChunks, requester);
+        });
+    }
 
+    private static MaximumChangeResult startTrim(UUID owner, SereniteaPotRecord record,
+            int maximumRadiusChunks, UUID requester) {
         SereniteaPotBundle previous = SereniteaPotManager.loaded(owner);
         if (previous == null) {
             try {
