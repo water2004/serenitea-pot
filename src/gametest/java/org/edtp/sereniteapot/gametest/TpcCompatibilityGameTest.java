@@ -26,6 +26,100 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class TpcCompatibilityGameTest {
     @GameTest(maxTicks = 300)
+    public void pendingReadCompletesOriginalTpcRequest(GameTestHelper helper) { pendingRead(helper, 0); }
+
+    @GameTest(maxTicks = 300)
+    public void cancelledTpcRequestDoesNotTeleportLater(GameTestHelper helper) { pendingRead(helper, 1); }
+
+    @GameTest(maxTicks = 300)
+    public void failedReadFailsOriginalTpcRequest(GameTestHelper helper) { pendingRead(helper, 2); }
+
+    private static void pendingRead(GameTestHelper helper, int scenario) {
+        if (!FabricLoader.getInstance().isModLoaded("teleport_commands_fabric")) { helper.succeed(); return; }
+        var probe = new PendingReadProbe(helper, scenario);
+        var queued = new java.util.concurrent.atomic.AtomicBoolean();
+        helper.onEachTick(() -> {
+            if (probe.done || !queued.compareAndSet(false, true)) return;
+            helper.getLevel().getServer().execute(() -> {
+                try { probe.step(); }
+                catch (Throwable error) {
+                    probe.cleanup();
+                    probe.done = true;
+                    helper.fail("TPC pending read: " + error);
+                } finally { queued.set(false); }
+            });
+        });
+    }
+
+    private static final class PendingReadProbe {
+        final GameTestHelper helper;
+        final int scenario;
+        ConnectedTestPlayer traveler;
+        final TeleportOperationManager manager = new TeleportOperationManager();
+        org.AndrewElizabeth.teleportcommandsfabric.core.teleport.types.TeleportOperation operation;
+        java.util.concurrent.CompletableFuture<net.minecraft.nbt.CompoundTag> gate;
+        net.minecraft.nbt.CompoundTag publicData;
+        int tick;
+        boolean done;
+
+        PendingReadProbe(GameTestHelper helper, int scenario) { this.helper = helper; this.scenario = scenario; }
+
+        @SuppressWarnings("unchecked")
+        void step() throws Exception {
+            var server = helper.getLevel().getServer();
+            if (traveler == null) {
+                traveler = new ConnectedTestPlayer(server);
+                var pot = TpcAssertions.createPot(traveler);
+                traveler.player().setGameMode(GameType.SURVIVAL);
+                TpcAssertions.transfer(traveler, pot.get(SereniteaPotDimension.END));
+                traveler.player().getAbilities().flying = true;
+                PlayerStateManager.prepareReturn(traveler.player()).join(); // fixture-only I/O
+                var field = PlayerStateManager.class.getDeclaredField("pendingPublicReturns");
+                field.setAccessible(true);
+                var reads = (Map<java.util.UUID, java.util.concurrent.CompletableFuture<net.minecraft.nbt.CompoundTag>>) field.get(null);
+                publicData = reads.get(traveler.id).join();
+                gate = new java.util.concurrent.CompletableFuture<>();
+                reads.put(traveler.id, gate);
+                var target = TeleportTarget.of(server.overworld(), new Vec3(8, 80, 8));
+                operation = manager.createPending(traveler.id, TeleportRequest.resolved(target,
+                    new TargetTeleportOptions(0, 0, false, false)), 0).pending();
+                traveler.takePackets();
+                TpcAssertions.require(new TeleportExecutor(null, manager).executeResolved(server, operation, target)
+                    == TeleportStatus.ACCEPTED, "Pending transfer was not accepted");
+            } else if (++tick < 5) {
+                TpcAssertions.require(!operation.resultFuture().isDone(), "TPC completed before read");
+                TpcAssertions.require(SereniteaPotLevelKeys.identify(traveler.player().level().dimension()) != null,
+                    "Player moved before read");
+            } else if (!gate.isDone()) {
+                if (scenario == 1) manager.cancelCurrent(traveler.id, TeleportStatus.CANCELLED);
+                if (scenario == 2) gate.completeExceptionally(new java.io.IOException("injected read failure"));
+                else gate.complete(publicData);
+            } else if (tick >= 8 && operation.resultFuture().isDone()) {
+                var expected = scenario == 0 ? TeleportStatus.SUCCESS : scenario == 1 ? TeleportStatus.CANCELLED : TeleportStatus.FAILED;
+                TpcAssertions.require(operation.resultFuture().join() == expected, "Wrong final TPC result");
+                var packets = traveler.takePackets();
+                long respawns = packets.stream().filter(net.minecraft.network.protocol.game.ClientboundRespawnPacket.class::isInstance).count();
+                TpcAssertions.require(respawns == (scenario == 0 ? 1 : 0), "Unexpected deferred/duplicate teleport");
+                TpcAssertions.require((traveler.player().level() == server.overworld()) == (scenario == 0), "Wrong final realm");
+                if (scenario == 0) TpcAssertions.require(!traveler.player().gameMode.isCreative()
+                    && !traveler.player().getAbilities().flying, "Source abilities leaked");
+                cleanup();
+                done = true;
+                helper.succeed();
+            }
+        }
+
+        void cleanup() {
+            if (gate != null && !gate.isDone()) gate.complete(publicData);
+            if (traveler != null) {
+                traveler.close();
+                GameTestStorage.deleteAndReset(helper.getLevel().getServer(), traveler.id);
+                SereniteaPotManager.catalog().getPlayers().remove(traveler.id);
+            }
+        }
+    }
+
+    @GameTest(maxTicks = 300)
     public void preservesRealmAbilitiesWithoutChangingOrdinaryTpcFlight(GameTestHelper helper) {
         if (!FabricLoader.getInstance().isModLoaded("teleport_commands_fabric")) {
             helper.succeed();

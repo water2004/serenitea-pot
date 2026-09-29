@@ -118,7 +118,9 @@ public final class PlayerStateManager {
         whenReady(player, prepare(player), action);
     }
 
-    static void whenReady(ServerPlayer player, CompletableFuture<Void> ready, Consumer<ServerPlayer> action) {
+    /** Completes false if a newer request, disconnect, death or transfer invalidates this request. */
+    public static CompletableFuture<Boolean> whenReady(ServerPlayer player, CompletableFuture<Void> ready, Consumer<ServerPlayer> action) {
+        CompletableFuture<Boolean> completion = new CompletableFuture<>();
         MinecraftServer currentServer = player.level().getServer();
         UUID playerId = player.getUUID();
         Object token = new Object();
@@ -126,19 +128,30 @@ public final class PlayerStateManager {
         var sourceLevel = player.level();
         var preparedReturn = pendingPublicReturns.get(playerId);
         Runnable resume = () -> {
-            if (server != currentServer || !pendingTransfers.remove(playerId, token)) return;
+            if (server != currentServer || !pendingTransfers.remove(playerId, token)) {
+                completion.complete(false);
+                return;
+            }
             try {
                 ServerPlayer current = currentServer.getPlayerList().getPlayer(playerId);
                 // A disconnect, death or unrelated world transfer invalidates the request.
-                if (current != player || current.level() != sourceLevel || !current.isAlive()) return;
+                if (current != player || current.level() != sourceLevel || !current.isAlive()) {
+                    completion.complete(false);
+                    return;
+                }
                 try {
                     ready.getNow(null);
                 } catch (CompletionException error) {
                     SereniteaPotMod.LOGGER.error("Failed to prepare player data for {}", playerId, error.getCause());
                     current.sendSystemMessage(component(current, message(MessageKey.TRAVEL_PLAYER_DATA_INVALID)));
+                    completion.completeExceptionally(error);
                     return;
                 }
                 action.accept(current);
+                completion.complete(true);
+            } catch (RuntimeException error) {
+                SereniteaPotMod.LOGGER.error("Failed to resume player transfer for {}", playerId, error);
+                completion.completeExceptionally(error);
             } finally {
                 if (preparedReturn != null) pendingPublicReturns.remove(playerId, preparedReturn);
             }
@@ -149,11 +162,16 @@ public final class PlayerStateManager {
             player.sendSystemMessage(component(player, message(MessageKey.TRAVEL_PLAYER_DATA_LOADING)));
             ready.whenComplete((ignored, error) -> currentServer.execute(resume));
         }
+        return completion;
+    }
+
+    public static CompletableFuture<Void> prepareTeleport(ServerPlayer player, ServerLevel destination) {
+        if (Objects.equals(realm(player.level()), realm(destination))) return CompletableFuture.completedFuture(null);
+        return realm(destination) == null ? prepareReturn(player) : prepare(player);
     }
 
     public static boolean deferTeleportIfLoading(ServerPlayer player, TeleportTransition transition) {
-        if (Objects.equals(realm(player.level()), realm(transition.newLevel()))) return false;
-        CompletableFuture<Void> ready = realm(transition.newLevel()) == null ? prepareReturn(player) : prepare(player);
+        CompletableFuture<Void> ready = prepareTeleport(player, transition.newLevel());
         if (ready.isDone()) return false;
         whenReady(player, current -> {
             if (current.level().getServer().getLevel(transition.newLevel().dimension()) == transition.newLevel()) {
