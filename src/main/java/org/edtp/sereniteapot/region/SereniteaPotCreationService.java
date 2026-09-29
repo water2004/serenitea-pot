@@ -414,7 +414,9 @@ public final class SereniteaPotCreationService {
         job.closeTasks();
         try {
             SereniteaPotLifecycleService.deleteEvacuated(job.staging);
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException error) {
+            SereniteaPotMod.LOGGER.error("Failed to discard staging generation {} for {}",
+                job.staging.generation(), job.owner, error);
         }
         abortMaintenance(job.owner);
         ServerPlayer player = job.requester == null

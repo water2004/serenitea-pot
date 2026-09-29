@@ -4,16 +4,19 @@ import net.casual.arcade.dimensions.level.CustomLevel;
 import net.casual.arcade.dimensions.level.LevelPersistence;
 import net.casual.arcade.dimensions.level.LevelProperties;
 import net.casual.arcade.dimensions.level.builder.CustomLevelBuilder;
-import net.casual.arcade.dimensions.level.vanilla.VanillaLikeLevels;
-import net.casual.arcade.dimensions.level.vanilla.VanillaLikeLevelsBuilder;
+import net.casual.arcade.dimensions.level.vanilla.VanillaDimension;
+import net.casual.arcade.dimensions.level.vanilla.VanillaDimensionMapper;
+import net.casual.arcade.dimensions.level.vanilla.VanillaLikeCustomLevelFactory;
 import net.casual.arcade.dimensions.utils.DimensionUtilsKt;
 import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.protocol.game.ClientboundChangeDifficultyPacket;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.FlatLevelSource;
@@ -32,6 +35,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -51,6 +55,9 @@ public final class SereniteaPotManager {
     private static SereniteaPotCatalogRepository repository;
     private static SereniteaPotCatalog catalog = new SereniteaPotCatalog();
     private static final Map<UUID, SereniteaPotBundle> loaded = new LinkedHashMap<>();
+    // Arcade detaches a level before closing its storage. An exception leaves
+    // closure uncertain: retain the instance and forbid reopening its files.
+    private static final Map<CustomLevel, Throwable> failedCloses = new IdentityHashMap<>();
 
     private SereniteaPotManager() {
     }
@@ -83,6 +90,8 @@ public final class SereniteaPotManager {
         saveCatalog();
         awaitCatalogWrites();
         loaded.clear();
+        // An integrated server can restart in the same JVM. Do not forget
+        // uncertain file handles merely because that server instance stopped.
         repository = null;
         SereniteaPotManager.server = null;
     }
@@ -120,6 +129,7 @@ public final class SereniteaPotManager {
 
     public static SereniteaPotBundle createStaging(UUID owner, long generation, long seed) {
         MinecraftServer server = requireServerThread();
+        requireNoFailedClose(owner);
         if (generation <= 0) throw new IllegalArgumentException("Generation must be positive");
         for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
             if (server.getLevel(SereniteaPotLevelKeys.key(owner, generation, dimension)) != null) {
@@ -129,51 +139,42 @@ public final class SereniteaPotManager {
             }
         }
 
-        // 三个维度必须由同一个 VanillaLikeLevelsBuilder 创建，Arcade 才会为它们建立
-        // 主世界/下界/末地的成组传送门映射。
-        VanillaLikeLevelsBuilder builder = new VanillaLikeLevelsBuilder();
-        Difficulty difficulty = catalog.getOrCreate(owner).getDifficulty();
+        // Use Arcade's shared portal mapper, but acquire each resource separately.
+        // Its batch builder cannot return earlier levels if a later constructor fails.
+        var keys = new EnumMap<VanillaDimension, ResourceKey<Level>>(VanillaDimension.class);
         for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
-            ServerLevel template = server.getLevel(dimension.vanillaLevelKey());
-            if (template == null) {
-                throw new IllegalStateException(
-                    "Missing vanilla template dimension " + dimension.vanillaLevelKey().identifier()
-                );
-            }
-            Holder<Biome> biome = template.getBiome(template.getRespawnData().pos());
-            builder.set(
-                dimension.vanilla(),
-                new CustomLevelBuilder()
+            keys.put(dimension.vanilla(), SereniteaPotLevelKeys.key(owner, generation, dimension));
+        }
+        var mapper = new VanillaDimensionMapper(keys);
+        EnumMap<SereniteaPotDimension, CustomLevel> levels = new EnumMap<>(SereniteaPotDimension.class);
+        Difficulty difficulty = catalog.getOrCreate(owner).getDifficulty();
+        try {
+            for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
+                ServerLevel template = server.getLevel(dimension.vanillaLevelKey());
+                if (template == null) {
+                    throw new IllegalStateException(
+                        "Missing vanilla template dimension " + dimension.vanillaLevelKey().identifier()
+                    );
+                }
+                Holder<Biome> biome = template.getBiome(template.getRespawnData().pos());
+                CustomLevel level = new CustomLevelBuilder()
+                    .constructor(VanillaLikeCustomLevelFactory.constructor(dimension.vanilla(), mapper))
                     .dimensionKey(SereniteaPotLevelKeys.key(owner, generation, dimension))
                     .dimensionType(template.dimensionTypeRegistration())
                     .chunkGenerator(voidGenerator(biome))
                     .difficulty(difficultyProperties(difficulty))
                     .persistence(LevelPersistence.Permanent)
-                    .seed(seed)
-            );
-        }
-        VanillaLikeLevels built = builder.build(server);
-        EnumMap<SereniteaPotDimension, CustomLevel> levels = new EnumMap<>(SereniteaPotDimension.class);
-        try {
-            for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
-                CustomLevel level = built.getOrThrow(dimension.vanilla());
+                    .seed(seed).build(server);
+                levels.put(dimension, level);
                 // Initialize new dimensions once. Existing dimensions restore their own
                 // Vanilla world_border SavedData; loading must never recenter them.
                 level.getWorldBorder().setCenter(ChunkPos.ZERO.getMiddleBlockX(), ChunkPos.ZERO.getMiddleBlockZ());
                 level.getWorldBorder().setSize((catalog.getOrCreate(owner).getMaxRadiusChunks() * 2.0 + 1.0)
                     * SectionPos.SECTION_SIZE);
                 DimensionUtilsKt.addCustomLevel(server, level);
-                levels.put(dimension, level);
             }
         } catch (RuntimeException error) {
-            var added = new ArrayList<>(levels.values());
-            Collections.reverse(added);
-            for (CustomLevel level : added) {
-                try {
-                    DimensionUtilsKt.removeCustomLevel(server, level);
-                } catch (RuntimeException ignored) {
-                }
-            }
+            rollbackLevels(levels, true, error);
             throw error;
         }
         return new SereniteaPotBundle(owner, generation, levels);
@@ -276,6 +277,7 @@ public final class SereniteaPotManager {
 
     public static SereniteaPotBundle load(UUID owner) {
         MinecraftServer server = requireServerThread();
+        requireNoFailedClose(owner);
         SereniteaPotBundle existing = loaded.get(owner);
         if (existing != null) return existing;
         SereniteaPotRecord record = catalog.getPlayers().get(owner);
@@ -286,31 +288,81 @@ public final class SereniteaPotManager {
         try {
             for (SereniteaPotDimension dimension : SereniteaPotDimension.values()) {
                 var key = SereniteaPotLevelKeys.key(owner, record.getActiveGeneration(), dimension);
-                CustomLevel level = DimensionUtilsKt.loadCustomLevel(server, key);
+                if (server.getLevel(key) != null) throw new IllegalStateException("Unowned level already registered: " + key);
+                CustomLevel level = CustomLevel.read(server, key);
                 if (level == null) {
                     throw new IllegalStateException("Missing persisted Serenitea Pot level " + key.identifier());
                 }
                 levels.put(dimension, level);
+                DimensionUtilsKt.addCustomLevel(server, level);
             }
+            SereniteaPotBundle bundle = new SereniteaPotBundle(owner, record.getActiveGeneration(), levels);
+            applyDifficulty(bundle, record.getDifficulty());
+            loaded.put(owner, bundle);
+            return bundle;
         } catch (RuntimeException error) {
-            var added = new ArrayList<>(levels.values());
-            Collections.reverse(added);
-            for (CustomLevel level : added) {
-                try {
-                    DimensionUtilsKt.removeCustomLevel(server, level);
-                } catch (RuntimeException ignored) {
-                }
-            }
+            rollbackLevels(levels, false, error);
             throw error;
         }
-        SereniteaPotBundle bundle = new SereniteaPotBundle(owner, record.getActiveGeneration(), levels);
-        applyDifficulty(bundle, record.getDifficulty());
-        loaded.put(owner, bundle);
-        return bundle;
+    }
+
+    private static void rollbackLevels(Map<SereniteaPotDimension, CustomLevel> acquired,
+            boolean discard, RuntimeException original) {
+        var levels = new ArrayList<>(acquired.values());
+        Collections.reverse(levels);
+        for (CustomLevel level : levels) {
+            try {
+                if (server.getLevel(level.dimension()) == level) {
+                    if (discard) DimensionUtilsKt.deleteCustomLevel(server, level);
+                    else if (!DimensionUtilsKt.removeCustomLevel(server, level)) {
+                        throw new IllegalStateException("Arcade did not remove " + level.dimension());
+                    }
+                } else {
+                    // Acquired but never registered: Arcade's remove API would skip close().
+                    level.close();
+                    if (discard) DimensionUtilsKt.deleteCustomLevel(server, level);
+                }
+            } catch (IOException | RuntimeException failure) {
+                rememberFailedClose(level, failure);
+                if (failure != original) original.addSuppressed(failure);
+            }
+        }
+        if (discard && !acquired.isEmpty()) {
+            // Directory deletion may fail independently after a successful close.
+            // Reuse the lifecycle's deletion queue; failed closes remain protected.
+            var identity = SereniteaPotLevelKeys.identify(levels.getFirst().dimension());
+            var copy = new EnumMap<SereniteaPotDimension, CustomLevel>(SereniteaPotDimension.class);
+            copy.putAll(acquired);
+            SereniteaPotLifecycleService.deleteEvacuated(new SereniteaPotBundle(identity.owner(), identity.generation(), copy));
+        }
+    }
+
+    private static void rememberFailedClose(CustomLevel level, Throwable failure) {
+        failedCloses.put(level, failure);
+        SereniteaPotMod.LOGGER.error(
+            "Could not confirm closure of {}. Reopening this pot is blocked until process restart; no automatic close retry is safe.",
+            level.dimension().identifier(), failure);
+    }
+
+    private static void requireNoFailedClose(UUID owner) {
+        for (var entry : failedCloses.entrySet()) {
+            var identity = SereniteaPotLevelKeys.identify(entry.getKey().dimension());
+            if (identity != null && identity.owner().equals(owner)) {
+                throw new IllegalStateException("Unfinished level closure for " + owner + "; process restart required", entry.getValue());
+            }
+        }
+    }
+
+    static boolean hasFailedClose(UUID owner) {
+        return failedCloses.keySet().stream().anyMatch(level -> {
+            var identity = SereniteaPotLevelKeys.identify(level.dimension());
+            return identity != null && identity.owner().equals(owner);
+        });
     }
 
     static boolean unloadEvacuated(UUID owner) {
         requireServerThread();
+        if (hasFailedClose(owner)) return false;
         SereniteaPotBundle bundle = loaded.get(owner);
         if (bundle == null) return true;
         if (bundle.levels().values().stream().anyMatch(level -> !level.players().isEmpty())) {
@@ -347,13 +399,15 @@ public final class SereniteaPotManager {
 
     static boolean deleteEvacuatedLevel(CustomLevel level) {
         MinecraftServer server = requireServerThread();
+        if (failedCloses.containsKey(level)) return false;
         if (!level.players().isEmpty()) {
             throw new IllegalArgumentException("Cannot delete occupied level " + level.dimension().identifier());
         }
         try {
             DimensionUtilsKt.deleteCustomLevel(server, level);
         } catch (RuntimeException error) {
-            SereniteaPotMod.LOGGER.warn("Failed to delete Serenitea Pot level {}", level.dimension().identifier(), error);
+            rememberFailedClose(level, error);
+            return false;
         }
         boolean detached = server.getLevel(level.dimension()) != level;
         boolean directoryRemoved = !Files.exists(DimensionUtilsKt.getDimensionPath(server, level.dimension()));
@@ -366,11 +420,16 @@ public final class SereniteaPotManager {
         var levels = new ArrayList<>(bundle.levels().values());
         Collections.reverse(levels);
         for (CustomLevel level : levels) {
+            if (failedCloses.containsKey(level)) {
+                complete = false;
+                continue;
+            }
             if (server.getLevel(level.dimension()) != level) continue;
             try {
-                DimensionUtilsKt.removeCustomLevel(server, level);
+                if (!DimensionUtilsKt.removeCustomLevel(server, level)) complete = false;
             } catch (RuntimeException error) {
-                SereniteaPotMod.LOGGER.warn("Failed to unload Serenitea Pot level {}", level.dimension().identifier(), error);
+                rememberFailedClose(level, error);
+                complete = false;
             }
             if (server.getLevel(level.dimension()) == level) complete = false;
         }

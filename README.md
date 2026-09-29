@@ -150,7 +150,7 @@ A single dimension tick, synchronous chunk load, or third-party callback cannot 
 
 ## Mod compatibility boundaries
 
-Serenitea Pot creates real server levels that share the server's registries and game logic. Arcade Dimensions provides the `VanillaLikeLevelsBuilder`, portal mixins, and `VanillaDimensionMapper` that keep players and other entities inside the same owner's Overworld/Nether/End bundle.
+Serenitea Pot creates real server levels that share the server's registries and game logic. Arcade Dimensions provides the level factories, portal mixins, and shared `VanillaDimensionMapper` that keep players and other entities inside the same owner's Overworld/Nether/End bundle.
 
 WorldThreader 3.1.0 is supported through an optional, version-locked Mixin integration. It attaches pot work to the three vanilla dimension-family threads and preserves WorldThreader's world-tick, teleport-receive, post-teleport, and recovery barriers. The integration is inactive when WorldThreader is absent.
 

@@ -114,7 +114,7 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 
 ## 模组兼容边界
 
-产物内嵌并强依赖 Arcade Dimensions 0.13.0-beta.6。尘歌壶三维度由 `VanillaLikeLevelsBuilder` 组成；Arcade 的 Nether/End portal mixin 和 `VanillaDimensionMapper` 负责让玩家及实体只在同一名主人的主世界、下界、末地之间传送。不要从 jar 中移除或替换这组 Arcade 依赖。
+产物内嵌并强依赖 Arcade Dimensions 0.13.0-beta.6。尘歌壶使用 Arcade 的维度工厂和共享的 `VanillaDimensionMapper` 构造三维度；Arcade 的 Nether/End portal mixin 负责让玩家及实体只在同一名主人的主世界、下界、末地之间传送。不要从 jar 中移除或替换这组 Arcade 依赖。
 
 WorldThreader 3.1.0 由独立且精确锁版的 Mixin 兼容层支持。壶维度挂到三个原版维度族线程，并完整参加世界 tick、传送接收、到达后补 tick 和失败恢复阶段；未安装时该兼容层不会加载。
 

@@ -72,7 +72,8 @@ public final class SereniteaPotLifecycleService {
     }
 
     public static boolean isUnavailable(UUID owner) {
-        return pendingCloses.contains(owner) || maintenance.contains(owner) || closing.contains(owner);
+        return pendingCloses.contains(owner) || maintenance.contains(owner) || closing.contains(owner)
+            || SereniteaPotManager.hasFailedClose(owner);
     }
 
     public static boolean isMaintaining(UUID owner) {
@@ -82,6 +83,9 @@ public final class SereniteaPotLifecycleService {
     /** Locks admission and evacuates occupants while old levels remain available as copy sources. */
     public static CompletableFuture<Result> beginMaintenance(MinecraftServer server, UUID owner) {
         requireServerThread(server);
+        if (SereniteaPotManager.hasFailedClose(owner)) {
+            return CompletableFuture.completedFuture(new Rejected(message(MessageKey.LIFECYCLE_UNLOAD_RETRY)));
+        }
         if (!maintenance.add(owner)) {
             return CompletableFuture.completedFuture(new Rejected(message(MessageKey.LIFECYCLE_MAINTENANCE_EXISTS)));
         }
@@ -197,6 +201,7 @@ public final class SereniteaPotLifecycleService {
             // Evicting the owner queues a close too. Copy sources must remain
             // registered until the maintenance operation releases its lock.
             if (maintenance.contains(owner)) continue;
+            if (SereniteaPotManager.hasFailedClose(owner)) continue;
             Result result = closeNow(server, owner);
             if (result instanceof Rejected rejected) {
                 SereniteaPotMod.LOGGER.warn(
