@@ -7,6 +7,7 @@ arcade = "0.13.0-beta.6+26.2"
 worldthreader = "D84PMJ4Y"
 axiom5 = "QO99kC52"
 axiom6 = "DEXe5O7N"
+tpc = "5Yw3OOkF"
 fabric-loom = "1.17-SNAPSHOT"
 junit = "5.11.4"
 junit-platform = "1.11.4"
@@ -24,6 +25,7 @@ arcade-utils = { module = "net.casualchampionships:arcade-utils", version.ref = 
 worldthreader = { module = "maven.modrinth:LwH5rYyd", version.ref = "worldthreader" }
 axiom5 = { module = "maven.modrinth:N6n5dqoA", version.ref = "axiom5" }
 axiom6 = { module = "maven.modrinth:N6n5dqoA", version.ref = "axiom6" }
+tpc = { module = "maven.modrinth:ez3Wxkfr", version.ref = "tpc" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
 

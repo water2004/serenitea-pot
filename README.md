@@ -44,6 +44,7 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 | WorldEdit (optional) | 7.2.2 through 7.4.5 |
 | Axiom (optional) | 5.0.0 through 6.0.0 |
 | Worldthreader (optional) | 3.1.0 |
+| TeleportCommandsFabric (optional) | Flight-state adapter tested with 2.4.1 |
 
 Arcade Dimensions `0.13.0-beta.6+26.2`, its supporting modules, and Fabric Permissions API v0 `0.7.0` are embedded in the built mod. Do not install duplicate copies or remove the embedded modules from the JAR.
 

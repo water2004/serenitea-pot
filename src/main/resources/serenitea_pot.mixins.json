@@ -3,6 +3,7 @@
   "minVersion": "0.8",
   "package": "org.edtp.sereniteapot.mixin",
   "compatibilityLevel": "JAVA_25",
+  "plugin": "org.edtp.sereniteapot.mixin.SereniteaPotMixinPlugin",
   "mixins": [
     "BaseCommandBlockMixin",
     "CommandExecutionTaskMixin",
@@ -20,6 +21,7 @@
     "ServerPlayerCommandSourceMixin",
     "ServerPlayerRespawnMixin",
     "ServerPlayerTeleportMixin",
+    "compat.tpc.TeleportExecutorMixin",
     "accessor.CommandNodeAccessor",
     "accessor.PlayerListAccessor",
     "accessor.ServerLevelEntityManagerAccessor"

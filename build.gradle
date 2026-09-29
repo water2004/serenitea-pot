@@ -44,6 +44,11 @@ dependencies {
     }
     // Axiom 5 supplies the legacy packet compiled by the isolated compatibility adapter.
     compileOnly(libs.axiom5)
+    // Optional TPC adapter; never bundled or required by the mod at runtime.
+    compileOnly(libs.tpc)
+    if (project.hasProperty('testTpc')) {
+        runtimeOnly(libs.tpc)
+    }
     if (project.hasProperty('testAxiom5') && project.hasProperty('testAxiom6')) {
         throw new GradleException('Choose either testAxiom5 or testAxiom6')
     }

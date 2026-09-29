@@ -8,13 +8,15 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import java.util.List;
 import java.util.Set;
 
-/** Loads the exact WorldThreader compatibility mixins only when that optional mod is present. */
+/** Keeps optional-mod mixins inactive when their target mod is absent. */
 public final class SereniteaPotMixinPlugin implements IMixinConfigPlugin {
     private boolean worldThreaderLoaded;
+    private boolean tpcLoaded;
 
     @Override
     public void onLoad(String mixinPackage) {
         worldThreaderLoaded = FabricLoader.getInstance().isModLoaded("worldthreader");
+        tpcLoaded = FabricLoader.getInstance().isModLoaded("teleport_commands_fabric");
         if (!worldThreaderLoaded) return;
         String version = FabricLoader.getInstance().getModContainer("worldthreader")
             .orElseThrow()
@@ -31,6 +33,7 @@ public final class SereniteaPotMixinPlugin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         if (mixinClassName.contains(".compat.worldthreader.")) return worldThreaderLoaded;
+        if (mixinClassName.contains(".compat.tpc.")) return tpcLoaded;
         return true;
     }
 

@@ -22,6 +22,7 @@ Minecraft 26.2 的 Fabric 服务端尘歌壶模组，支持独立服务器和单
 | WorldEdit（可选） | 7.2.2 至 7.4.5 |
 | Axiom（可选） | 5.0.0 至 6.0.0 |
 | Worldthreader（可选） | 3.1.0 |
+| TeleportCommandsFabric（可选） | 飞行状态适配已验证 2.4.1 |
 
 Arcade Dimensions `0.13.0-beta.6+26.2`、其相关模块以及 Fabric Permissions API v0 `0.7.0` 已嵌入最终 JAR，不需要另外安装，也不应从产物中移除。
 
