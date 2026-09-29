@@ -54,6 +54,14 @@ public final class WorldThreaderFailureGameTest {
                     var start = SereniteaPotScheduler.class.getDeclaredMethod("startServerTick", net.minecraft.server.MinecraftServer.class);
                     start.setAccessible(true);
                     start.invoke(null, server);
+                    // Other GameTests can own pots concurrently. Restrict this
+                    // deliberately single-lane fault probe to its own owner;
+                    // otherwise a healthy owner's three-lane barrier runs first.
+                    var ledgerField = SereniteaPotScheduler.class.getDeclaredField("ownerBudgets");
+                    ledgerField.setAccessible(true);
+                    var constructor = planField.getType().getDeclaredConstructors()[0];
+                    constructor.setAccessible(true);
+                    planField.set(null, constructor.newInstance(java.util.List.of(player.id), 1_000_000_000.0, ledgerField.get(null)));
                     target.set(bundle.get(SereniteaPotDimension.OVERWORLD));
                     Throwable actual = null;
                     try { WorldThreaderPotTicking.tickWorldPhase(server, SereniteaPotDimension.OVERWORLD, () -> true); }
