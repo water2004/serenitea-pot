@@ -1,7 +1,8 @@
-Snapshot 5 for Minecraft 26.2 Fabric servers.
+Snapshot 6 for Minecraft 26.2 Fabric servers.
 
-- Adds Axiom 6.0.0 support while retaining Axiom 5.x compatibility.
-- Refreshes Axiom permissions through capability detection without changing public-world authorization.
-- Makes player-name completion reflect available pot owners, pending requests, and configured admin targets.
+- Adds pot-scoped vanilla commands and preserves source coordinates.
+- Makes player-data I/O and chunk loading asynchronous.
+- Fixes TPC realm transfers and lingering dragon boss bars.
+- Improves maintenance, rollback, and WorldThreader scheduling reliability.
 
 Clients do not need this mod installed.
