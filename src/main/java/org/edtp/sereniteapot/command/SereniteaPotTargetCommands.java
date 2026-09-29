@@ -22,12 +22,12 @@ final class SereniteaPotTargetCommands {
     static int delete(CommandContext<CommandSourceStack> context, UUID owner) {
         SereniteaPotDeletionService.deleteAndReset(
                 context.getSource().getServer(), owner).thenAccept(finished -> {
-                if (finished == SereniteaPotDeletionService.Success.INSTANCE) {
-                    success(context, MessageKey.COMMAND_DELETE_SUCCESS);
-                } else {
-                    failure(context, ((SereniteaPotDeletionService.Rejected) finished).reason());
-                }
-            });
+            if (finished == SereniteaPotDeletionService.Success.INSTANCE) {
+                success(context, MessageKey.COMMAND_DELETE_SUCCESS);
+            } else {
+                failure(context, ((SereniteaPotDeletionService.Rejected) finished).reason());
+            }
+        });
         return 1;
     }
 

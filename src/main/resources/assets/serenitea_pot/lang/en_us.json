@@ -57,7 +57,6 @@
   "serenitea_pot.travel.leave.failed": "Could not leave the Serenitea Pot",
   "serenitea_pot.travel.player.data.invalid": "Teleport cancelled: player data is unreadable or uses an unsupported format. Check the server log.",
   "serenitea_pot.travel.player.data.loading": "Loading player data; your teleport will continue automatically.",
-  "serenitea_pot.lifecycle.player.data.pending": "Waiting for player data before completing evacuation",
   "serenitea_pot.invitation.self": "You cannot request access to your own Serenitea Pot",
   "serenitea_pot.invitation.target.no.pot": "That player does not have a Serenitea Pot",
   "serenitea_pot.invitation.unavailable": "That Serenitea Pot is not accepting requests",
