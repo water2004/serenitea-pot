@@ -2,6 +2,7 @@ package org.edtp.sereniteapot.level;
 
 import net.casual.arcade.dimensions.level.CustomLevel;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -9,6 +10,7 @@ import org.edtp.sereniteapot.SereniteaPotMod;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.player.PlayerStateManager;
+import org.edtp.sereniteapot.mixin.accessor.EnderDragonFightAccessor;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -42,6 +44,17 @@ public final class SereniteaPotLifecycleService {
     }
 
     public static void register() {
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, sourceLevel) -> {
+            if (!(entity instanceof ServerPlayer player)
+                || SereniteaPotLevelKeys.identify(sourceLevel.dimension()) == null) return;
+            var fight = sourceLevel.getDragonFight();
+            if (fight != null) {
+                // Vanilla normally drops this subscription on a later dragon tick,
+                // which cannot run after a pot is frozen/unloaded. Use the event's
+                // source level and departing instance, including WorldThreader swaps.
+                ((EnderDragonFightAccessor) fight).sereniteapot$getDragonEvent().removePlayer(player);
+            }
+        });
         ServerTickEvents.END_SERVER_TICK.register(SereniteaPotLifecycleService::endServerTick);
         ServerLifecycleEvents.SERVER_STOPPING.register(SereniteaPotLifecycleService::stop);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> clearAll());

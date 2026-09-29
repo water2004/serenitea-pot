@@ -23,6 +23,7 @@
     "ServerPlayerTeleportMixin",
     "compat.tpc.TeleportExecutorMixin",
     "accessor.CommandNodeAccessor",
+    "accessor.EnderDragonFightAccessor",
     "accessor.PlayerListAccessor",
     "accessor.ServerLevelEntityManagerAccessor"
   ],
