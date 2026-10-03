@@ -1,4 +1,4 @@
-package org.edtp.sereniteapot.mixin.compat.worldthreader;
+package org.edtp.sereniteapot.adapters.worldthreader.mixin;
 
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
@@ -8,8 +8,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import no2.worldthreader.common.thread.ThreadOwnedObject;
 import no2.worldthreader.common.thread.WorldThreadingManager;
-import org.edtp.sereniteapot.compat.worldthreader.WorldThreaderGroupAccess;
-import org.edtp.sereniteapot.compat.worldthreader.WorldThreaderPotTicking;
+import org.edtp.sereniteapot.adapters.worldthreader.WorldThreaderGroupAccess;
+import org.edtp.sereniteapot.adapters.worldthreader.WorldThreaderPotTicking;
 import org.edtp.sereniteapot.level.SereniteaPotLevelKeys;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.spongepowered.asm.mixin.Final;

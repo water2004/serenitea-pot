@@ -1,4 +1,4 @@
-package org.edtp.sereniteapot.mixin;
+package org.edtp.sereniteapot.adapters;
 
 import net.fabricmc.loader.api.FabricLoader;
 import org.objectweb.asm.tree.ClassNode;
@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Set;
 
 /** Keeps optional-mod mixins inactive when their target mod is absent. */
-public final class SereniteaPotMixinPlugin implements IMixinConfigPlugin {
+public final class OptionalModMixinPlugin implements IMixinConfigPlugin {
     private boolean worldThreaderLoaded;
     private boolean tpcLoaded;
 
@@ -32,8 +32,8 @@ public final class SereniteaPotMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        if (mixinClassName.contains(".compat.worldthreader.")) return worldThreaderLoaded;
-        if (mixinClassName.contains(".compat.tpc.")) return tpcLoaded;
+        if (mixinClassName.startsWith("org.edtp.sereniteapot.adapters.worldthreader.mixin.")) return worldThreaderLoaded;
+        if (mixinClassName.startsWith("org.edtp.sereniteapot.adapters.tpc.mixin.")) return tpcLoaded;
         return true;
     }
 

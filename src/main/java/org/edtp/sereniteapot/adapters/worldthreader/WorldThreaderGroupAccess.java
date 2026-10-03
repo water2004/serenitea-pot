@@ -1,4 +1,4 @@
-package org.edtp.sereniteapot.compat.worldthreader;
+package org.edtp.sereniteapot.adapters.worldthreader;
 
 import net.minecraft.server.level.ServerLevel;
 import no2.worldthreader.common.thread.ThreadOwnedObject;

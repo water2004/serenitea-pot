@@ -1,4 +1,4 @@
-package org.edtp.sereniteapot.mixin.compat.worldthreader;
+package org.edtp.sereniteapot.adapters.worldthreader.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;

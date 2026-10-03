@@ -1,4 +1,4 @@
-package org.edtp.sereniteapot.mixin.compat.tpc;
+package org.edtp.sereniteapot.adapters.tpc.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.sugar.Local;

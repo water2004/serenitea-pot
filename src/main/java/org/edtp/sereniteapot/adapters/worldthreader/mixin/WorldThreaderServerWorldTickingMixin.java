@@ -1,4 +1,4 @@
-package org.edtp.sereniteapot.mixin.compat.worldthreader;
+package org.edtp.sereniteapot.adapters.worldthreader.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -10,8 +10,8 @@ import no2.worldthreader.common.ServerWorldTicking;
 import no2.worldthreader.common.thread.ThreadHelper;
 import no2.worldthreader.common.thread.ThreadOwnedObject;
 import no2.worldthreader.common.thread.WorldThreadingManager;
-import org.edtp.sereniteapot.compat.worldthreader.WorldThreaderGroupAccess;
-import org.edtp.sereniteapot.compat.worldthreader.WorldThreaderPotTicking;
+import org.edtp.sereniteapot.adapters.worldthreader.WorldThreaderGroupAccess;
+import org.edtp.sereniteapot.adapters.worldthreader.WorldThreaderPotTicking;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

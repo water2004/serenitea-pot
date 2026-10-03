@@ -1,9 +1,9 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "org.edtp.sereniteapot.mixin.compat.worldthreader",
+  "package": "org.edtp.sereniteapot.adapters.worldthreader.mixin",
   "compatibilityLevel": "JAVA_25",
-  "plugin": "org.edtp.sereniteapot.mixin.SereniteaPotMixinPlugin",
+  "plugin": "org.edtp.sereniteapot.adapters.OptionalModMixinPlugin",
   "mixins": [
     "WorldThreaderManagerMixin",
     "WorldThreaderServerLevelMixin",

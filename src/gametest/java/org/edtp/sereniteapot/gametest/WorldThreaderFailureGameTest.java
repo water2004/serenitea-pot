@@ -5,7 +5,7 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
-import org.edtp.sereniteapot.compat.worldthreader.WorldThreaderPotTicking;
+import org.edtp.sereniteapot.adapters.worldthreader.WorldThreaderPotTicking;
 import org.edtp.sereniteapot.level.*;
 import org.edtp.sereniteapot.model.*;
 import org.edtp.sereniteapot.performance.SereniteaPotScheduler;

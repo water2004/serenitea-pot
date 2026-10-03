@@ -1,4 +1,4 @@
-package org.edtp.sereniteapot.compat.axiom;
+package org.edtp.sereniteapot.adapters.axiom;
 
 import com.moulberry.axiom.packets.AxiomClientboundRedoHandshake;
 import net.fabricmc.loader.api.FabricLoader;
