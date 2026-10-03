@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import no2.worldthreader.common.ServerWorldTicking;
 import no2.worldthreader.common.WorldThreaderTickPhase;
+import no2.worldthreader.common.mixin_support.interfaces.MinecraftServerExtended;
 import no2.worldthreader.common.mixin_support.interfaces.ServerWorldExtended;
 import org.edtp.sereniteapot.model.SereniteaPotDimension;
 import org.edtp.sereniteapot.performance.SereniteaPotScheduler;
@@ -29,6 +30,8 @@ public final class WorldThreaderPotTicking {
         SereniteaPotDimension lane,
         BooleanSupplier shouldKeepTicking
     ) {
+        var threading = (WorldThreaderGroupAccess) ((MinecraftServerExtended) server)
+            .worldthreader$getThreadingManager();
         for (UUID owner : SereniteaPotScheduler.tickOrder()) {
             ServerLevel level = SereniteaPotScheduler.activeLevel(server, owner, lane);
             boolean ran = level != null && SereniteaPotScheduler.beforeThreadedLevelTick(level);
@@ -50,7 +53,8 @@ public final class WorldThreaderPotTicking {
                 throw throwable;
             } finally {
                 long elapsed = ran ? System.nanoTime() - started : 0L;
-                completed = SereniteaPotScheduler.finishThreadedOwner(owner, lane, elapsed, ran);
+                completed = SereniteaPotScheduler.finishThreadedOwner(owner, lane, elapsed, ran,
+                    barrier -> threading.sereniteapot$awaitBarrier(barrier));
             }
             // A return inside finally would swallow the original world-tick failure
             // after abortThreadedTick terminates the barrier.

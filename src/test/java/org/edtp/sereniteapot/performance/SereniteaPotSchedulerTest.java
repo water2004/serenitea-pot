@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -138,9 +139,10 @@ class SereniteaPotSchedulerTest {
             for (var dimension : SereniteaPotDimension.values()) {
                 results[dimension.ordinal()] = workers.submit(() -> {
                     boolean firstAdmitted = plan.admitThreaded(FIRST);
-                    plan.finishThreadedOwner(FIRST, dimension, dimension.ordinal() + 3L, firstAdmitted);
+                    plan.finishThreadedOwner(FIRST, dimension, dimension.ordinal() + 3L, firstAdmitted,
+                        Phaser::arriveAndAwaitAdvance);
                     boolean secondAdmitted = plan.admitThreaded(SECOND);
-                    plan.finishThreadedOwner(SECOND, dimension, 1L, secondAdmitted);
+                    plan.finishThreadedOwner(SECOND, dimension, 1L, secondAdmitted, Phaser::arriveAndAwaitAdvance);
                     return firstAdmitted && secondAdmitted;
                 });
             }
@@ -166,9 +168,9 @@ class SereniteaPotSchedulerTest {
             for (var dimension : SereniteaPotDimension.values()) {
                 results[dimension.ordinal()] = workers.submit(() -> {
                     boolean debtorAdmitted = plan.admitThreaded(FIRST);
-                    plan.finishThreadedOwner(FIRST, dimension, 0L, debtorAdmitted);
+                    plan.finishThreadedOwner(FIRST, dimension, 0L, debtorAdmitted, Phaser::arriveAndAwaitAdvance);
                     boolean nextAdmitted = plan.admitThreaded(SECOND);
-                    plan.finishThreadedOwner(SECOND, dimension, 1L, nextAdmitted);
+                    plan.finishThreadedOwner(SECOND, dimension, 1L, nextAdmitted, Phaser::arriveAndAwaitAdvance);
                     return !debtorAdmitted && nextAdmitted;
                 });
             }
@@ -180,5 +182,15 @@ class SereniteaPotSchedulerTest {
         }
         assertEquals(-1.0, ledger.available(FIRST));
         assertEquals(1.0, ledger.available(SECOND));
+    }
+
+    @Test
+    void abortedPlanDoesNotEnterTheAdaptersWaitProtocol() {
+        var ledger = new OwnerBudgetLedger();
+        ledger.refill(Map.of(FIRST, 2.0));
+        var plan = new SereniteaPotScheduler.TickPlan(List.of(FIRST), 10.0, ledger);
+        plan.abortThreadedTick();
+        assertFalse(plan.finishThreadedOwner(FIRST, SereniteaPotDimension.END, 0, false,
+            barrier -> { throw new AssertionError("Aborted tick entered adapter wait"); }));
     }
 }

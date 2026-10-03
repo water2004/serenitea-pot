@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -27,10 +28,15 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Phaser;
 
 /** Groups every pot level under its vanilla dimension-family worker in WorldThreader 3.1.0. */
 @Mixin(value = WorldThreadingManager.class, remap = false)
 public abstract class WorldThreaderManagerMixin implements WorldThreaderGroupAccess {
+    @Override
+    @Invoker("barrier")
+    public abstract int sereniteapot$awaitBarrier(Phaser barrier);
+
     @Shadow @Final
     private Reference2ReferenceLinkedOpenHashMap<Thread, ResourceKey<Level>> worldThreads;
 

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Phaser;
+import java.util.function.ToIntFunction;
 
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.component;
 import static org.edtp.sereniteapot.i18n.SereniteaPotTranslations.message;
@@ -135,10 +136,11 @@ public final class SereniteaPotScheduler {
         UUID owner,
         SereniteaPotDimension dimension,
         long elapsedNanos,
-        boolean ran
+        boolean ran,
+        ToIntFunction<Phaser> awaitBarrier
     ) {
         if (ran) recordLevelRun(owner, dimension, elapsedNanos);
-        return currentPlan.finishThreadedOwner(owner, dimension, ran ? elapsedNanos : 0L, ran);
+        return currentPlan.finishThreadedOwner(owner, dimension, ran ? elapsedNanos : 0L, ran, awaitBarrier);
     }
 
     /** Wakes the other two family lanes if one lane aborts before reaching the owner barrier. */
@@ -395,13 +397,18 @@ public final class SereniteaPotScheduler {
             UUID owner,
             SereniteaPotDimension dimension,
             long elapsedNanos,
-            boolean ran
+            boolean ran,
+            ToIntFunction<Phaser> awaitBarrier
         ) {
             Integer index = indices.get(owner);
             if (index == null) return false;
             threadedElapsed[index][dimension.ordinal()] = elapsedNanos;
             if (ran) threadedExecuted[index] = true;
-            return threadedBarrier.arriveAndAwaitAdvance() >= 0;
+            // The optional threading adapter owns the wait protocol: WorldThreader
+            // must yield world access before parking, even if nobody requested it yet.
+            // An aborted plan must not enter that protocol or replace the tick failure.
+            if (threadedBarrier.isTerminated()) return false;
+            return awaitBarrier.applyAsInt(threadedBarrier) >= 0;
         }
 
         private synchronized void completeThreadedPhase(int index) {
