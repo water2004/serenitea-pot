@@ -1,6 +1,7 @@
 package org.edtp.sereniteapot.player;
 
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.IntTag;
@@ -100,6 +101,32 @@ public final class PlayerStateManager {
         CompletableFuture<Void> privateData = store.preload(player.getUUID());
         CompletableFuture<CompoundTag> publicData = pendingPublicReturns.get(player.getUUID());
         return publicData == null ? privateData : CompletableFuture.allOf(privateData, publicData);
+    }
+
+    /** Detached preparation for players born directly in a pot, before they join a level. */
+    public static CompletableFuture<CompoundTag> preparePotSpawn(MinecraftServer currentServer, UUID player, UUID owner) {
+        requireServerThread(currentServer);
+        PlayerStateStore currentStore = store;
+        String key = potStateKey(owner);
+        var registries = currentServer.registryAccess();
+        return currentStore.preload(player).thenApply(ignored -> {
+            CompoundTag state = currentStore.get(player, key);
+            if (state != null) validatePotState(registries, player, state);
+            return state;
+        });
+    }
+
+    /** An aborted birth has no disconnect event to release its preloaded data. */
+    public static void discardPreparedSpawn(MinecraftServer currentServer, UUID player) {
+        if (server == currentServer && currentServer.getPlayerList().getPlayer(player) == null) {
+            store.release(player);
+        }
+    }
+
+    public static void initializePotSpawn(ServerPlayer player, CompoundTag state) {
+        requireServerThread(player.level().getServer());
+        if (realm(player.level()) == null) throw new IllegalArgumentException("Not a pot player");
+        applyPotState(player, state == null ? blankPotState(player) : state);
     }
 
     public static CompletableFuture<Void> prepareReturn(ServerPlayer player) {
@@ -203,7 +230,7 @@ public final class PlayerStateManager {
         } else {
             targetState = store.get(player.getUUID(), potStateKey(destinationRealm));
             if (targetState != null) {
-                validatePotState(player, targetState);
+                validatePotState(player.registryAccess(), player.getUUID(), targetState);
             }
         }
         // 先关闭容器，避免跨 realm 时仍有公共世界容器菜单引用或未提交的物品操作。
@@ -269,7 +296,7 @@ public final class PlayerStateManager {
     public static SavedLocation savedPotLocation(ServerPlayer player, UUID owner) {
         requireServerThread(player.level().getServer());
         CompoundTag state = store == null ? null : store.get(player.getUUID(), potStateKey(owner));
-        return state == null ? null : validatePotState(player, state);
+        return state == null ? null : validatePotState(player.registryAccess(), player.getUUID(), state);
     }
 
     public static SavedLocation savedPublicLocation(ServerPlayer player) {
@@ -291,12 +318,12 @@ public final class PlayerStateManager {
         );
     }
 
-    private static SavedLocation validatePotState(ServerPlayer player, CompoundTag state) {
-        var input = TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), state);
+    private static SavedLocation validatePotState(RegistryAccess registries, UUID player, CompoundTag state) {
+        var input = TagValueInput.create(ProblemReporter.DISCARDING, registries, state);
         if (!(state.get("snapshotVersion") instanceof IntTag)
                 || input.getIntOr("snapshotVersion", -1) != SNAPSHOT_VERSION) {
             throw new PlayerStateStore.InvalidPlayerStateException(
-                "Unsupported Serenitea Pot snapshot version for " + player.getUUID());
+                "Unsupported Serenitea Pot snapshot version for " + player);
         }
         Identifier dimensionId = Identifier.tryParse(input.getStringOr("LocationDimension", ""));
         if (dimensionId == null) {

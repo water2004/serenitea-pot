@@ -49,6 +49,11 @@ dependencies {
     if (project.hasProperty('testTpc')) {
         runtimeOnly(libs.tpc)
     }
+    // Carpet is only an optional integration/test target, never bundled.
+    compileOnly(libs.carpet)
+    if (project.hasProperty('testCarpet')) {
+        runtimeOnly(libs.carpet)
+    }
     if (project.hasProperty('testAxiom5') && project.hasProperty('testAxiom6')) {
         throw new GradleException('Choose either testAxiom5 or testAxiom6')
     }

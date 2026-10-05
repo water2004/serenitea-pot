@@ -12,11 +12,13 @@ import java.util.Set;
 public final class OptionalModMixinPlugin implements IMixinConfigPlugin {
     private boolean worldThreaderLoaded;
     private boolean tpcLoaded;
+    private boolean carpetLoaded;
 
     @Override
     public void onLoad(String mixinPackage) {
         worldThreaderLoaded = FabricLoader.getInstance().isModLoaded("worldthreader");
         tpcLoaded = FabricLoader.getInstance().isModLoaded("teleport_commands_fabric");
+        carpetLoaded = FabricLoader.getInstance().isModLoaded("carpet");
         if (!worldThreaderLoaded) return;
         String version = FabricLoader.getInstance().getModContainer("worldthreader")
             .orElseThrow()
@@ -34,6 +36,7 @@ public final class OptionalModMixinPlugin implements IMixinConfigPlugin {
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         if (mixinClassName.startsWith("org.edtp.sereniteapot.adapters.worldthreader.mixin.")) return worldThreaderLoaded;
         if (mixinClassName.startsWith("org.edtp.sereniteapot.adapters.tpc.mixin.")) return tpcLoaded;
+        if (targetClassName.startsWith("carpet.")) return carpetLoaded;
         return true;
     }
 

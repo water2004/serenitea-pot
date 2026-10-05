@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.edtp.sereniteapot.SereniteaPotMod;
+import org.edtp.sereniteapot.adapters.carpet.CarpetCompatibility;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.player.PlayerStateManager;
@@ -163,6 +164,11 @@ public final class SereniteaPotLifecycleService {
         List<ServerPlayer> occupants = occupants(server, owner);
         boolean failed = false;
         for (ServerPlayer player : occupants) {
+            if (CarpetCompatibility.isFake(player)) {
+                if (!PlayerStateManager.prepare(player).isDone()) continue;
+                CarpetCompatibility.removeFake(player);
+                continue;
+            }
             // Loading is normal pending work, not a failed teleport. Check before
             // attempting eviction, so completion between two checks cannot cause a kick.
             if (!PlayerStateManager.prepareReturn(player).isDone()) continue;

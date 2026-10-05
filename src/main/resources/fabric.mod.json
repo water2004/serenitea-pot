@@ -18,7 +18,8 @@
   "mixins": [
     "serenitea_pot.mixins.json",
     "serenitea_pot.worldthreader.mixins.json",
-    "serenitea_pot.tpc.mixins.json"
+    "serenitea_pot.tpc.mixins.json",
+    "serenitea_pot.carpet.mixins.json"
   ],
   "suggests": {
     "worldedit": ">=7.2.2 <=7.4.5",
