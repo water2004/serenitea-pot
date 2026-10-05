@@ -4,9 +4,11 @@
   "version": "1.0.0",
   "name": "Serenitea Pot Game Tests",
   "environment": "server",
+  "mixins": ["serenitea_pot.tests.carpet.mixins.json"],
   "entrypoints": {
     "fabric-gametest": [
       "org.edtp.sereniteapot.gametest.AdminSuggestionGameTest",
+      "org.edtp.sereniteapot.gametest.CarpetCompatibilityGameTest",
       "org.edtp.sereniteapot.gametest.AxiomCompatibilityGameTest",
       "org.edtp.sereniteapot.gametest.TpcCompatibilityGameTest",
       "org.edtp.sereniteapot.gametest.DragonSubscriptionGameTest",

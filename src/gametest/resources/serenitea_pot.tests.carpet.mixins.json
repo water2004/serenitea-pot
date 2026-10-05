@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.edtp.sereniteapot.gametest.carpet.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "plugin": "org.edtp.sereniteapot.adapters.OptionalModMixinPlugin",
+  "mixins": ["CarpetProfileMixin"],
+  "injectors": { "defaultRequire": 1 }
+}
