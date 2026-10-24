@@ -29,7 +29,7 @@ Minecraft 26.3 的 Fabric 服务端尘歌壶模组，支持独立服务器和单
 
 Arcade Dimensions `0.14.0-beta.21+26.3`、其相关模块以及 Fabric Permissions API v0 `0.7.0` 已嵌入最终 JAR，不需要另外安装，也不应从产物中移除。
 
-当前开发构建：`1.0.0-snapshot.6-26.3`
+当前快照版本：`1.0.0-snapshot.6-26.3`
 
 ## 安装
 

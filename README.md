@@ -51,7 +51,7 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 
 Arcade Dimensions `0.14.0-beta.21+26.3`, its supporting modules, and Fabric Permissions API v0 `0.7.0` are embedded in the built mod. Do not install duplicate copies or remove the embedded modules from the JAR.
 
-Development build: `1.0.0-snapshot.6-26.3`
+Current snapshot: `1.0.0-snapshot.6-26.3`
 
 ## Installation
 

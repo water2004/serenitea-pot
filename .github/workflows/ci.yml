@@ -144,7 +144,7 @@ jobs:
           args=(
             release create "$GITHUB_REF_NAME" "${assets[0]}"
             --verify-tag
-            --title "Serenitea Pot ${RELEASE_VERSION}"
+            --title "Serenitea Pot ${GITHUB_REF_NAME#v}"
             --notes-file release.md
           )
 
