@@ -1,8 +1,6 @@
-Snapshot 6 for Minecraft 26.2 Fabric servers.
+Minecraft 26.3 Fabric servers.
 
-- Adds pot-scoped vanilla commands and preserves source coordinates.
-- Makes player-data I/O and chunk loading asynchronous.
-- Fixes TPC realm transfers and lingering dragon boss bars.
-- Improves maintenance, rollback, and WorldThreader scheduling reliability.
+- Updates Minecraft, Fabric, and Arcade dependencies for 26.3.
+- Supports WorldThreader 3.2.0, Carpet 26.3, and Axiom 6.1.
 
 Clients do not need this mod installed.

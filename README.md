@@ -5,12 +5,14 @@
 <h1 align="center">Serenitea Pot</h1>
 
 <p align="center">
-  Personal, isolated three-dimension worlds for Minecraft 26.2 Fabric servers.
+  Personal, isolated three-dimension worlds for Minecraft 26.3 Fabric servers.
 </p>
 
 <p align="center">
   <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
 </p>
+
+`main` targets Minecraft 26.3. Minecraft 26.2 development continues on the [26.2 branch](https://github.com/water2004/serenitea-pot/tree/26.2).
 
 Serenitea Pot lets each player extract a full-height chunk region from the public server world into a personal Overworld, Nether, and End. Pot worlds use the server's existing registries, mods, and game logic while keeping their world data and player state isolated. Players are always in Creative mode inside a pot, and the complete three-dimension bundle unloads as soon as its owner leaves.
 
@@ -36,31 +38,31 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 
 | Component | Version |
 | --- | --- |
-| Minecraft | 26.2 |
+| Minecraft | 26.3 |
 | Java | 25 |
-| Fabric Loader | 0.19.3 or newer |
-| Fabric API | 0.158.0+26.2 |
-| Fabric Language Kotlin | 1.13.12+kotlin.2.4.0 or newer |
-| WorldEdit (optional) | 7.2.2 through 7.4.5 |
-| Axiom (optional) | 5.0.0 through 6.0.0 |
-| Worldthreader (optional) | 3.1.0 |
+| Fabric Loader | 0.20.1 or newer |
+| Fabric API | 0.165.0+26.3 |
+| Fabric Language Kotlin | 1.14.1+kotlin.2.4.20 or newer |
+| WorldEdit (optional) | 7.2.2 through 7.4.6 |
+| Axiom (optional) | 6.1.1 through 6.1.3 |
+| Worldthreader (optional) | 3.2.0 |
 | TeleportCommandsFabric (optional) | Flight-state adapter tested with 2.4.1 |
-| Fabric Carpet (optional) | 26.2+v260616 |
+| Fabric Carpet (optional) | 26.3+v260915 |
 
-Arcade Dimensions `0.13.0-beta.6+26.2`, its supporting modules, and Fabric Permissions API v0 `0.7.0` are embedded in the built mod. Do not install duplicate copies or remove the embedded modules from the JAR.
+Arcade Dimensions `0.14.0-beta.21+26.3`, its supporting modules, and Fabric Permissions API v0 `0.7.0` are embedded in the built mod. Do not install duplicate copies or remove the embedded modules from the JAR.
 
-Current snapshot: `1.0.0-snapshot.6-26.2`
+Development build: `1.0.0-snapshot.6-26.3`
 
 ## Installation
 
-1. Install Minecraft 26.2 with Fabric Loader 0.19.3 or newer on the server.
-2. Download `serenitea-pot-1.0.0-snapshot.6-26.2.jar` from [GitHub Releases](https://github.com/water2004/serenitea-pot/releases).
-3. Download Fabric API `0.158.0+26.2` and Fabric Language Kotlin `1.13.12+kotlin.2.4.0` or newer.
+1. Install Minecraft 26.3 with Fabric Loader 0.20.1 or newer on the server.
+2. Download the JAR matching your Minecraft version from [GitHub Releases](https://github.com/water2004/serenitea-pot/releases).
+3. Download Fabric API `0.165.0+26.3` and Fabric Language Kotlin `1.14.1+kotlin.2.4.20` or newer.
 4. Place all three JAR files in the server's `mods` directory and start the server with Java 25.
 
 Serenitea Pot has no client component and needs no separate configuration file. Limits are managed through in-game level-4 operator commands. Arcade Dimensions is already nested inside the Serenitea Pot JAR and must not be installed separately.
 
-Optionally install exactly WorldThreader 3.1.0 on the server. Other installed WorldThreader versions are rejected by Fabric Loader because this integration targets its internal threading protocol. Removing it restores Vanilla's serial dimension ticking without changing pot data or configuration.
+Optionally install exactly WorldThreader 3.2.0 on the server. Other installed WorldThreader versions are rejected by Fabric Loader because this integration targets its internal threading protocol. Removing it restores Vanilla's serial dimension ticking without changing pot data or configuration.
 
 ## How extraction works
 
@@ -141,7 +143,7 @@ Each pot has one persistent difficulty shared by its Overworld, Nether, and End;
 
 ## Performance model
 
-Without WorldThreader, all world work remains on Minecraft's server thread. With optional WorldThreader 3.1.0 installed, pots do not create more worker threads: every pot Overworld joins the public Overworld lane, every pot Nether joins the public Nether lane, and every pot End joins the public End lane. The three lanes run in parallel, while different pots remain sequential within a lane.
+Without WorldThreader, all world work remains on Minecraft's server thread. With optional WorldThreader 3.2.0 installed, pots do not create more worker threads: every pot Overworld joins the public Overworld lane, every pot Nether joins the public Nether lane, and every pot End joins the public End lane. The three lanes run in parallel, while different pots remain sequential within a lane.
 
 Each owner's allowance refills every server tick, with unused time capped at one tick's allowance. Overruns become debt that later ticks repay, including after unload or freeze. Loaded pots are shuffled, then whole pots run in that order while both the owner's balance and the current tick's global budget have time available. Once admitted, all three dimensions complete. With WorldThreader the cost of one pot is the slowest of its three parallel dimension lanes; without it the three serial dimension costs are added. Region-copy work shares the owner's balance and uses the current tick's remaining global time; its actual cost, including overruns, is charged to both.
 
@@ -155,7 +157,7 @@ A single dimension tick, synchronous chunk load, or third-party callback cannot 
 
 Serenitea Pot creates real server levels that share the server's registries and game logic. Arcade Dimensions provides the level factories, portal mixins, and shared `VanillaDimensionMapper` that keep players and other entities inside the same owner's Overworld/Nether/End bundle.
 
-WorldThreader 3.1.0 is supported through an optional, version-locked Mixin integration. It attaches pot work to the three vanilla dimension-family threads and preserves WorldThreader's world-tick, teleport-receive, post-teleport, and recovery barriers. The integration is inactive when WorldThreader is absent.
+WorldThreader 3.2.0 is supported through an optional, version-locked Mixin integration. It attaches pot work to the three vanilla dimension-family threads and preserves WorldThreader's world-tick, teleport-receive, post-teleport, and recovery barriers. The integration is inactive when WorldThreader is absent.
 
 Mods that store machine state in block entities or standard persistent Fabric chunk attachments will usually copy with the region. There is no universal and safe region meaning for the following data, so compatibility is not promised for:
 
@@ -206,7 +208,7 @@ Open the repository root directly in IntelliJ IDEA as a Gradle project, or run:
 .\gradlew.bat check
 ```
 
-`check` runs the JUnit suite and then starts a real Minecraft 26.2 GameTest server with Fabric, Arcade, every project mixin, and Serenitea Pot loaded. To run only the Minecraft integration tests:
+`check` runs the JUnit suite and then starts a real Minecraft 26.3 GameTest server with Fabric, Arcade, every project mixin, and Serenitea Pot loaded. To run only the Minecraft integration tests:
 
 ```powershell
 .\gradlew.bat runGameTest

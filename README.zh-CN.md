@@ -8,37 +8,39 @@
   <a href="README.md">English</a> | <strong>简体中文</strong>
 </p>
 
-Minecraft 26.2 的 Fabric 服务端尘歌壶模组，支持独立服务器和单人游戏的集成服务器。每名玩家拥有一组三维度尘歌壶（主世界、下界、末地），使用服务器现有的模组、注册表与游戏逻辑，同时隔离世界存档和玩家创造状态。联机时只需安装在服务端，客户端无需安装。
+Minecraft 26.3 的 Fabric 服务端尘歌壶模组，支持独立服务器和单人游戏的集成服务器。每名玩家拥有一组三维度尘歌壶（主世界、下界、末地），使用服务器现有的模组、注册表与游戏逻辑，同时隔离世界存档和玩家创造状态。联机时只需安装在服务端，客户端无需安装。
+
+`main` 面向 Minecraft 26.3；Minecraft 26.2 的开发保留在 [26.2 分支](https://github.com/water2004/serenitea-pot/tree/26.2)。
 
 ## 环境要求
 
 | 组件 | 版本 |
 | --- | --- |
-| Minecraft | 26.2 |
+| Minecraft | 26.3 |
 | Java | 25 |
-| Fabric Loader | 0.19.3 或更高 |
-| Fabric API | 0.158.0+26.2 |
-| Fabric Language Kotlin | 1.13.12+kotlin.2.4.0 或更高 |
-| WorldEdit（可选） | 7.2.2 至 7.4.5 |
-| Axiom（可选） | 5.0.0 至 6.0.0 |
-| Worldthreader（可选） | 3.1.0 |
+| Fabric Loader | 0.20.1 或更高 |
+| Fabric API | 0.165.0+26.3 |
+| Fabric Language Kotlin | 1.14.1+kotlin.2.4.20 或更高 |
+| WorldEdit（可选） | 7.2.2 至 7.4.6 |
+| Axiom（可选） | 6.1.1 至 6.1.3 |
+| Worldthreader（可选） | 3.2.0 |
 | TeleportCommandsFabric（可选） | 飞行状态适配已验证 2.4.1 |
-| Fabric Carpet（可选） | 26.2+v260616 |
+| Fabric Carpet（可选） | 26.3+v260915 |
 
-Arcade Dimensions `0.13.0-beta.6+26.2`、其相关模块以及 Fabric Permissions API v0 `0.7.0` 已嵌入最终 JAR，不需要另外安装，也不应从产物中移除。
+Arcade Dimensions `0.14.0-beta.21+26.3`、其相关模块以及 Fabric Permissions API v0 `0.7.0` 已嵌入最终 JAR，不需要另外安装，也不应从产物中移除。
 
-当前快照版本：`1.0.0-snapshot.6-26.2`
+当前开发构建：`1.0.0-snapshot.6-26.3`
 
 ## 安装
 
-1. 在服务端安装 Minecraft 26.2 和 Fabric Loader 0.19.3 或更高版本。
-2. 从 [GitHub Releases](https://github.com/water2004/serenitea-pot/releases) 下载 `serenitea-pot-1.0.0-snapshot.6-26.2.jar`。
-3. 下载 Fabric API `0.158.0+26.2`，以及 Fabric Language Kotlin `1.13.12+kotlin.2.4.0` 或更高版本。
+1. 在服务端安装 Minecraft 26.3 和 Fabric Loader 0.20.1 或更高版本。
+2. 从 [GitHub Releases](https://github.com/water2004/serenitea-pot/releases) 下载与 Minecraft 版本对应的 JAR。
+3. 下载 Fabric API `0.165.0+26.3`，以及 Fabric Language Kotlin `1.14.1+kotlin.2.4.20` 或更高版本。
 4. 将三个 JAR 放入服务端 `mods` 目录，并使用 Java 25 启动服务器。
 
 尘歌壶没有客户端组件，也不需要单独的配置文件；所有限制通过游戏内 OP4 管理命令设置。Arcade Dimensions 已嵌入尘歌壶 JAR，不能重复安装。
 
-服务端可选安装且只能安装 WorldThreader 3.1.0。适配层依赖该版本的内部线程协议，其他已安装版本会由 Fabric Loader 拒绝启动。移除它后自动恢复原版串行维度 tick，不需要迁移尘歌壶数据。
+服务端可选安装且只能安装 WorldThreader 3.2.0。适配层依赖该版本的内部线程协议，其他已安装版本会由 Fabric Loader 拒绝启动。移除它后自动恢复原版串行维度 tick，不需要迁移尘歌壶数据。
 
 ## 核心规则
 
@@ -102,11 +104,11 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 
 全部六种原版选择器（`@s`、`@a`、`@e`、`@p`、`@r`、`@n`）、玩家名称和 UUID 都会先按当前尘歌壶过滤，再执行排序与数量限制；原版三维度参数会映射到当前尘歌壶自己的主世界、下界和末地。真实 OP 身处壶内时也受同一实体与维度边界约束，壶外权限和行为完全保持原样。其他模组的命令不会自动加入白名单；它们若使用原版选择器参数会继承这层边界，自定义选择器仍由对应模组负责。
 
-这些临时授权会在离开时立即失效。每次进壶都会通过当前 Axiom 版本支持的机制刷新会话授权，WorldEdit 则在每次命令时读取当前玩家权限。其他玩家的壶内以及访客的权限保持服务器原样。尘歌壶内的命令方块始终不会执行。
+这些临时授权会在离开时立即失效。Axiom 6.1 使用自身的维度切换事件刷新授权，WorldEdit 则在每次命令时读取当前玩家权限。其他玩家的壶内以及访客的权限保持服务器原样。尘歌壶内的命令方块始终不会执行。
 
 ## 性能模型
 
-未安装 WorldThreader 时，全部世界逻辑仍在 Minecraft 服务端主线程运行。安装 WorldThreader 3.1.0 后不会按壶增加线程：全部壶主世界加入公共主世界线程，全部壶下界加入公共下界线程，全部壶末地加入公共末地线程。三个维度族并行，同一维度族内的不同壶仍顺序执行。
+未安装 WorldThreader 时，全部世界逻辑仍在 Minecraft 服务端主线程运行。安装 WorldThreader 3.2.0 后不会按壶增加线程：全部壶主世界加入公共主世界线程，全部壶下界加入公共下界线程，全部壶末地加入公共末地线程。三个维度族并行，同一维度族内的不同壶仍顺序执行。
 
 每个服务器 tick 都会补充壶主额度，未用的正额度最多保留一个 tick 的份额；超支会形成债务，由后续 tick 偿还，卸载或冻结也不会清除。已加载的壶先随机排序，只在壶主余额与本 tick 全局余额都为正时放行整组三维度 tick；放行后会完成三个维度。安装 WorldThreader 时单壶成本取三个并行维度中最慢者；未安装时取三个串行维度之和。区域复制共用壶主余额和本 tick 剩余的全局额度，实际耗时（包括超支）从两者扣除。默认单壶预算为 2 ms/tick，全局预算为 20 ms/tick；默认最大半径为 4 区块，默认值命令只影响之后新建的玩家配置。
 
@@ -116,9 +118,9 @@ OP4 也可用 `/sereniteapot enter <owner>` 进入主人当前已加载的尘歌
 
 ## 模组兼容边界
 
-产物内嵌并强依赖 Arcade Dimensions 0.13.0-beta.6。尘歌壶使用 Arcade 的维度工厂和共享的 `VanillaDimensionMapper` 构造三维度；Arcade 的 Nether/End portal mixin 负责让玩家及实体只在同一名主人的主世界、下界、末地之间传送。不要从 jar 中移除或替换这组 Arcade 依赖。
+产物内嵌并强依赖 Arcade Dimensions 0.14.0-beta.21。尘歌壶使用 Arcade 的维度工厂和共享的 `VanillaDimensionMapper` 构造三维度；Arcade 的 Nether/End portal mixin 负责让玩家及实体只在同一名主人的主世界、下界、末地之间传送。不要从 jar 中移除或替换这组 Arcade 依赖。
 
-WorldThreader 3.1.0 由独立且精确锁版的 Mixin 兼容层支持。壶维度挂到三个原版维度族线程，并完整参加世界 tick、传送接收、到达后补 tick 和失败恢复阶段；未安装时该兼容层不会加载。
+WorldThreader 3.2.0 由独立且精确锁版的 Mixin 兼容层支持。壶维度挂到三个原版维度族线程，并完整参加世界 tick、传送接收、到达后补 tick 和失败恢复阶段；未安装时该兼容层不会加载。
 
 尘歌壶（Serenitea Pot）的实现源码全部使用 Java 25。Arcade Dimensions 自身使用 Kotlin 编写，因此最终服务端产物仍声明 `fabric-language-kotlin` 运行时依赖；这不代表本项目还混有 Kotlin 业务源码，也不要求玩家客户端安装任何模组。
 
@@ -166,4 +168,4 @@ WorldThreader 3.1.0 由独立且精确锁版的 Mixin 兼容层支持。壶维�
 .\gradlew.bat clean check
 ```
 
-`check` 会先运行纯 Java 的模型与持久化测试，再启动 Minecraft 26.2 专用 GameTest 服务器，加载 Fabric、Arcade、mixin 和本模组，并验证区块 section 及持久化 chunk attachment 的复制结果彼此独立。只需重跑服务端测试时可执行 `.\gradlew.bat runGameTest`。构建产物位于 `build/libs/`。
+`check` 会先运行纯 Java 的模型与持久化测试，再启动 Minecraft 26.3 专用 GameTest 服务器，加载 Fabric、Arcade、mixin 和本模组，并验证区块 section 及持久化 chunk attachment 的复制结果彼此独立。只需重跑服务端测试时可执行 `.\gradlew.bat runGameTest`。构建产物位于 `build/libs/`。
