@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Phaser;
 
-/** Groups every pot level under its vanilla dimension-family worker in WorldThreader 3.1.0. */
+/** Groups every pot level under its vanilla dimension-family worker in WorldThreader 3.2.0. */
 @Mixin(value = WorldThreadingManager.class, remap = false)
 public abstract class WorldThreaderManagerMixin implements WorldThreaderGroupAccess {
     @Override

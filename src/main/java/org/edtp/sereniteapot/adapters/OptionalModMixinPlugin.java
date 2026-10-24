@@ -25,9 +25,9 @@ public final class OptionalModMixinPlugin implements IMixinConfigPlugin {
             .getMetadata()
             .getVersion()
             .getFriendlyString();
-        if (!"3.1.0".equals(version)) {
+        if (!"3.2.0".equals(version)) {
             throw new IllegalStateException(
-                "Serenitea Pot supports WorldThreader 3.1.0 exactly, found " + version
+                "Serenitea Pot supports WorldThreader 3.2.0 exactly, found " + version
             );
         }
     }

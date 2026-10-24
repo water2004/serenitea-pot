@@ -96,11 +96,11 @@ jobs:
       - name: Test with TPC and Worldthreader
         run: bash ./gradlew runGameTest --no-daemon -PtestTpc -PtestWorldthreader ${{ steps.version.outputs.gradle_args }}
 
-      - name: Test with Axiom 5.5.0
-        run: bash ./gradlew runGameTest --no-daemon -PtestAxiom5 ${{ steps.version.outputs.gradle_args }}
+      - name: Test with Axiom 6.1.3
+        run: bash ./gradlew runGameTest --no-daemon -PtestAxiom ${{ steps.version.outputs.gradle_args }}
 
-      - name: Test with Axiom 6.0.0
-        run: bash ./gradlew runGameTest --no-daemon -PtestAxiom6 ${{ steps.version.outputs.gradle_args }}
+      - name: Test with Axiom and Worldthreader
+        run: bash ./gradlew runGameTest --no-daemon -PtestAxiom -PtestWorldthreader ${{ steps.version.outputs.gradle_args }}
 
       - name: Upload release artifact
         if: github.ref_type == 'tag'

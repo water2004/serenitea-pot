@@ -5,7 +5,6 @@ import net.minecraft.world.level.portal.TeleportTransition;
 import org.edtp.sereniteapot.SereniteaPotMod;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.level.SereniteaPotAccessPolicy;
-import org.edtp.sereniteapot.permission.SereniteaPotToolPermissions;
 import org.edtp.sereniteapot.player.PlayerStateManager;
 import org.edtp.sereniteapot.player.PlayerStateStore.InvalidPlayerStateException;
 import org.spongepowered.asm.mixin.Mixin;
@@ -71,7 +70,6 @@ public abstract class ServerPlayerTeleportMixin {
                 transition
             );
             PlayerStateManager.afterTeleport(transferredPlayer, plan);
-            SereniteaPotToolPermissions.afterRealmChange(transferredPlayer, plan.targetOwner());
             // Command requirements depend on whether the player is currently inside their own pot.
             // Refresh only when crossing the public/pot realm boundary, not between pot dimensions.
             sereniteapot$refreshCommands(transferredPlayer);

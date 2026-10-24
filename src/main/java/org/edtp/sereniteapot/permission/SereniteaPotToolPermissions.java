@@ -11,7 +11,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import org.edtp.sereniteapot.level.SereniteaPotLevelKeys;
-import org.edtp.sereniteapot.adapters.axiom.AxiomSessionCompatibility;
 
 import java.util.UUID;
 
@@ -38,13 +37,6 @@ public final class SereniteaPotToolPermissions {
         // WorldEdit 7.2.2-7.4.4 and Axiom query the legacy string API. Axiom expands
         // axiom.all itself, while WorldEdit asks for each worldedit.* node individually.
         PermissionCheckEvent.EVENT.register(SereniteaPotToolPermissions::legacyPermission);
-    }
-
-    /** Refreshes stateful tool protocols after the owner crosses into their own pot. */
-    public static void afterRealmChange(ServerPlayer player, UUID targetOwner) {
-        if (targetOwner != null && targetOwner.equals(player.getUUID())) {
-            AxiomSessionCompatibility.refreshIfRequired(player);
-        }
     }
 
     private static <T> T worldEditPermission(PermissionContext context, PermissionNode<T> permission) {

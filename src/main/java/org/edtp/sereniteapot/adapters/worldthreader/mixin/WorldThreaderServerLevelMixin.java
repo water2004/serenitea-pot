@@ -7,10 +7,10 @@ import no2.worldthreader.common.thread.WorldThreadingManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
-/** Adjusts calls injected into ServerLevel by the exact WorldThreader 3.1.0 mixins. */
+/** Adjusts calls injected into ServerLevel by the exact WorldThreader 3.2.0 mixins. */
 @Mixin(value = ServerLevel.class, priority = 1100)
 public abstract class WorldThreaderServerLevelMixin {
-    // WT 3.1.0 calls this even while its active gamerule is false. A null guard
+    // WT 3.2.0 calls this even while its active gamerule is false. A null guard
     // prevents the upstream safepoint mixin from dereferencing an absent manager.
     @WrapOperation(
         method = "safePoint",

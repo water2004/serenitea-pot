@@ -9,7 +9,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.levelgen.feature.configurations.SimpleBlockConfiguration;
+import net.minecraft.world.level.levelgen.feature.SimpleBlockFeature;
 import org.edtp.sereniteapot.level.SereniteaPotBundle;
 import org.edtp.sereniteapot.level.SereniteaPotDeletionService;
 import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
@@ -92,8 +92,7 @@ public final class PotCoordinatesGameTest {
                             var forest = source.registryAccess().lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.FLOWER_FOREST);
                             var chunk = source.getChunkAt(marker);
                             for (var section : chunk.getSections()) {
-                                section.fillBiomesFromNoise((x, y, z, sampler) -> forest,
-                                    source.getChunkSource().randomState().sampler(), 0, 0, 0);
+                                section.fillBiomesFromNoise((x, y, z) -> forest, 0, 0, 0);
                             }
                             player.snapTo(sourceEntry.getX() + .5, sourceEntry.getY(), sourceEntry.getZ() + .5);
                             check(SereniteaPotCreationService.request(player, 1).join() instanceof SereniteaPotCreationService.Accepted,
@@ -167,9 +166,9 @@ public final class PotCoordinatesGameTest {
     }
 
     private static void assertFlowers(ServerLevel source, ServerLevel pot, BlockPos marker) {
-        var feature = source.registryAccess().lookupOrThrow(Registries.CONFIGURED_FEATURE)
+        var feature = source.registryAccess().lookupOrThrow(Registries.FEATURE)
             .getOrThrow(VegetationFeatures.FLOWER_FLOWER_FOREST).value();
-        var provider = ((SimpleBlockConfiguration) feature.config()).toPlace();
+        var provider = ((SimpleBlockFeature) feature).toPlace().value();
         boolean localCoordinatesDiffer = false;
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {

@@ -22,19 +22,19 @@
     "serenitea_pot.carpet.mixins.json"
   ],
   "suggests": {
-    "worldedit": ">=7.2.2 <=7.4.5",
-    "axiom": ">=5.0.0 <=6.0.0",
-    "worldthreader": "=3.1.0"
+    "worldedit": ">=7.2.2 <=7.4.6",
+    "axiom": ">=6.1.1 <=6.1.3",
+    "worldthreader": "=3.2.0"
   },
   "breaks": {
-    "worldthreader": ["<3.1.0", ">3.1.0"]
+    "worldthreader": ["<3.2.0", ">3.2.0"]
   },
   "depends": {
     "minecraft": "~${minecraft_version}",
-    "fabricloader": ">=0.19.3",
-    "fabric-api": "=0.158.0+26.2",
+    "fabricloader": ">=0.20.1",
+    "fabric-api": "=0.165.0+26.3",
     "fabric-permissions-api-v0": ">=0.7.0",
-    "fabric-language-kotlin": ">=1.13.12+kotlin.2.4.0",
-    "arcade-dimensions": "=0.13.0-beta.6+26.2"
+    "fabric-language-kotlin": ">=1.14.1+kotlin.2.4.20",
+    "arcade-dimensions": "=0.14.0-beta.21+26.3"
   }
 }

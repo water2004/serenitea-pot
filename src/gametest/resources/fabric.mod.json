@@ -36,8 +36,8 @@
     ]
   },
   "depends": {
-    "fabricloader": ">=0.19.3",
-    "fabric-api": "=0.158.0+26.2",
+    "fabricloader": ">=0.20.1",
+    "fabric-api": "=0.165.0+26.3",
     "serenitea_pot": "*"
   }
 }

@@ -42,8 +42,7 @@ dependencies {
     if (project.hasProperty('testWorldthreader')) {
         runtimeOnly(libs.worldthreader)
     }
-    // Axiom 5 supplies the legacy packet compiled by the isolated compatibility adapter.
-    compileOnly(libs.axiom5)
+    compileOnly(libs.axiom)
     // Optional TPC adapter; never bundled or required by the mod at runtime.
     compileOnly(libs.tpc)
     if (project.hasProperty('testTpc')) {
@@ -54,14 +53,8 @@ dependencies {
     if (project.hasProperty('testCarpet')) {
         runtimeOnly(libs.carpet)
     }
-    if (project.hasProperty('testAxiom5') && project.hasProperty('testAxiom6')) {
-        throw new GradleException('Choose either testAxiom5 or testAxiom6')
-    }
-    if (project.hasProperty('testAxiom5')) {
-        runtimeOnly(libs.axiom5)
-    }
-    if (project.hasProperty('testAxiom6')) {
-        runtimeOnly(libs.axiom6)
+    if (project.hasProperty('testAxiom')) {
+        runtimeOnly(libs.axiom)
     }
 
     testImplementation(libs.junit.jupiter)

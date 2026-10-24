@@ -5,7 +5,7 @@ import no2.worldthreader.common.thread.ThreadOwnedObject;
 
 import java.util.concurrent.Phaser;
 
-/** Runtime bridge implemented by the exact WorldThreader 3.1.0 manager mixin. */
+/** Runtime bridge implemented by the exact WorldThreader 3.2.0 manager mixin. */
 public interface WorldThreaderGroupAccess {
     ThreadOwnedObject[] sereniteapot$ownedObjects(ServerLevel anchor, ThreadOwnedObject[] fallback);
 

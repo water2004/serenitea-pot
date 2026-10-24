@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import java.util.Collection;
 import java.util.function.BooleanSupplier;
 
-/** Inserts grouped pot work into the five WorldThreader 3.1.0 world phases. */
+/** Inserts grouped pot work into the five WorldThreader 3.2.0 world phases. */
 @Mixin(value = ServerWorldTicking.class, remap = false)
 public abstract class WorldThreaderServerWorldTickingMixin {
     @WrapOperation(
