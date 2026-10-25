@@ -14,7 +14,7 @@
 
 `main` targets Minecraft 26.3. Minecraft 26.2 development continues on the [26.2 branch](https://github.com/water2004/serenitea-pot/tree/26.2).
 
-Serenitea Pot lets each player extract a full-height chunk region from the public server world into a personal Overworld, Nether, and End. Pot worlds use the server's existing registries, mods, and game logic while keeping their world data and player state isolated. Players are always in Creative mode inside a pot, and the complete three-dimension bundle unloads as soon as its owner leaves.
+Serenitea Pot lets each player extract a full-height chunk region from the public server world into a personal Overworld, Nether, and End. Pot worlds use the server's existing registries, mods, and game logic while keeping their world data and player state isolated. Players are always in Creative mode inside a pot. Its three dimensions stay loaded while the owner or an invited resident is inside.
 
 The mod is server-side only. Clients joining the server do not need Serenitea Pot installed; other server mods may still have their own client requirements.
 
@@ -25,8 +25,8 @@ The mod is server-side only. Clients joining the server do not need Serenitea Po
 - Extracted regions keep their source coordinates, including coordinate-dependent biome behavior.
 - Per-dimension replacement: creating from the public Overworld, Nether, or End replaces only the matching pot dimension.
 - Separate public and pot inventories, Ender Chest, experience, health, effects, abilities, game mode, respawn data, death location, dimension, position, and rotation.
-- Immediate owner-driven lifecycle: when the owner leaves or disconnects, all occupants are evacuated and all three dimensions unload.
-- Temporary 60-second visit requests with clickable accept and deny actions. Level-4 operators bypass approval, but the owner must still be present.
+- When the last owner or resident leaves or disconnects, remaining occupants are evacuated and all three dimensions unload.
+- Temporary 60-second visit requests with clickable accept and deny actions, plus persistent resident invitations. Level-4 operators bypass approval while the owner or a resident is inside.
 - Per-owner and global performance budgets shared by dimension ticks and region-copy work.
 - Automatic freezing after a dangerous tick instead of deleting or disabling the pot, allowing the owner to enter and repair it.
 - Scoped command access: a pot owner receives full WorldEdit and Axiom permissions plus an explicit allow-list of audited Vanilla commands only inside their own pot.
@@ -88,18 +88,18 @@ Crossing between the public realm and a pot first captures the source state, the
 
 Immediately before entering a pot, Vanilla saves the exact public playerdata. While the player is inside a pot, ordinary playerdata writes are suppressed and only the existing isolated pot snapshot is updated. Normal playerdata therefore remains at the last public dimension, position, and game mode without moving the live in-pot player.
 
-Only a real owner standing inside their own pot can keep the bundle loaded. When the owner leaves or disconnects, the lifecycle transaction:
+The real owner or an invited resident inside the pot keeps its bundle loaded. Residents may enter even when the owner is offline. When the last such player leaves or disconnects, the lifecycle transaction:
 
 1. Blocks new admission.
 2. Returns visitors and operators to their respective public locations.
 3. Verifies that no player still references a custom level.
 4. Saves and unloads the Overworld, Nether, and End together.
 
-Carpet fake players, portal loaders, chunk tickets, and machines cannot keep a pot loaded. Visit grants are temporary and never become a permanent guest list.
+Carpet fake players, portal loaders, chunk tickets, and machines cannot keep a pot loaded, even if a fake player's UUID is on the resident list. Ordinary approved requests remain one-use grants. Resident invitations persist across restarts until the owner revokes them; they also survive region replacement and pot rebuilding, like other owner configuration. Revoking an invitation leaves an already admitted player as a temporary visitor while another owner/resident remains; otherwise the pot closes.
 
-Carpet players spawned inside a pot use that pot's private player data and Creative mode. They log out when the owner leaves; fake-player behavior outside pots is unchanged.
+Carpet players spawned inside a pot use that pot's private player data and Creative mode. They log out when the last owner/resident leaves; fake-player behavior outside pots is unchanged.
 
-`disable` is an operator action that closes a player's pot and prevents future admission. `freeze` only stops world ticks: the owner, approved visitors, and operators may still enter for repairs, and the owner can run `unfreeze` afterward.
+`disable` is an operator action that closes a player's pot and prevents future admission. `freeze` only stops world ticks: the owner, residents, approved temporary visitors, and operators may still enter for repairs, and the owner can run `unfreeze` afterward.
 
 While physically inside their own pot, its owner receives full WorldEdit and Axiom permissions plus an explicit allow-list of audited, pot-local Vanilla commands. This is not blanket OP access. The allow-list covers building, entity, inventory, presentation, time/weather, and `/execute` operations; server-global commands such as `/op`, `/whitelist`, `/reload`, `/scoreboard`, and `/function` are not granted. `/worldborder` is not granted: extraction and administrator radius limits manage the pot's size.
 
@@ -113,16 +113,20 @@ These grants disappear immediately on leaving. Pot entry refreshes Axiom's sessi
 /sereniteapot                         Show your pot status
 /sereniteapot create <radius>         Extract the current dimension using a chunk radius
 /sereniteapot enter                   Enter your own pot
+/sereniteapot enter <owner>           Enter a pot you are a resident of (owner name or UUID)
 /sereniteapot leave                   Leave the current pot
 /sereniteapot unfreeze                Resume ticks after repairing your frozen pot
 /sereniteapot request <owner>         Request temporary entry to another player's pot
 /sereniteapot requests                List pending requests received by you
 /sereniteapot approve <player>        Approve a request and teleport the requester
 /sereniteapot deny <player>           Deny a request
+/sereniteapot resident add <player>   Invite a resident to your pot
+/sereniteapot resident remove <player> Revoke a resident invitation (name or UUID)
+/sereniteapot resident list           List your residents
 /sereniteapot delete confirm          Permanently delete your pot
 ```
 
-Level-4 operators may also use `/sereniteapot enter <owner>` to enter a currently loaded pot without requesting permission.
+Level-4 operators may also use `/sereniteapot enter <owner>` without requesting permission while the owner or a resident is inside. Resident status grants independent entry and loading, not the owner's command permissions. Everyone inside remains Creative. Temporary requests still require the owner to be inside to approve them.
 
 ## Level-4 operator commands
 
