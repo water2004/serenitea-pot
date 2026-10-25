@@ -49,10 +49,13 @@ public final class SereniteaPotAccessPolicy {
         if (current != null && current.owner().equals(identity.owner())) {
             return null;
         }
-        if (player.getUUID().equals(identity.owner())) {
+        if (canLoad(player.getUUID(), identity.owner())) {
             return HumanPlayerDetector.isHuman(player)
                 ? null
                 : component(player, message(MessageKey.ACCESS_FAKE_PLAYER));
+        }
+        if (!hasResidentInside(player.level().getServer(), identity.owner())) {
+            return component(player, message(MessageKey.ACCESS_RESIDENT_REQUIRED));
         }
         if (!player.permissions().hasPermission(Permissions.COMMANDS_OWNER)) {
             // 临时许可只消费一次，批准申请不会变成永久访客名单。
@@ -60,9 +63,23 @@ public final class SereniteaPotAccessPolicy {
                 ? null
                 : component(player, message(MessageKey.ACCESS_REQUEST_REQUIRED));
         }
-        return isRealOwnerInside(player.level().getServer(), identity.owner())
-            ? null
-            : component(player, message(MessageKey.ACCESS_OWNER_REQUIRED_FOR_ADMIN));
+        return null;
+    }
+
+    /** Loading rights belong to the owner and explicitly invited residents, never to OP alone. */
+    public static boolean canLoad(UUID player, UUID owner) {
+        SereniteaPotRecord record = SereniteaPotManager.record(owner);
+        return player.equals(owner) || record != null && record.getResidents().contains(player);
+    }
+
+    public static boolean hasResidentInside(MinecraftServer server, UUID owner) {
+        return server.getPlayerList().getPlayers().stream().anyMatch(player -> {
+            if (!canLoad(player.getUUID(), owner) || !HumanPlayerDetector.isHuman(player)) return false;
+            var identity = SereniteaPotLevelKeys.identify(player.level().dimension());
+            var record = SereniteaPotManager.record(owner);
+            return identity != null && identity.owner().equals(owner) && record != null
+                && identity.generation() == record.getActiveGeneration();
+        });
     }
 
     public static boolean isRealOwnerInside(MinecraftServer server, UUID owner) {

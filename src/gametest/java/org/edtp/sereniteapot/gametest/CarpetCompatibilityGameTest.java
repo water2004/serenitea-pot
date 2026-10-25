@@ -56,7 +56,10 @@ public final class CarpetCompatibilityGameTest {
     @GameTest(maxTicks = 300)
     public void maintenanceRemovesFakeWithoutPublicData(GameTestHelper helper) { run(helper, Scenario.MAINTENANCE); }
 
-    private enum Scenario { FRESH, LOGOUT, RESPAWN, PUBLIC_DATA, LATE_PROFILE, LATE_DATA, FAILED_DATA, PUBLIC_SPAWN, MAINTENANCE }
+    @GameTest(maxTicks = 300)
+    public void residentCanHostFakeButInvitedFakeCannotKeepPotLoaded(GameTestHelper helper) { run(helper, Scenario.RESIDENT); }
+
+    private enum Scenario { FRESH, LOGOUT, RESPAWN, PUBLIC_DATA, LATE_PROFILE, LATE_DATA, FAILED_DATA, PUBLIC_SPAWN, MAINTENANCE, RESIDENT }
 
     private static void run(GameTestHelper helper, Scenario scenario) {
         if (!FabricLoader.getInstance().isModLoaded("carpet")) { helper.succeed(); return; }
@@ -82,6 +85,7 @@ public final class CarpetCompatibilityGameTest {
         final GameProfile profile = new GameProfile(UUIDUtil.createOfflinePlayerUUID(name), name);
         final CompletableFuture<GameProfile> profileRead = new CompletableFuture<>();
         ConnectedTestPlayer owner;
+        ConnectedTestPlayer resident;
         ServerLevel level;
         CompletableFuture<net.minecraft.nbt.CompoundTag> dataGate;
         CompletableFuture<SereniteaPotLifecycleService.Result> maintenance;
@@ -103,6 +107,16 @@ public final class CarpetCompatibilityGameTest {
                 check(SereniteaPotTravelService.enter(owner.player(), owner.id) == SereniteaPotTravelService.Success.INSTANCE,
                     "Owner entry failed");
                 level = scenario == Scenario.PUBLIC_SPAWN ? server.overworld() : bundle.get(SereniteaPotDimension.OVERWORLD);
+                if (scenario == Scenario.RESIDENT) {
+                    resident = new ConnectedTestPlayer(server);
+                    PlayerStateManager.prepare(resident.player()).join();
+                    var record = SereniteaPotManager.record(owner.id);
+                    record.getResidents().add(resident.id);
+                    record.getResidents().add(profile.id()); // Explicitly invited fake still cannot host.
+                    check(SereniteaPotTravelService.enter(resident.player(), owner.id)
+                        == SereniteaPotTravelService.Success.INSTANCE, "Resident entry failed");
+                    leave();
+                }
                 server.services().nameToIdCache().add(new NameAndId(profile));
                 CarpetTestProfiles.pending.put(profile.id(), profileRead);
                 if (scenario == Scenario.PUBLIC_DATA || scenario == Scenario.PUBLIC_SPAWN) {
@@ -160,6 +174,8 @@ public final class CarpetCompatibilityGameTest {
                 } else if (scenario == Scenario.LOGOUT) {
                     owner.close();
                     ownerDisconnected = true;
+                } else if (scenario == Scenario.RESIDENT) {
+                    resident.close();
                 } else leave();
                 phase = 5;
                 return;
@@ -239,6 +255,7 @@ public final class CarpetCompatibilityGameTest {
             if (dataGate != null && !dataGate.isDone()) dataGate.complete(new net.minecraft.nbt.CompoundTag());
             CarpetTestProfiles.pending.remove(profile.id());
             if (fake() != null) server.getPlayerList().remove(fake());
+            if (resident != null) resident.close();
             if (owner == null) return;
             if (!ownerDisconnected) owner.close();
             SereniteaPotLifecycleService.endMaintenance(owner.id);

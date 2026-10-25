@@ -254,8 +254,8 @@ public final class PlayerStateManager {
         } else {
             applyPotState(player, plan.targetState() == null ? blankPotState(player) : plan.targetState());
         }
-        if (player.getUUID().equals(plan.sourceOwner()) && !player.getUUID().equals(targetOwner)) {
-            requestCloseOnServerThread(player);
+        if (plan.sourceOwner() != null && !plan.sourceOwner().equals(targetOwner)) {
+            checkPresenceOnServerThread(player, plan.sourceOwner());
         }
     }
 
@@ -268,8 +268,8 @@ public final class PlayerStateManager {
         pendingTransfers.remove(player.getUUID());
         store.release(player.getUUID());
         UUID realmOwner = realm(player.level());
-        if (player.getUUID().equals(realmOwner)) {
-            requestCloseOnServerThread(player);
+        if (realmOwner != null) {
+            checkPresenceOnServerThread(player, realmOwner);
         }
     }
 
@@ -513,15 +513,14 @@ public final class PlayerStateManager {
         }
     }
 
-    private static void requestCloseOnServerThread(ServerPlayer player) {
+    private static void checkPresenceOnServerThread(ServerPlayer player, UUID owner) {
         MinecraftServer currentServer = player.level().getServer();
-        UUID owner = player.getUUID();
         if (currentServer.isSameThread()) {
-            SereniteaPotLifecycleService.requestClose(owner);
+            SereniteaPotLifecycleService.checkPresence(owner);
         } else {
             // Worldthreader completes the destination-world transfer before the
             // server thread processes this lifecycle request after its tick barrier.
-            currentServer.execute(() -> SereniteaPotLifecycleService.requestClose(owner));
+            currentServer.execute(() -> SereniteaPotLifecycleService.checkPresence(owner));
         }
     }
 

@@ -1,6 +1,7 @@
 package org.edtp.sereniteapot.persistence;
 
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -118,6 +119,9 @@ public class SereniteaPotCatalogRepository {
         result.addProperty("difficulty", record.getDifficulty().getSerializedName());
         result.addProperty("enabled", record.isEnabled());
         result.addProperty("frozen", record.isFrozen());
+        JsonArray residents = new JsonArray();
+        record.getResidents().forEach(id -> residents.add(id.toString()));
+        result.add("residents", residents);
 
         JsonObject slots = new JsonObject();
         for (Map.Entry<SereniteaPotDimension, SereniteaPotSlotRecord> entry : record.getSlots().entrySet()) {
@@ -162,6 +166,12 @@ public class SereniteaPotCatalogRepository {
                     booleanValue(recordObject, "enabled"),
                     booleanValue(recordObject, "frozen"));
 
+            // Additive v4 metadata: catalogs without invitations have no residents.
+            if (recordObject.has("residents")) {
+                for (JsonElement resident : recordObject.getAsJsonArray("residents")) {
+                    record.getResidents().add(UUID.fromString(resident.getAsString()));
+                }
+            }
             JsonObject slots = requiredObject(recordObject, "slots");
             for (Map.Entry<String, JsonElement> slotEntry : slots.entrySet()) {
                 SereniteaPotDimension dimension = SereniteaPotDimension.fromId(slotEntry.getKey());

@@ -29,6 +29,7 @@ public final class SereniteaPotCommands {
         SereniteaPotCreateCommand.register(root);
         SereniteaPotTravelCommands.register(root);
         SereniteaPotInvitationCommands.register(root);
+        SereniteaPotResidentCommands.register(root);
         SereniteaPotAdminCommands.register(root);
         dispatcher.register(root);
     }

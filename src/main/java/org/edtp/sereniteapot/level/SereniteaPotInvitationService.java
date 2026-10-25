@@ -79,6 +79,9 @@ public final class SereniteaPotInvitationService {
     public static Result approve(ServerPlayer owner, UUID visitor, UUID requestId) {
         SereniteaPotRecord record = SereniteaPotManager.record(owner.getUUID());
         if (record == null) return new Rejected(message(MessageKey.ERROR_SELF_NO_POT));
+        if (!SereniteaPotAccessPolicy.isRealOwnerInside(owner.level().getServer(), owner.getUUID())) {
+            return new Rejected(message(MessageKey.INVITATION_OWNER_REQUIRED));
+        }
         LinkedHashMap<UUID, PendingRequest> requests = pending.get(owner.getUUID());
         PendingRequest request = requests == null ? null : requests.get(visitor);
         if (request == null || request.expiresAt() <= System.currentTimeMillis()) {

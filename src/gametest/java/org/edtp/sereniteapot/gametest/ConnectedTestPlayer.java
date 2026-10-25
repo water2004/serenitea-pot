@@ -19,8 +19,12 @@ final class ConnectedTestPlayer implements AutoCloseable {
     private final EmbeddedChannel channel;
 
     ConnectedTestPlayer(MinecraftServer server) {
+        this(server, "realm-probe");
+    }
+
+    ConnectedTestPlayer(MinecraftServer server, String name) {
         this.server = server;
-        var cookie = CommonListenerCookie.createInitial(new GameProfile(id, "realm-probe"), false);
+        var cookie = CommonListenerCookie.createInitial(new GameProfile(id, name), false);
         var player = new ServerPlayer(server, server.overworld(), cookie.gameProfile(), cookie.clientInformation());
         var connection = new Connection(PacketFlow.SERVERBOUND);
         channel = new EmbeddedChannel(connection);

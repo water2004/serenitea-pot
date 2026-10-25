@@ -38,6 +38,7 @@ public final class SereniteaPotLifecycleService {
     private static final long DELETE_RETRY_MILLIS = 1_000L;
 
     private static final Set<UUID> pendingCloses = new LinkedHashSet<>();
+    private static final Set<UUID> presenceChecks = new LinkedHashSet<>();
     private static final Set<UUID> maintenance = new LinkedHashSet<>();
     private static final Map<UUID, CompletableFuture<Result>> waitingMaintenance = new LinkedHashMap<>();
     private static final Set<UUID> closing = new LinkedHashSet<>();
@@ -65,6 +66,11 @@ public final class SereniteaPotLifecycleService {
 
     public static void requestClose(UUID owner) {
         pendingCloses.add(owner);
+    }
+
+    /** Re-evaluate departures and revoked invitations after all dimension workers have joined. */
+    public static void checkPresence(UUID owner) {
+        presenceChecks.add(owner);
     }
 
     /** Cancels a close that has only been queued and has not started yet. */
@@ -141,6 +147,7 @@ public final class SereniteaPotLifecycleService {
     }
 
     public static void forget(UUID owner) {
+        presenceChecks.remove(owner);
         pendingCloses.remove(owner);
         endMaintenance(owner);
         closing.remove(owner);
@@ -203,9 +210,13 @@ public final class SereniteaPotLifecycleService {
     }
 
     private static void endServerTick(MinecraftServer server) {
+        for (UUID owner : presenceChecks) {
+            if (!SereniteaPotAccessPolicy.hasResidentInside(server, owner)) requestClose(owner);
+        }
+        presenceChecks.clear();
         for (UUID owner : List.copyOf(waitingMaintenance.keySet())) advanceMaintenance(server, owner);
         for (UUID owner : List.copyOf(pendingCloses)) {
-            // Evicting the owner queues a close too. Copy sources must remain
+            // Evacuation queues another presence check. Copy sources must remain
             // registered until the maintenance operation releases its lock.
             if (maintenance.contains(owner)) continue;
             if (SereniteaPotManager.hasFailedClose(owner)) continue;
@@ -254,6 +265,7 @@ public final class SereniteaPotLifecycleService {
     }
 
     private static void clearAll() {
+        presenceChecks.clear();
         pendingCloses.clear();
         maintenance.clear();
         waitingMaintenance.clear();

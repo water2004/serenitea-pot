@@ -21,7 +21,8 @@ public final class CommandTreeGameTest {
         helper.assertTrue(root != null, "Missing /sereniteapot command");
         assertChildren(helper, root,
                 "create", "enter", "leave", "unfreeze", "request", "requests",
-                "approve", "deny", "delete", "admin");
+                "approve", "deny", "resident", "delete", "admin");
+        assertChildren(helper, child(root, "resident"), "add", "remove", "list");
         assertChildren(helper, child(root, "admin"),
                 "enable", "disable", "max-radius", "default-max-radius",
                 "budget", "default-budget", "global-budget",

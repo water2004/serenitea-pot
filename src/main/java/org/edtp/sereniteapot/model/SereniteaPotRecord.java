@@ -3,8 +3,10 @@ package org.edtp.sereniteapot.model;
 import net.minecraft.world.Difficulty;
 
 import java.util.EnumMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /** Mutable administrative metadata for one owner's personal Serenitea Pot. */
@@ -22,6 +24,7 @@ public class SereniteaPotRecord {
     private boolean enabled;
     private boolean frozen;
     private final Map<SereniteaPotDimension, SereniteaPotSlotRecord> slots;
+    private final Set<UUID> residents = new LinkedHashSet<>();
 
     public SereniteaPotRecord(UUID stateId, long activeGeneration, int maxRadiusChunks,
                           double budgetMillisPerTick, Difficulty difficulty,
@@ -98,6 +101,11 @@ public class SereniteaPotRecord {
 
     public Map<SereniteaPotDimension, SereniteaPotSlotRecord> getSlots() {
         return slots;
+    }
+
+    /** Persistent invitations; membership never grants the owner's command permissions. */
+    public Set<UUID> getResidents() {
+        return residents;
     }
 
     static int requireValidRadiusChunks(int radiusChunks) {

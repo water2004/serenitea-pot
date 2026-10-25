@@ -18,6 +18,7 @@
       "org.edtp.sereniteapot.gametest.CommandTreeGameTest",
       "org.edtp.sereniteapot.gametest.FrozenPotTickGameTest",
       "org.edtp.sereniteapot.gametest.InvitationSuggestionGameTest",
+      "org.edtp.sereniteapot.gametest.ResidentGameTest",
       "org.edtp.sereniteapot.gametest.PlayerDataIsolationGameTest",
       "org.edtp.sereniteapot.gametest.PlayerDeathIsolationGameTest",
       "org.edtp.sereniteapot.gametest.PlayerRealmTransferGameTest",

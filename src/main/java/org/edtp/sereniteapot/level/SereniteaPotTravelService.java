@@ -66,7 +66,7 @@ public final class SereniteaPotTravelService {
         }
 
         SereniteaPotBundle bundle;
-        if (player.getUUID().equals(owner)) {
+        if (SereniteaPotAccessPolicy.canLoad(player.getUUID(), owner)) {
             if (!HumanPlayerDetector.isHuman(player)) {
                 return new Rejected(message(MessageKey.TRAVEL_FAKE_PLAYER));
             }
@@ -74,13 +74,15 @@ public final class SereniteaPotTravelService {
             if (bundle == null) {
                 try {
                     bundle = SereniteaPotManager.load(owner);
+                    // Failed admission must not leave an unoccupied bundle loaded.
+                    SereniteaPotLifecycleService.checkPresence(owner);
                 } catch (RuntimeException error) {
                     return new Rejected(message(MessageKey.TRAVEL_LOAD_FAILED, error.getMessage()));
                 }
             }
         } else {
-            if (!SereniteaPotAccessPolicy.isRealOwnerInside(player.level().getServer(), owner)) {
-                return new Rejected(message(MessageKey.TRAVEL_OWNER_REQUIRED));
+            if (!SereniteaPotAccessPolicy.hasResidentInside(player.level().getServer(), owner)) {
+                return new Rejected(message(MessageKey.ACCESS_RESIDENT_REQUIRED));
             }
             bundle = SereniteaPotManager.loaded(owner);
             if (bundle == null) {

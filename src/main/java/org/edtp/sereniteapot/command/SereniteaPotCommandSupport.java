@@ -8,10 +8,14 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.GameProfileArgument;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.NameAndId;
 import org.edtp.sereniteapot.i18n.MessageKey;
 import org.edtp.sereniteapot.i18n.SereniteaPotTranslations.Message;
 import org.edtp.sereniteapot.level.SereniteaPotAccessPolicy;
+import org.edtp.sereniteapot.level.SereniteaPotLifecycleService;
+import org.edtp.sereniteapot.level.SereniteaPotManager;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -66,7 +70,7 @@ final class SereniteaPotCommandSupport {
     }
 
     /**
-     * 提示当前确实能接待访客的壶主。申请和进入共用这一定义，执行时仍会重新鉴权。
+     * 临时申请必须由在线且在壶内的主人批准。
      */
     static CompletableFuture<Suggestions> suggestAvailableOwners(
             CommandContext<CommandSourceStack> context,
@@ -80,6 +84,24 @@ final class SereniteaPotCommandSupport {
                         .filter(player -> SereniteaPotAccessPolicy.isRealOwnerInside(server, player.getUUID()))
                         .map(ServerPlayer::getScoreboardName),
                 builder);
+    }
+
+    static CompletableFuture<Suggestions> suggestEnterOwners(CommandContext<CommandSourceStack> context,
+                                                              SuggestionsBuilder builder) {
+        var server = context.getSource().getServer();
+        var player = context.getSource().getPlayer();
+        return SharedSuggestionProvider.suggest(SereniteaPotManager.catalog().getPlayers().entrySet().stream()
+            .filter(entry -> entry.getValue().exists() && entry.getValue().isEnabled())
+            .filter(entry -> !SereniteaPotLifecycleService.isUnavailable(entry.getKey()))
+            .filter(entry -> player != null && SereniteaPotAccessPolicy.canLoad(player.getUUID(), entry.getKey())
+                || SereniteaPotAccessPolicy.hasResidentInside(server, entry.getKey()))
+            .map(entry -> playerName(server, entry.getKey())), builder);
+    }
+
+    static String playerName(MinecraftServer server, UUID id) {
+        var online = server.getPlayerList().getPlayer(id);
+        return online != null ? online.getScoreboardName()
+            : server.services().nameToIdCache().get(id).map(NameAndId::name).orElse(id.toString());
     }
 
     static int success(CommandContext<CommandSourceStack> context, MessageKey key, Object... arguments) {

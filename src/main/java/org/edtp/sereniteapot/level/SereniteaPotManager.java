@@ -47,7 +47,7 @@ import java.util.concurrent.CompletionException;
 /**
  * 尘歌壶元数据和 Arcade 自定义维度的运行时所有者。
  *
- * <p>持久化目录可以存在但维度默认不加载；只有主人进入时才调用 {@link #load(UUID)}。
+ * <p>持久化目录可以存在但维度默认不加载；主人或常驻访客进入时才调用 {@link #load(UUID)}。
  * 所有增删维度操作都要求位于服务器线程，并由生命周期服务保证其中已经没有玩家。</p>
  */
 public final class SereniteaPotManager {

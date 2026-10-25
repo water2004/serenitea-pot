@@ -36,6 +36,8 @@ class SereniteaPotCatalogRepositoryTest {
         record.setBudgetMillisPerTick(12.25);
         record.setDifficulty(Difficulty.HARD);
         record.setEnabled(false);
+        UUID resident = UUID.randomUUID();
+        record.getResidents().add(resident);
         record.getSlots().put(SereniteaPotDimension.NETHER,
                 new SereniteaPotSlotRecord("minecraft:the_nether", 12, 70, -8, 17));
 
@@ -52,6 +54,7 @@ class SereniteaPotCatalogRepositoryTest {
         assertEquals(12.25, loadedRecord.getBudgetMillisPerTick());
         assertEquals(Difficulty.HARD, loadedRecord.getDifficulty());
         assertFalse(loadedRecord.isEnabled());
+        assertEquals(java.util.Set.of(resident), loadedRecord.getResidents());
         assertEquals(record.getStateId(), loadedRecord.getStateId());
         assertEquals(record.getSlots().get(SereniteaPotDimension.NETHER),
                 loadedRecord.getSlots().get(SereniteaPotDimension.NETHER));
@@ -66,6 +69,39 @@ class SereniteaPotCatalogRepositoryTest {
         assertTrue(json.contains("\"radiusChunks\": 17"));
         assertFalse(json.contains("\"defaultMaxRadius\":"));
         assertFalse(json.contains("\"maxRadius\":"));
+    }
+
+    @Test
+    void v4CatalogWithoutInvitationsLoadsWithNoResidents() throws Exception {
+        var catalog = new SereniteaPotCatalog();
+        UUID owner = UUID.randomUUID();
+        catalog.getOrCreate(owner);
+        var repository = new SereniteaPotCatalogRepository(directory);
+        repository.saveAsync(catalog).join();
+        Path file = directory.resolve("serenitea_pots.json");
+        var json = com.google.gson.JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+        json.getAsJsonObject("players").getAsJsonObject(owner.toString()).remove("residents");
+        Files.writeString(file, json.toString());
+        assertTrue(repository.load().getPlayers().get(owner).getResidents().isEmpty());
+    }
+
+    @Test
+    void residentRemovalPersistsAndInvalidInvitationsAreRejected() throws Exception {
+        var catalog = new SereniteaPotCatalog();
+        UUID owner = UUID.randomUUID();
+        UUID resident = UUID.randomUUID();
+        catalog.getOrCreate(owner).getResidents().add(resident);
+        var repository = new SereniteaPotCatalogRepository(directory);
+        repository.saveAsync(catalog).join();
+        catalog.getPlayers().get(owner).getResidents().remove(resident);
+        repository.saveAsync(catalog).join();
+        assertTrue(repository.load().getPlayers().get(owner).getResidents().isEmpty());
+        Path file = directory.resolve("serenitea_pots.json");
+        String valid = Files.readString(file);
+        for (String bad : new String[]{"null", "{}", "[null]", "[123]", "[\"invalid-id\"]"}) {
+            Files.writeString(file, valid.replace("\"residents\": []", "\"residents\": " + bad));
+            assertThrows(IllegalStateException.class, repository::load);
+        }
     }
 
     @Test

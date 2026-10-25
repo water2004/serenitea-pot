@@ -1,11 +1,12 @@
 package org.edtp.sereniteapot.command;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.arguments.GameProfileArgument;
 import org.edtp.sereniteapot.i18n.MessageKey;
+import org.edtp.sereniteapot.level.SereniteaPotManager;
 import org.edtp.sereniteapot.level.SereniteaPotTravelService;
 import org.edtp.sereniteapot.player.PlayerStateManager;
 
@@ -14,7 +15,7 @@ import java.util.UUID;
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.failure;
-import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.profile;
+import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.playerName;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.route;
 import static org.edtp.sereniteapot.command.SereniteaPotCommandSupport.success;
 
@@ -29,14 +30,21 @@ final class SereniteaPotTravelCommands {
                 literal("enter")
                         .executes(context -> enter(
                                 context, context.getSource().getPlayerOrException().getUUID())),
-                argument(OWNER_ARGUMENT, GameProfileArgument.gameProfile())
-                        .suggests(SereniteaPotCommandSupport::suggestAvailableOwners)
+                argument(OWNER_ARGUMENT, StringArgumentType.word())
+                        .suggests(SereniteaPotCommandSupport::suggestEnterOwners)
                         .executes(SereniteaPotTravelCommands::enterTarget));
         route(root, literal("leave").executes(SereniteaPotTravelCommands::leave));
     }
 
     private static int enterTarget(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        return enter(context, profile(context, OWNER_ARGUMENT));
+        String name = StringArgumentType.getString(context, OWNER_ARGUMENT);
+        // Existing pots are identified locally: offline owners need no profile lookup,
+        // and their UUID remains usable if Vanilla's name cache no longer contains them.
+        UUID owner = SereniteaPotManager.catalog().getPlayers().keySet().stream()
+            .filter(id -> id.toString().equalsIgnoreCase(name)
+                || playerName(context.getSource().getServer(), id).equalsIgnoreCase(name))
+            .findFirst().orElse(null);
+        return owner == null ? failure(context, MessageKey.TRAVEL_TARGET_NO_POT) : enter(context, owner);
     }
 
     private static int enter(CommandContext<CommandSourceStack> context, UUID owner) throws CommandSyntaxException {

@@ -66,7 +66,7 @@ public final class CarpetCompatibility {
         return record != null && record.isEnabled()
             && record.getActiveGeneration() == identity.generation()
             && !SereniteaPotLifecycleService.isUnavailable(identity.owner())
-            && SereniteaPotAccessPolicy.isRealOwnerInside(server, identity.owner());
+            && SereniteaPotAccessPolicy.hasResidentInside(server, identity.owner());
     }
 
     private static void rejectSpawn(MinecraftServer server, GameProfile profile,
