@@ -101,6 +101,16 @@ public final class RegionCopyTask {
         return phase == Phase.DONE;
     }
 
+    /** Diagnostic snapshot; read on the same server thread that advances the task. */
+    @Override
+    public String toString() {
+        return "RegionCopyTask{phase=" + phase + ", chunks=" + chunkCursor + "/" + chunkCount
+            + ", position=" + pendingChunkPos
+            + ", sourceLoad=" + (pendingSourceLoad == null ? null : pendingSourceLoad.future)
+            + ", targetLoad=" + (pendingTargetLoad == null ? null : pendingTargetLoad.future)
+            + ", chunkReady=" + chunkReady + ", lighting=" + lightingBarrier + "}";
+    }
+
     /** Register before Minecraft freezes built-in registries. */
     public static void registerTicketType() {
         if (copyTicketType == null) {
